@@ -133,7 +133,7 @@ App.alignWheelScroll = function () {
   if (!list.clientHeight) return;
   const rh = App.layerRowH();
   const plusH = App.plusRowH();
-  const n = App.state.layers.length;
+  const n = App.panelLayers().length;
   list.style.paddingTop = (1 * rh) + 'px';
   list.style.paddingBottom = Math.max(0, list.clientHeight - 2 * rh) + 'px';
   wb.style.top = (1 * rh + plusH) + 'px';
@@ -162,7 +162,7 @@ App.alignWheelScroll = function () {
   let idx;
   if (App.lastWheelIdx !== undefined) idx = clamp(App.lastWheelIdx, 0, n - 1);
   else if (App.state.selected.size === 1) {
-    const ids = App.state.layers.slice().reverse().map(l => l.id);
+    const ids = App.panelLayers().map(l => l.id);
     idx = ids.indexOf(Array.from(App.state.selected)[0]);
     if (idx < 0) idx = 0;
   } else {
@@ -182,7 +182,7 @@ App.initLayerWheelNav = function () {
   }, { passive: false });
   App.layerListEl.addEventListener('scrollend', () => {
     const list = App.layerListEl;
-    const n = App.state.layers.length;
+    const n = App.panelLayers().length;
     if (!n) return;
     if (App._progScrollTop !== null && Math.abs(list.scrollTop - App._progScrollTop) < 0.5) {
       App._progScrollTop = null;
@@ -209,9 +209,9 @@ App.initLayerWheelNav = function () {
   });
 };
 App.stepWhiteBox = function (dir) {
-  const n = App.state.layers.length;
+  const n = App.panelLayers().length;
   if (!n) return;
-  const ids = App.state.layers.slice().reverse().map(l => l.id);
+  const ids = App.panelLayers().map(l => l.id);
   let ni;
   if (App.state.plusAnchorActive) {
     if (dir !== 1) return;
@@ -353,7 +353,7 @@ App.hideDragGhost = function () {
   if (App.dragGhostEl) { App.dragGhostEl.remove(); App.dragGhostEl = null; }
 };
 App.dropIndexAt = function (clientY) {
-  const ids = App.state.layers.slice().reverse().map(l => l.id);
+  const ids = App.panelLayers().map(l => l.id);
   const items = $$('.layer-item', App.layerListEl);
   let q = ids.length;
   for (let p = 0; p < items.length; p++) {
@@ -399,9 +399,15 @@ App.reorderLayer = function (id, q) {
   if (App.contentChanged) App.contentChanged();
 };
 
+App.panelLayers = function () {
+  const ex = App.currentExcluded ? App.currentExcluded() : null;
+  const src = ex ? App.state.layers.filter(l => !ex.has(l)) : App.state.layers;
+  return src.slice().reverse();
+};
+
 App.refreshPanel = function () {
   if (!App.layerListEl) return;
-  const list = App.state.layers.slice().reverse();
+  const list = App.panelLayers();
   const existing = new Map();
   $$('.layer-item', App.layerListEl).forEach(el => {
     existing.set(parseInt(el.getAttribute('data-id'), 10), el);
@@ -460,6 +466,7 @@ App.refreshPanel = function () {
   App.syncPanelSelectionClasses();
   App.fillVisibleThumbs();
   App.alignWheelScroll();
+  if (App.syncGroupBackBtn) App.syncGroupBackBtn();
 };
 
 App.fillVisibleThumbs = function () {
@@ -516,7 +523,16 @@ App.syncPanelSelectionClasses = function () {
 };
 
 App.refreshCount = function () {
-  $('#totalCount').textContent = App.i18n.t('panel.totalPrefix') + App.countPatterns();
+  const all = App.countPatterns();
+  const ex = App.currentExcluded ? App.currentExcluded() : null;
+  let text;
+  if (ex) {
+    const inScope = App.state.layers.reduce((a, l) => a + (ex.has(l) ? 0 : App.countInLayer(l)), 0);
+    text = App.i18n.t('panel.totalPrefix') + App.i18n.tf('panel.totalPair', { in: inScope, all: all });
+  } else {
+    text = App.i18n.t('panel.totalPrefix') + all;
+  }
+  $('#totalCount').textContent = text;
   if (App.updateHideLayersButton) App.updateHideLayersButton();
   if (App.updateLayersDisplaySlider) App.updateLayersDisplaySlider();
 };
@@ -524,7 +540,7 @@ App.refreshCount = function () {
 App.scrollItemToTop = function (layer, instant) {
   if (!App.layerListEl || !layer) return;
   if (App.state.plusAnchorActive) App.setPlusAnchor(false);
-  const ids = App.state.layers.slice().reverse().map(l => l.id);
+  const ids = App.panelLayers().map(l => l.id);
   const i = ids.indexOf(layer.id);
   if (i < 0) return;
   App.lastWheelIdx = i;

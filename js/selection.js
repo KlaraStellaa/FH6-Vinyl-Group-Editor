@@ -35,7 +35,7 @@ App.actOnWhiteBoxLayer = function () {
   if (!App.state.layers.length) return;
   if (App.state.plusAnchorActive) return;
   App.state.selBarDismissed = true;
-  const ids = App.state.layers.slice().reverse().map(l => l.id);
+  const ids = App.panelLayers().map(l => l.id);
   let i;
   if (App.lastWheelIdx !== undefined) i = clamp(App.lastWheelIdx, 0, ids.length - 1);
   else if (App.state.selected.size === 1) i = ids.indexOf(Array.from(App.state.selected)[0]);
@@ -133,22 +133,23 @@ App.onCanvasPointerDown = function (e) {
   if (App.state.spaceDown) return;
   let rolledId = e && e._rolledId;
   if (App.state.tabDown && rolledId === undefined) rolledId = App.rollbackTabAutoSel();
-  const layer = (e.clientX === 0 && e.clientY === 0 && e.target)
+  let layer = (e.clientX === 0 && e.clientY === 0 && e.target)
     ? App.hitLayer(e)
     : App.hitLayerPaintedSync(e.clientX, e.clientY);
+  if (!App.inGroupEditScope(layer)) layer = null;
   if (layer) {
     const top = App.topOf(layer);
     if (App.state.tabDown) {
       App.state.tabGestureUsed = true;
       App.toggleLayerSelection(top);
-      const ids = App.state.layers.slice().reverse().map(l => l.id);
+      const ids = App.panelLayers().map(l => l.id);
       const bi = ids.indexOf(top.id);
       if (bi >= 0) { App.lastWheelIdx = bi; App.syncPanelSelectionClasses(); }
       App.scrollItemToTop(top);
       App.requestFlashRefresh(false);
     } else if (App.state.selected.size > 1 || (App.state.selectedByTab && App.state.selected.size >= 1)) {
       App.state.selBarDismissed = false;
-      const ids = App.state.layers.slice().reverse().map(l => l.id);
+      const ids = App.panelLayers().map(l => l.id);
       const i = ids.indexOf(top.id);
       if (i >= 0) App.lastWheelIdx = i;
       App.syncPanelSelectionClasses();
@@ -300,6 +301,7 @@ App.layerPolyHitBox = function (layer, x, y, w, h) {
 App.layersInBox = function (x, y, w, h) {
   const out = [];
   App.state.layers.forEach(top => {
+    if (!App.inGroupEditScope(top)) return;
     if (top.kind === 'merged') {
       const leaves = [];
       const walk = l => { if (l.kind === 'merged') l.children.forEach(walk); else leaves.push(l); };
@@ -326,11 +328,24 @@ App.setSelToolbarVisible = function (show) {
     setTimeout(() => { bar.classList.add('hidden'); bar.classList.remove('sve-bar-out'); }, 180);
   }
 };
+App.syncGroupBackBtn = function () {
+  const btn = $('#btnGroupBack');
+  if (!btn) return;
+  const active = App.groupEditActive();
+  btn.disabled = !active;
+  btn.classList.toggle('hidden', !active);
+};
 App.updateSelToolbar = function () {
   const bar = $('#selToolbar');
   const inEdit = !!App.state.edit;
   const locateBtn = $('#btnLocateLayer');
   if (locateBtn) locateBtn.disabled = !App.whiteBoxLayer();
+  const geBtn = $('#btnGroupEdit');
+  if (geBtn) {
+    const one = App.operationTargets();
+    geBtn.disabled = !(one.length === 1 && one[0].kind === 'merged');
+  }
+  App.syncGroupBackBtn();
   if (App.syncColorPanelToTargets) App.syncColorPanelToTargets();
   if (!App.state.selected.size || inEdit || App.state.plusAnchorActive) { App.setSelToolbarVisible(false); return; }
   const items = App.operationTargets();
@@ -345,6 +360,86 @@ App.updateSelToolbar = function () {
   $('#btnToLayer').disabled = !anyMask;
   const show = !App.state.selBarDismissed;
   App.setSelToolbarVisible(!!show);
+};
+
+App.groupEditActive = function () {
+  return !!(App.state.groupEdit && App.state.groupEdit.length);
+};
+App.currentExcluded = function () {
+  if (!App.groupEditActive()) return null;
+  return App.state.groupEdit[App.state.groupEdit.length - 1].excluded;
+};
+App.inGroupEditScope = function (layer) {
+  if (!layer) return false;
+  const ex = App.currentExcluded();
+  if (!ex) return true;
+  return !ex.has(layer);
+};
+App.groupEditInsertIndex = function () {
+  const ex = App.currentExcluded();
+  if (!ex) return -1;
+  let inTop = -1;
+  App.state.layers.forEach((l, i) => { if (!ex.has(l)) inTop = i; });
+  if (inTop < 0) return -1;
+  for (let i = inTop + 1; i < App.state.layers.length; i++) {
+    if (ex.has(App.state.layers[i])) return i;
+  }
+  return -1;
+};
+App.enterGroupEdit = function (merged) {
+  if (!merged || merged.kind !== 'merged') return false;
+  const children = (merged.children || []).slice();
+  if (!children.length) return false;
+  if (!App.state.groupEdit) App.state.groupEdit = [];
+  const prev = App.currentExcluded();
+  App.history.markDiscrete();
+  App.splitMerged(merged);
+  const inScope = new Set(children);
+  const excluded = new Set();
+  App.state.layers.forEach(l => { if (!inScope.has(l)) excluded.add(l); });
+  if (prev) prev.forEach(l => excluded.add(l));
+  let anchor = children[0];
+  children.forEach(ch => {
+    if (App.state.layers.indexOf(ch) > App.state.layers.indexOf(anchor)) anchor = ch;
+  });
+  App.state.groupEdit.push({ excluded: excluded, anchor: anchor });
+  App.state.selBarDismissed = false;
+  App.refreshPanel();
+  App.refreshCount();
+  App.updateSelToolbar();
+  App.drawOutlines();
+  if (App.requestFlashRefresh) App.requestFlashRefresh();
+  try { App.log('info', '进入分组内编辑', { children: children.length }); } catch (e) { /* ignore */ }
+  return true;
+};
+App.exitGroupEdit = function () {
+  if (!App.groupEditActive()) return false;
+  const ex = App.currentExcluded();
+  const frame = App.state.groupEdit[App.state.groupEdit.length - 1];
+  const scope = App.state.layers.filter(l => !ex.has(l));
+  let merged = null;
+  if (scope.length >= 2) {
+    App.history.markDiscrete();
+    if (frame && frame.anchor && scope.indexOf(frame.anchor) >= 0) {
+      const ids = App.panelLayers().map(l => l.id);
+      const i = ids.indexOf(frame.anchor.id);
+      if (i >= 0) App.lastWheelIdx = i;
+    }
+    merged = App.mergeLayers(scope.map(l => l.id));
+  }
+  App.state.groupEdit.pop();
+  App.state.selected = new Set();
+  App.state.selectedByTab = false;
+  App.refreshPanel();
+  if (merged && App.state.layers.indexOf(merged) >= 0 && App.scrollItemToTop) {
+    App.scrollItemToTop(merged, true);
+  }
+  App.refreshCount();
+  App.updateSelToolbar();
+  App.drawOutlines();
+  if (App.requestFlashRefresh) App.requestFlashRefresh();
+  try { App.log('info', '退出分组内编辑', { rest: scope.length }); } catch (e) { /* ignore */ }
+  return true;
 };
 
 App.setSelectedMask = function (flag) {
@@ -427,7 +522,7 @@ App.flipSelected = function (axis) {
 App.whiteBoxLayer = function () {
   if (App.state.plusAnchorActive) return null;
   if (!App.state.layers.length) return null;
-  const ids = App.state.layers.slice().reverse().map(l => l.id);
+  const ids = App.panelLayers().map(l => l.id);
   let i;
   if (App.lastWheelIdx !== undefined) i = clamp(App.lastWheelIdx, 0, ids.length - 1);
   else if (App.state.selected.size === 1) i = ids.indexOf(Array.from(App.state.selected)[0]);
@@ -618,6 +713,12 @@ App.initSelectionToolbar = function () {
   $('#btnFlipV').addEventListener('click', () => App.flipSelected('v'));
   $('#btnMerge').addEventListener('click', App.mergeSelected);
   $('#btnSplit').addEventListener('click', App.splitSelected);
+  $('#btnGroupEdit').addEventListener('click', () => {
+    const items = App.operationTargets();
+    if (items.length !== 1 || items[0].kind !== 'merged') return;
+    App.enterGroupEdit(items[0]);
+  });
+  $('#btnGroupBack').addEventListener('click', () => App.exitGroupEdit());
   $('#btnCut').addEventListener('click', App.cutSelection);
   $('#btnCopy').addEventListener('click', App.copySelection);
   $('#btnDelete').addEventListener('click', App.deleteSelection);

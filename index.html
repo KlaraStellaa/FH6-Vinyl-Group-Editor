@@ -56,26 +56,30 @@
   </div>
 
   <div id="selToolbar" class="hidden">
-    <button id="btnEditPos" data-i18n="sel.editPos">编辑位置</button>
-    <button id="btnEditColor" data-i18n="sel.editColor">改变颜色</button>
-    <button id="btnReplace" data-i18n="sel.replace">更换图案</button>
-    <button id="btnToMask" data-i18n="sel.toMask">切换为蒙版</button>
-    <button id="btnToLayer" data-i18n="sel.toLayer">切换为图层</button>
-    <button id="btnFlipH" data-i18n="sel.flipH">水平翻转</button>
-    <button id="btnFlipV" data-i18n="sel.flipV">垂直翻转</button>
-    <span class="st-sep"></span>
-    <span class="btn-group">
-      <button id="btnMerge" data-i18n="sel.merge">创建新图层分组</button>
-      <button id="btnSplit" data-i18n="sel.split">取消分组</button>
-    </span>
-    <button id="btnCut" data-i18n="sel.cut">剪切</button>
-    <button id="btnCopy" data-i18n="sel.copy">复制</button>
-    <button id="btnDelete" data-i18n="sel.delete">删除</button>
-    <button id="btnSelectAll" data-i18n="sel.selectAll">高亮所有图层</button>
-    <button id="btnClearSel" data-i18n="sel.clearSel">取消高亮所有图层</button>
-    <button id="btnSavePalette" data-i18n="sel.savePalette">保存</button>
-    <button id="btnDeleteAll" data-i18n="sel.deleteAll">删除所有图层</button>
-    <button id="btnLocateLayer" data-i18n="sel.locateLayer">定位图层位置</button>
+    <div class="st-col">
+      <span class="btn-group">
+        <button id="btnMerge" data-i18n="sel.merge">创建新图层分组</button>
+        <button id="btnSplit" data-i18n="sel.split">取消分组</button>
+      </span>
+      <button id="btnCut" data-i18n="sel.cut">剪切</button>
+      <button id="btnCopy" data-i18n="sel.copy">复制</button>
+      <button id="btnDelete" data-i18n="sel.delete">删除</button>
+      <button id="btnSelectAll" data-i18n="sel.selectAll">高亮所有图层</button>
+      <button id="btnClearSel" data-i18n="sel.clearSel">取消高亮所有图层</button>
+      <button id="btnSavePalette" data-i18n="sel.savePalette">保存</button>
+      <button id="btnDeleteAll" data-i18n="sel.deleteAll">删除所有图层</button>
+      <button id="btnLocateLayer" data-i18n="sel.locateLayer">定位图层位置</button>
+      <button id="btnGroupEdit" data-i18n="sel.groupEdit">分组内编辑</button>
+    </div>
+    <div class="st-col">
+      <button id="btnEditPos" data-i18n="sel.editPos">编辑图层</button>
+      <button id="btnEditColor" data-i18n="sel.editColor">改变颜色</button>
+      <button id="btnReplace" data-i18n="sel.replace">更换图案</button>
+      <button id="btnToMask" data-i18n="sel.toMask">切换为蒙版</button>
+      <button id="btnToLayer" data-i18n="sel.toLayer">切换为图层</button>
+      <button id="btnFlipH" data-i18n="sel.flipH">水平翻转</button>
+      <button id="btnFlipV" data-i18n="sel.flipV">垂直翻转</button>
+    </div>
   </div>
 
   <div id="canvasWrap">
@@ -117,6 +121,7 @@
     </div>
 
     <div id="bgButtons">
+      <button id="btnHideOthers" data-i18n="canvas.hideOthers" class="hidden">隐藏其他图层</button>
       <button id="btnHideLayers" data-i18n="canvas.hideLayers">隐藏图层</button>
       <button id="btnHideBg" data-i18n="canvas.hideBg">隐藏背景</button>
       <div class="bg-opacity-col">
@@ -180,6 +185,8 @@
     </div>
     <div id="loadingOverlay"><div class="loader-box" data-i18n="loading.lib">正在加载图案库…</div></div>
     <div id="toast" class="hidden"></div>
+
+    <button id="btnGroupBack" class="hidden" data-i18n="sel.groupBack">返回</button>
   </div>
 
   <div id="rightPanel">
@@ -266,6 +273,7 @@
 <script src="js/help-i18n.js"></script>
 <script src="keymap.js"></script>
 <script src="js/keymap.js"></script>
+<script src="js/theme.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/model.js"></script>
 <script src="js/thumb-render-core.js"></script>

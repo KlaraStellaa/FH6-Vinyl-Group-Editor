@@ -268,7 +268,7 @@ App.wireKeyboard = function () {
       else {
         const box = App.whiteBoxLayer();
         if (box) {
-          const ids = App.state.layers.slice().reverse().map(l => l.id);
+          const ids = App.panelLayers().map(l => l.id);
           const i = ids.indexOf(box.id);
           if (i >= 0) App.lastWheelIdx = i;
         }
@@ -372,11 +372,16 @@ App.wireKeyboard = function () {
       if (A === 'delete') { App.deleteSelection(); return; }
     }
     if (A === 'base') { App.toggleBase(); e.preventDefault(); return; }
-    if (A === 'hideLayers' || A === 'hideBg') {
+    if (A === 'hideLayers' || A === 'hideBg' || A === 'hideOthers') {
       if (App.Home && App.Home.shown) return;
       if (!e.repeat) {
         if (A === 'hideLayers') App.toggleLayersHidden();
-        else App.toggleBgHidden();
+        else if (A === 'hideBg') App.toggleBgHidden();
+        else if (App.state.edit && App.state.edit.type !== 'bg') {
+          App.state.hideOthers = !App.state.hideOthers;
+          if (App.state.hideOthers) App.state.layersHidden = false;
+          App.updateHideLayersButton();
+        }
       }
       return;
     }

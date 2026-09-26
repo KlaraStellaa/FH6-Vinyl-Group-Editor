@@ -370,8 +370,16 @@ App.unregisterChildren = function (layer) {
 App.addLayer = function (layer) {
   if (!layer.el) App.buildLayerElement(layer);
   if (App.state.batching && App.layersRoot.style.display !== 'none') App.layersRoot.style.display = 'none';
-  App.layersRoot.appendChild(layer.el);
-  App.state.layers.push(layer);
+  const ins = App.groupEditInsertIndex ? App.groupEditInsertIndex() : -1;
+  const next = ins >= 0 ? App.state.layers[ins] : null;
+  if (next) {
+    App.state.layers.splice(ins, 0, layer);
+    if (next.el && next.el.parentNode === App.layersRoot) App.layersRoot.insertBefore(layer.el, next.el);
+    else App.layersRoot.appendChild(layer.el);
+  } else {
+    App.layersRoot.appendChild(layer.el);
+    App.state.layers.push(layer);
+  }
   App.registerChildren(layer);
   layer.thumbDirty = true;
   if (!App.state.batching) {
@@ -552,6 +560,7 @@ App.clearAllLayers = function () {
   App.state.layers = [];
   App.state.layerMap.clear();
   App.state.selected = new Set();
+  App.state.groupEdit = [];
   $$('pattern[id^="svePat"]', App.defs).forEach(p => p.remove());
 };
 

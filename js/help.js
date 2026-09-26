@@ -16,12 +16,13 @@
     ['#btnSelectAll', 'selSelectAll'], ['#btnClearSel', 'selClearSel'],
     ['#btnSavePalette', 'selSavePalette'], ['#btnDeleteAll', 'selDeleteAll'],
     ['#btnLocateLayer', 'selLocateLayer'],
+    ['#btnGroupEdit', 'selGroupEdit'], ['#btnGroupBack', 'selGroupBack'],
     ['#editBar [data-mode="move"]', 'editModeMove'], ['#editBar [data-mode="size"]', 'editModeSize'],
     ['#editBar [data-mode="rotate"]', 'editModeRotate'], ['#editBar [data-mode="skew"]', 'editModeSkew'],
     ['#editBar [data-mode="opacity"]', 'editModeOpacity'],
     ['#btnFinish', 'btnFinish'], ['#btnShowHandles', 'btnShowHandles'], ['#btnAxisHint', 'btnAxisHint'],
     ['#btnPlaceAnchor', 'btnPlaceAnchor'], ['#btnPropMode', 'btnPropMode'], ['#btnRemoveBg', 'btnRemoveBg'],
-    ['#btnHideLayers', 'btnHideLayers'], ['#btnHideBg', 'btnHideBg'],
+    ['#btnHideLayers', 'btnHideLayers'], ['#btnHideOthers', 'btnHideOthers'], ['#btnHideBg', 'btnHideBg'],
     ['#bgOpacityRange', 'bgOpacityRange'], ['#bgOpacityBgRange', 'bgOpacityBgRange'],
     ['#canvas', 'canvas'],
     ['.layer-item', 'layerItem'],
@@ -62,7 +63,7 @@
   function tf(k, p) { return App.i18n.tf ? App.i18n.tf(k, p) : App.i18n.t(k); }
   function known(k) { return t(k) !== k; }
 
-  var KBD = { btnHideLayers: 'hideLayers', btnHideBg: 'hideBg' };
+  var KBD = { btnHideLayers: 'hideLayers', btnHideBg: 'hideBg', btnHideOthers: 'hideOthers' };
 
   function comboText(id) {
     if (!App.keymap || !App.keymap.combos || !window.SVE_KEYMAP) return '';

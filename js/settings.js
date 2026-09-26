@@ -2,7 +2,183 @@
 App.settings = {
   lang: 'zh-CN',
   theme: 'light',
+  customTheme: null,
+  themeOf(id) { return App.theme.presetOf(id) || (id === App.theme.CUSTOM_ID ? { id: id, scheme: App.theme.schemeOf((this.customTheme || {}).bg || '#F8FAFD') } : null); },
+  applyTheme(id, seeds) {
+    let r;
+    if (id === App.theme.CUSTOM_ID) {
+      this.customTheme = Object.assign({}, App.theme.defaultSeeds(), this.customTheme || {}, seeds || {});
+      r = App.theme.applyCustom(this.customTheme);
+    } else {
+      r = App.theme.applyPreset(id);
+    }
+    this.theme = r.id;
+    return r;
+  },
   panNeedsSpace: true,
+
+  presetPreview(id) {
+    const want = id === 'dark' ? ':root' : 'html[data-theme="' + id + '"]';
+    for (const sheet of Array.from(document.styleSheets || [])) {
+      let rules = null;
+      try { rules = sheet.cssRules; } catch (e) { continue; }
+      for (const r of Array.from(rules || [])) {
+        if (r.selectorText !== want || !r.style) continue;
+        const bg = r.style.getPropertyValue('--bg').trim();
+        if (!bg) continue;
+        return {
+          bg: bg,
+          panel: r.style.getPropertyValue('--panel').trim(),
+          accent: r.style.getPropertyValue('--accent').trim(),
+          text: r.style.getPropertyValue('--text').trim()
+        };
+      }
+    }
+    return null;
+  },
+
+  themeName(id) {
+    const t = App.theme.presetOf(id);
+    if (t) return (App.i18n && App.i18n.t(t.key)) || t.zh;
+    return id === App.theme.CUSTOM_ID ? App.i18n.t('theme.custom') : id;
+  },
+
+  buildThemeView() {
+    const el = document.getElementById('settingsThemeView');
+    if (!el || el.dataset.built === '1') return el;
+    const t = k => App.i18n.t(k);
+    const tile = th => {
+      const p = this.presetPreview(th.id) || {};
+      const style = p.bg ? ' style="--pv-bg:' + p.bg + ';--pv-panel:' + p.panel + ';--pv-accent:' + p.accent + '"' : '';
+      return '<button type="button" class="tm-tile" data-theme-id="' + th.id + '"' + style + '>' +
+        '<span class="tm-mock"><i class="tm-m-bg"></i><i class="tm-m-panel"></i><i class="tm-m-accent"></i></span>' +
+        '<span class="tm-name">' + ((App.i18n && App.i18n.t(th.key)) || th.zh) + '</span>' +
+        '</button>';
+    };
+    el.innerHTML =
+      '<div class="tm-head" data-i18n="theme.presets">预设</div>' +
+      '<div class="tm-grid">' + App.theme.THEMES.map(tile).join('') + '</div>' +
+      '<div class="tm-head tm-head-custom" data-i18n="theme.custom">自定义</div>' +
+      '<div class="tm-custom">' +
+        '<div class="tm-seeds">' +
+          '<label class="tm-seed"><span data-i18n="theme.seed.bg">底色</span><input type="color" id="tmSeedBg"></label>' +
+          '<label class="tm-seed"><span data-i18n="theme.seed.panel">面板</span><input type="color" id="tmSeedPanel"></label>' +
+          '<label class="tm-seed"><span data-i18n="theme.seed.accent">强调色</span><input type="color" id="tmSeedAccent"></label>' +
+          '<label class="tm-seed"><span data-i18n="theme.seed.text">正文色</span><input type="color" id="tmSeedText"></label>' +
+        '</div>' +
+        '<div class="tm-preview" id="tmPreview">' +
+          '<div class="tm-pv-top"></div>' +
+          '<div class="tm-pv-body"><span class="tm-pv-side"></span>' +
+            '<span class="tm-pv-main"><i class="tm-pv-line"></i><i class="tm-pv-line dim"></i>' +
+            '<span class="tm-pv-btns"><i></i><i class="accent"></i></span></span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="tm-warn hidden" id="tmWarn"></div>' +
+        '<div class="tm-custom-btns">' +
+          '<button id="tmResetCustom" data-i18n="theme.custom.reset">恢复默认</button>' +
+          '<button id="tmApplyCustom" data-i18n="theme.custom.apply">应用自定义</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="tm-foot"><button id="tmBack" data-i18n="theme.back">返回</button></div>';
+    el.dataset.built = '1';
+    el.querySelectorAll('.tm-tile').forEach(b => {
+      b.addEventListener('click', () => {
+        this.applyTheme(b.getAttribute('data-theme-id'));
+        this.save();
+        this.syncPanel();
+      });
+    });
+    const seedIds = { bg: 'tmSeedBg', panel: 'tmSeedPanel', accent: 'tmSeedAccent', text: 'tmSeedText' };
+    const readSeeds = () => {
+      const o = {};
+      Object.keys(seedIds).forEach(k => { o[k] = el.querySelector('#' + seedIds[k]).value; });
+      return o;
+    };
+    el.querySelectorAll('.tm-seed input').forEach(inp => {
+      inp.addEventListener('input', () => this.previewCustom(readSeeds()));
+      inp.addEventListener('change', () => { this.applyTheme(App.theme.CUSTOM_ID, readSeeds()); this.save(); this.syncPanel(); });
+    });
+    el.querySelector('#tmApplyCustom').addEventListener('click', () => {
+      this.applyTheme(App.theme.CUSTOM_ID, readSeeds());
+      this.save();
+      this.syncPanel();
+    });
+    el.querySelector('#tmResetCustom').addEventListener('click', () => {
+      const d = App.theme.defaultSeeds();
+      Object.keys(seedIds).forEach(k => { el.querySelector('#' + seedIds[k]).value = d[k]; });
+      this.previewCustom(d);
+    });
+    el.querySelector('#tmBack').addEventListener('click', () => this.showMainView());
+    return el;
+  },
+
+  previewCustom(seeds) {
+    const el = document.getElementById('tmPreview');
+    if (!el) return;
+    const r = App.theme.derive(seeds);
+    const v = r.vars;
+    el.setAttribute('style',
+      '--pv-bg:' + v['--bg'] + ';--pv-panel:' + v['--panel'] + ';--pv-accent:' + v['--accent'] +
+      ';--pv-text:' + v['--text'] + ';--pv-dim:' + v['--dim'] + ';--pv-btn:' + v['--btn-bg'] +
+      ';--pv-border:' + v['--border']);
+    const warn = document.getElementById('tmWarn');
+    const bad = App.theme.customWarnings(seeds);
+    if (warn) {
+      if (bad.length) {
+        warn.textContent = App.i18n.t('theme.warn').replace('{v}', bad.map(b => b.key + ' ' + b.value).join(' / '));
+        warn.classList.remove('hidden');
+      } else warn.classList.add('hidden');
+    }
+  },
+
+  openThemeView() {
+    const box = document.getElementById('settingsPanel');
+    if (!box) return false;
+    const el = this.buildThemeView();
+    const main = box.querySelector('#settingsMainView');
+    const key = box.querySelector('#settingsKeyView');
+    const title = box.querySelector('#settingsTitle');
+    if (main) main.classList.add('hidden');
+    if (key) key.classList.add('hidden');
+    if (el) el.classList.remove('hidden');
+    const cb = box.querySelector('.confirm-box');
+    if (cb) cb.classList.add('tm-mode');
+    if (title) { title.setAttribute('data-i18n', 'settings.theme'); title.textContent = App.i18n.t('settings.theme'); }
+    const seeds = this.theme === App.theme.CUSTOM_ID && this.customTheme
+      ? Object.assign({}, App.theme.defaultSeeds(), this.customTheme)
+      : App.theme.defaultSeeds();
+    const map = { bg: 'tmSeedBg', panel: 'tmSeedPanel', accent: 'tmSeedAccent', text: 'tmSeedText' };
+    Object.keys(map).forEach(k => { const i = el && el.querySelector('#' + map[k]); if (i) i.value = seeds[k]; });
+    this.previewCustom(seeds);
+    this.syncThemeView();
+    return true;
+  },
+
+  syncThemeView() {
+    const el = document.getElementById('settingsThemeView');
+    if (!el || el.dataset.built !== '1') return;
+    el.querySelectorAll('.tm-tile').forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-theme-id') === this.theme);
+    });
+    const now = document.getElementById('themeNowName');
+    if (now) now.textContent = this.themeName(this.theme);
+  },
+
+  showMainView() {
+    if (App.keymapUI) App.keymapUI.showMainView();
+    const box = document.getElementById('settingsPanel');
+    if (!box) return;
+    const main = box.querySelector('#settingsMainView');
+    const key = box.querySelector('#settingsKeyView');
+    const tv = box.querySelector('#settingsThemeView');
+    const title = box.querySelector('#settingsTitle');
+    if (main) main.classList.remove('hidden');
+    if (key) key.classList.add('hidden');
+    if (tv) tv.classList.add('hidden');
+    const cb = box.querySelector('.confirm-box');
+    if (cb) cb.classList.remove('tm-mode', 'km-mode');
+    if (title) { title.setAttribute('data-i18n', 'settings.title'); title.textContent = App.i18n.t('settings.title'); }
+  },
 
   initPanel() {
     if (document.getElementById('settingsPanel')) return;
@@ -26,11 +202,11 @@ App.settings = {
           '</select>' +
         '</div>' +
         '<div class="settings-row">' +
-          '<label for="settingTheme" data-i18n="settings.theme">主题颜色</label>' +
-          '<select id="settingTheme">' +
-            '<option data-theme="dark" value="dark" data-i18n="settings.dark">深色</option>' +
-            '<option data-theme="light" value="light" data-i18n="settings.light">浅色</option>' +
-          '</select>' +
+          '<label for="btnTheme" data-i18n="settings.theme">主题颜色</label>' +
+          '<span class="settings-now">' +
+            '<span id="themeNowName"></span>' +
+            '<button id="btnTheme" class="settings-change" data-i18n="settings.change">更改</button>' +
+          '</span>' +
         '</div>' +
         '<div class="settings-row">' +
           '<label data-i18n="settings.speedWasm">更改编辑速率</label>' +
@@ -51,21 +227,18 @@ App.settings = {
         '<div class="anchor-btns"><button id="btnSettingsClose" data-i18n="settings.close">关闭</button></div>' +
         '</div>' +
         '<div id="settingsKeyView" class="hidden"></div>' +
+        '<div id="settingsThemeView" class="hidden"></div>' +
       '</div>';
     document.body.appendChild(p);
     p.addEventListener('click', e => { if (e.target === p) App.hideOverlay(p); });
     p.querySelector('#btnSettingsClose').addEventListener('click', () => App.hideOverlay(p));
-    if (App.evDropdown) { App.evDropdown(p.querySelector('#settingLang')); App.evDropdown(p.querySelector('#settingTheme')); }
+    if (App.evDropdown) { App.evDropdown(p.querySelector('#settingLang')); }
     p.querySelector('#settingLang').addEventListener('change', e => {
       const v = e.target.value;
       if (App.i18n && App.i18n.dicts[v]) { this.lang = v; App.i18n.set(v); }
     });
-    p.querySelector('#settingTheme').addEventListener('change', e => {
-      const v = e.target.value === 'light' ? 'light' : 'dark';
-      this.theme = v;
-      document.documentElement.dataset.theme = v;
-      this.save();
-    });
+    const btnTheme = p.querySelector('#btnTheme');
+    if (btnTheme) btnTheme.addEventListener('click', () => this.openThemeView());
     const b1 = p.querySelector('#btnEditSpeed');
     const b2 = p.querySelector('#btnNudgeSpeed');
     if (b1) b1.addEventListener('click', () => { App.hideOverlay(p); App.speedEditor.open('wasm'); });
@@ -78,24 +251,25 @@ App.settings = {
   },
 
   syncPanel() {
-    const t = document.getElementById('settingTheme');
-    if (t && t.value !== this.theme) t.value = this.theme;
+    const now = document.getElementById('themeNowName');
+    if (now) now.textContent = this.themeName(this.theme);
     const l = document.getElementById('settingLang');
     if (l && l.value !== this.lang) l.value = this.lang;
     if (App.evDropdownSyncAll) App.evDropdownSyncAll();
+    this.syncThemeView();
   },
 
   toggle() {
     const p = document.getElementById('settingsPanel');
     if (!p) return;
     if (p.classList.contains('hidden')) {
-      if (App.keymapUI) App.keymapUI.showMainView();
+      this.showMainView();
       this.syncPanel(); App.showOverlay(p);
     } else App.hideOverlay(p);
   },
 
   applyAll() {
-    document.documentElement.dataset.theme = this.theme;
+    this.applyTheme(this.theme);
     if (App.i18n) {
       if (App.i18n.dicts[this.lang]) App.i18n.lang = this.lang;
       document.documentElement.lang = App.i18n.lang;
@@ -108,7 +282,8 @@ App.settings = {
       const r = await window.sveApi.settingsGet();
       const s = (r && r.settings) || r || {};
       if (s.lang && App.i18n && App.i18n.dicts[s.lang]) this.lang = s.lang;
-      if (s.theme === 'light' || s.theme === 'dark') this.theme = s.theme;
+      if (s.customTheme && typeof s.customTheme === 'object') this.customTheme = s.customTheme;
+      if (this.themeOf(s.theme)) this.theme = s.theme;
       if (s.panNeedsSpace === false) this.panNeedsSpace = false;
       this.applySpeeds(s);
       this.applyKeymap(s);
@@ -117,7 +292,8 @@ App.settings = {
       const ls = JSON.parse(localStorage.getItem('sve-settings') || '{}');
       if (!window.sveApi.settingsGet) {
         if (ls.lang && App.i18n.dicts[ls.lang]) this.lang = ls.lang;
-        if (ls.theme === 'light' || ls.theme === 'dark') this.theme = ls.theme;
+        if (ls.customTheme && typeof ls.customTheme === 'object') this.customTheme = ls.customTheme;
+        if (this.themeOf(ls.theme)) this.theme = ls.theme;
         if (ls.panNeedsSpace === false) this.panNeedsSpace = false;
       }
       this.applySpeeds(ls);
@@ -149,6 +325,7 @@ App.settings = {
   save() {
     const payload = {
       lang: this.lang, theme: this.theme,
+      customTheme: this.theme === App.theme.CUSTOM_ID ? Object.assign({}, this.customTheme) : undefined,
       panNeedsSpace: this.panNeedsSpace !== false,
       editSpeeds: Object.assign({}, App.state.editSpeeds),
       nudgeSpeeds: Object.assign({}, App.state.nudgeSpeeds),

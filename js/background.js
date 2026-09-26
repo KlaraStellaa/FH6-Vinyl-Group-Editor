@@ -16,6 +16,12 @@ App.initBackground = function () {
   });
   $('#btnHideBg').addEventListener('click', App.toggleBgHidden);
   $('#btnHideLayers').addEventListener('click', App.toggleLayersHidden);
+  $('#btnHideOthers').addEventListener('click', () => {
+    if (App.state.eyeMode === 'bg') { showToast(App.i18n.t('toast.bg.eyeBusyLayers')); return; }
+    App.state.hideOthers = !App.state.hideOthers;
+    if (App.state.hideOthers) App.state.layersHidden = false;
+    App.updateHideLayersButton();
+  });
   $('#bgOpacityRange').addEventListener('input', App.onLayersDisplayOpacityInput);
   $('#bgOpacityBgRange').addEventListener('input', App.onBgDisplayOpacityInput);
   App.updateHideBgButton();
@@ -69,6 +75,7 @@ App.toggleLayersHidden = function () {
   if (App.state.eyeMode === 'bg') { showToast(App.i18n.t('toast.bg.eyeBusyLayers')); return; }
   if (!App.state.layers.length) { showToast(App.i18n.t('toast.bg.noLayers')); return; }
   App.state.layersHidden = !App.state.layersHidden;
+  if (App.state.layersHidden) App.state.hideOthers = false;
   App.updateHideLayersButton();
 };
 App.updateHideLayersButton = function () {
@@ -79,6 +86,24 @@ App.updateHideLayersButton = function () {
   b.classList.toggle('disabled', !has);
   if (!has) b.textContent = App.i18n.t('canvas.hideLayers');
   else b.textContent = App.i18n.t(App.state.layersHidden ? 'canvas.showLayers' : 'canvas.hideLayers');
+  const ob = $('#btnHideOthers');
+  const editing = !!(App.state.edit && App.state.edit.type !== 'bg');
+  const onlyOthers = !!(editing && App.state.hideOthers);
+  if (ob) {
+    ob.classList.toggle('hidden', !editing);
+    ob.classList.toggle('active', onlyOthers);
+    ob.disabled = !editing;
+    ob.textContent = App.i18n.t(onlyOthers ? 'canvas.showOthers' : 'canvas.hideOthers');
+  }
+  if (onlyOthers || App._hideOthersApplied) {
+    const targets = onlyOthers ? new Set(App.editTargets()) : null;
+    App.state.layers.forEach(l => {
+      if (!l.el) return;
+      if (targets) l.el.style.display = targets.has(l) ? '' : 'none';
+      else if (l.el.style.display === 'none') l.el.style.display = '';
+    });
+    App._hideOthersApplied = !!onlyOthers;
+  }
   App.layersRoot.style.display = (App.state.layersHidden || App.state.eyeMode === 'bg') ? 'none' : '';
   if (App.state.layersHidden) App.flashG.style.display = 'none';
   else if (App.flashOverlayMap && App.flashOverlayMap.size) App.animateFlash();

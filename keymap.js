@@ -8,6 +8,7 @@ var ACTIONS = [
   { id: 'base', ctx: 'global', def: ['p'], label: 'km.a.base' },
   { id: 'hideLayers', ctx: 'global', def: ['c'], label: 'km.a.hideLayers' },
   { id: 'hideBg', ctx: 'global', def: ['v'], label: 'km.a.hideBg' },
+  { id: 'hideOthers', ctx: 'global', def: ['b'], label: 'km.a.hideOthers' },
   { id: 'escape', ctx: 'global', def: ['Escape'], label: 'km.a.escape' },
 
   { id: 'up', ctx: 'canvas', def: ['w', 'ArrowUp'], label: 'km.a.up' },

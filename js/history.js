@@ -18,7 +18,13 @@ App.history = {
       clipboard: App.state.clipboard.map(s => JSON.parse(JSON.stringify(s))),
       selIndexes: Array.from(App.state.selected).map(id => App.state.layers.findIndex(l => l.id === id)).filter(i => i >= 0),
       selectedByTab: !!App.state.selectedByTab,
-      selBarDismissed: !!App.state.selBarDismissed
+      selBarDismissed: !!App.state.selBarDismissed,
+      groupEdit: (App.state.groupEdit && App.state.groupEdit.length)
+        ? App.state.groupEdit.map(fr => ({
+            excluded: App.state.layers.map((l, i) => (fr.excluded.has(l) ? i : -1)).filter(i => i >= 0),
+            anchor: fr.anchor ? App.state.layers.indexOf(fr.anchor) : -1
+          }))
+        : null
     };
   },
   trim: function () {
@@ -96,6 +102,12 @@ App.history = {
     App.state.selected = new Set((snap.selIndexes || []).map(i => (App.state.layers[i] ? App.state.layers[i].id : null)).filter(Boolean));
     App.state.selectedByTab = !!snap.selectedByTab;
     App.state.selBarDismissed = !!snap.selBarDismissed;
+    App.state.groupEdit = (snap.groupEdit || []).map(fr => {
+      const set = new Set();
+      (fr.excluded || []).forEach(i => { const l = App.state.layers[i]; if (l) set.add(l); });
+      const anchor = (typeof fr.anchor === 'number' && App.state.layers[fr.anchor]) ? App.state.layers[fr.anchor] : null;
+      return { excluded: set, anchor: anchor };
+    });
     App.refreshPanel();
     App.refreshCount();
     App.refreshClipboardPanel();

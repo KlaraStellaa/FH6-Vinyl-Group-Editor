@@ -169,6 +169,7 @@ App.enterEdit = function (spec) {
   $('#btnRemoveBg').classList.toggle('hidden', !isBg);
   App.layersRoot.style.pointerEvents = 'auto';
   App.updateEditBar();
+  if (App.updateHideLayersButton) App.updateHideLayersButton();
   App.drawOutlines();
   if (App.refreshImpBitmaps) App.refreshImpBitmaps();
   if (App.autoStaticRelease) App.autoStaticRelease();
@@ -221,6 +222,7 @@ App.exitEdit = function (cancel) {
   }
   App.editSession = null;
   App.state.edit = null;
+  if (App.updateHideLayersButton) App.updateHideLayersButton();
   if (App.updateEditStaticViewport) App.updateEditStaticViewport();
   App.state.keys.clear();
   App.drag = null;
@@ -566,7 +568,22 @@ App.applyGroupScaleAbs = function (ddx, ddy) {
   App.groupTransformApply(g => { g.sx *= fx; g.sy *= fy; });
   return true;
 };
+App.propScalePair = function (ddx, ddy) {
+  const targets = App.editTargets();
+  if (targets.length !== 1) return [ddx, ddy];
+  const it = targets[0];
+  if (!it) return [ddx, ddy];
+  const sx0 = (it.flipH ? -1 : 1) * (it.sx || 1);
+  const sy0 = (it.flipV ? -1 : 1) * (it.sy || 1);
+  if (ddx && sx0) return [ddx, ddx * (sy0 / sx0)];
+  if (ddy && sy0) return [ddy * (sx0 / sy0), ddy];
+  return [ddx, ddy];
+};
 App.applyEditScaleDelta = function (ddx, ddy) {
+  if (App.state.sizeMode === 'prop') {
+    const p = App.propScalePair(ddx, ddy);
+    ddx = p[0]; ddy = p[1];
+  }
   if (!App.applyGroupScaleAbs(ddx, ddy)) {
     App.withTransformBatch(() => App.editTargets().forEach(it => App.scaleItemKeepCenterAbs(it, ddx, ddy)));
   }
@@ -1271,8 +1288,13 @@ App.onEditPointerMove = function (e) {
     if (h.includes('n')) gy -= ly / 200;
     if (h.includes('s')) gy += ly / 200;
     if (App.state.sizeMode === 'prop') {
-      const g = (h.includes('e') || h.includes('w')) ? gx : gy;
-      gx = g; gy = g;
+      if (App.drag.snap.length === 1 && it) {
+        const p = App.propScalePair(gx, gy);
+        gx = p[0]; gy = p[1];
+      } else {
+        const g = (h.includes('e') || h.includes('w')) ? gx : gy;
+        gx = g; gy = g;
+      }
     }
     let rotD = 0;
     if (App.state.shiftDown && (h === 'nw' || h === 'ne' || h === 'sw' || h === 'se')) {
@@ -1372,7 +1394,8 @@ App.duplicateEditing = function () {
   App.refreshPanel();
   App.refreshCount();
   const first = items[0];
-  App.lastWheelIdx = App.state.layers.length - 1 - App.state.layers.indexOf(first);
+  const boxIdx = App.panelLayers().indexOf(first);
+  if (boxIdx >= 0) App.lastWheelIdx = boxIdx;
   App.refreshLayerThumbs();
   if (App.contentChanged) App.contentChanged();
   if (App.requestFlashRefresh) App.requestFlashRefresh(false);

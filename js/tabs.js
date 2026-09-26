@@ -325,7 +325,7 @@ App.Tabs = {
       d.data = {
         layers: [], view: { x: App.state.view.x, y: App.state.view.y, scale: 1 },
         clipboard: [], selIndexes: [], selectedByTab: false, selBarDismissed: false,
-        lastColor: App.state.lastColor, histColors: [], layersHidden: false,
+        lastColor: '#ffffff', histColors: [], layersHidden: false,
         layersDisplayOpacity: 1, bgHidden: false, bgDisplayOpacity: 1
       };
       d.bg = null;
@@ -399,6 +399,8 @@ App.Tabs = {
     if (App.editHist) App.editHist.reset();
     App.editSession = null;
     App.state.edit = null;
+    App.state.groupEdit = [];
+    App.state.hideOthers = false;
     App.state.keys.clear();
     App.drag = null;
     App.refreshPanel();

@@ -137,8 +137,24 @@ App.FZA.exportSlim = function (l) {
   return slim;
 };
 
+App.exportLayersView = function () {
+  const ex = App.currentExcluded ? App.currentExcluded() : null;
+  if (!ex) return App.state.layers;
+  const scope = App.state.layers.filter(l => !ex.has(l));
+  if (scope.length < 2) return App.state.layers;
+  const wrapper = App.newLayer({ kind: 'merged', name: App.i18n.t('name.mergedLayer'), color: '', opacity: 1 });
+  wrapper.children = scope.slice();
+  const out = [];
+  let placed = false;
+  App.state.layers.forEach(l => {
+    if (ex.has(l)) { out.push(l); return; }
+    if (!placed) { out.push(wrapper); placed = true; }
+  });
+  return out;
+};
+
 App.buildForzaExportString = function (quiet, layers) {
-  const src = Array.isArray(layers) ? layers : App.state.layers;
+  const src = Array.isArray(layers) ? layers : App.exportLayersView();
   if (!src.length) { if (!quiet) showToast(App.i18n.t('toast.forza.noLayers')); return null; }
   const defMap = App.FZA.symbolDefMap();
   let skipped = 0, anyMask = false;
@@ -214,7 +230,7 @@ App.buildForzaExportString = function (quiet, layers) {
   }
 
   const body = nodes.map(n => writeNode(n, 2)).join('\n');
-  const str = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+  let str = '<?xml version="1.0" encoding="UTF-8"?>\n' +
     '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"' +
     ' xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"' +
     ' xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"' +
@@ -223,6 +239,26 @@ App.buildForzaExportString = function (quiet, layers) {
     '  <sodipodi:namedview id="namedview1" pagecolor="#ffffff" showgrid="false" />\n' +
     '  <defs>\n' + defsParts.join('\n') + '\n  </defs>\n' +
     body + '\n</svg>\n';
+  const CANVAS_RECT = [-960, -540, 1920, 1080];
+  if (App.thumbFrameToContent) {
+    try {
+      const framed = App.thumbFrameToContent(str, src);
+      const mv = /viewBox="([^"]+)"/.exec(framed || '');
+      const p = mv ? mv[1].trim().split(/[\s,]+/).map(Number) : null;
+      if (p && p.length === 4 && p.every(isFinite)) {
+        const x0 = Math.min(CANVAS_RECT[0], p[0]), y0 = Math.min(CANVAS_RECT[1], p[1]);
+        const x1 = Math.max(CANVAS_RECT[0] + CANVAS_RECT[2], p[0] + p[2]);
+        const y1 = Math.max(CANVAS_RECT[1] + CANVAS_RECT[3], p[1] + p[3]);
+        const r3 = v => Math.round(v * 1000) / 1000;
+        const pw = r3(x1 - x0), ph = r3(y1 - y0);
+        str = str.replace(/<svg\b[^>]*>/, tag => tag
+          .replace(/\bwidth="[^"]*"/, 'width="' + pw + '"')
+          .replace(/\bheight="[^"]*"/, 'height="' + ph + '"')
+          .replace(/\bviewBox="[^"]*"/, 'viewBox="' + [r3(x0), r3(y0), pw, ph].join(' ') + '"')
+          .replace(/<svg\b/, '<svg data-sve-canvas="' + CANVAS_RECT.join(' ') + '"'));
+      }
+    } catch (e) { console.warn('[forza] 页框放宽失败，保持画布页框：', e && e.message); }
+  }
 
   const d = new Date();
   const name = App.autoNamePrefix() + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') +
@@ -237,8 +273,12 @@ App.buildForzaExportString = function (quiet, layers) {
 
 App.importForza = function (root) {
   let cx = 960, cy = 540;
-  const vbM = (root.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
-  if (vbM.length === 4 && vbM.every(isFinite)) { cx = vbM[0] + vbM[2] / 2; cy = vbM[1] + vbM[3] / 2; }
+  const cvM = ((root.getAttribute('data-sve-canvas') || '').trim().split(/[\s,]+/).map(Number));
+  if (cvM.length === 4 && cvM.every(isFinite)) { cx = cvM[0] + cvM[2] / 2; cy = cvM[1] + cvM[3] / 2; }
+  else {
+    const vbM = (root.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+    if (vbM.length === 4 && vbM.every(isFinite)) { cx = vbM[0] + vbM[2] / 2; cy = vbM[1] + vbM[3] / 2; }
+  }
 
   const defInfo = {};
   $$('symbol', root).forEach(s => {
@@ -283,7 +323,7 @@ App.importForza = function (root) {
     try { return JSON.parse(raw); } catch (e) { return null; }
   };
 
-  const buildUse = (useEl, M, mask, opacity) => {
+  const buildUse = (useEl, M, mask, opacity, ancFlip) => {
     const href = useEl.getAttribute('href') || useEl.getAttributeNS(XLINK, 'href') || '';
     const id = href.replace(/^#/, '');
     const def = defInfo[id];
@@ -298,7 +338,7 @@ App.importForza = function (root) {
     const p = App.FZA.decomposeToModel(Me);
     let sy = Math.abs(p.sy), flipV = p.sy < 0, flipH = false, rot = normalizeDeg(p.rot);
     const slim = slimOf(useEl);
-    if (slim && slim.kind === 'symbol') {
+    if (slim && slim.kind === 'symbol' && !ancFlip) {
       flipH = !!slim.flipH; flipV = !!slim.flipV;
       if (flipH) rot = normalizeDeg(p.rot - 180);
     }
@@ -330,7 +370,7 @@ App.importForza = function (root) {
       const tag = ch.nodeName.toLowerCase();
       if (tag === 'use' && App.FZA.useRe.test(ch.getAttribute('href') || ch.getAttributeNS(XLINK, 'href') || '')) {
         const Mc = App.FZA.mul(M, App.FZA.matFromString(ch.getAttribute('transform')));
-        const l = buildUse(ch, Mc, gMask || isMaskEl(ch), gOp * parseOpacity(ch));
+        const l = buildUse(ch, Mc, gMask || isMaskEl(ch), gOp * parseOpacity(ch), (M.a * M.d - M.b * M.c) < 0);
         if (l) children.push(l);
       } else if (tag === 'g') {
         const Mc = App.FZA.mul(M, App.FZA.matFromString(ch.getAttribute('transform')));
@@ -356,11 +396,11 @@ App.importForza = function (root) {
       const tag = ch.nodeName.toLowerCase();
       if (tag === 'use' && App.FZA.useRe.test(ch.getAttribute('href') || ch.getAttributeNS(XLINK, 'href') || '')) {
         const M = App.FZA.matFromString(ch.getAttribute('transform'));
-        const l = buildUse(ch, M, isMaskEl(ch), parseOpacity(ch));
+        const l = buildUse(ch, M, isMaskEl(ch), parseOpacity(ch), false);
         if (l) { App.addLayer(l); count++; }
       } else if (tag === 'g') {
         const M = App.FZA.matFromString(ch.getAttribute('transform'));
-        const sub = buildG(ch, M, isMaskEl(ch), parseOpacity(ch));
+        const sub = buildG(ch, M, isMaskEl(ch), 1);
         if (sub) { App.addLayer(sub); count++; }
       }
     });
@@ -396,7 +436,9 @@ App.FZA.modelFromForzaSvg = function (svgStr) {
   const rootEl = doc.documentElement;
   const vb = ((rootEl.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number));
   let canvasX = 0, canvasY = 0, canvasW = 1920, canvasH = 1080;
-  if (vb.length === 4 && vb.every(isFinite)) { canvasX = vb[0]; canvasY = vb[1]; canvasW = vb[2]; canvasH = vb[3]; }
+  const hint = ((rootEl.getAttribute('data-sve-canvas') || '').trim().split(/[\s,]+/).map(Number));
+  if (hint.length === 4 && hint.every(isFinite)) { canvasX = hint[0]; canvasY = hint[1]; canvasW = hint[2]; canvasH = hint[3]; }
+  else if (vb.length === 4 && vb.every(isFinite)) { canvasX = vb[0]; canvasY = vb[1]; canvasW = vb[2]; canvasH = vb[3]; }
   else {
     const pw = parseFloat(rootEl.getAttribute('width'));
     const ph = parseFloat(rootEl.getAttribute('height'));

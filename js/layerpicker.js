@@ -138,7 +138,8 @@
     if (!l) return;
     App.state.selectedByTab = false;
     App.state.selBarDismissed = false;
-    App.lastWheelIdx = App.state.layers.length - 1 - App.state.layers.indexOf(l);
+    var _bi = App.panelLayers().indexOf(l);
+    if (_bi >= 0) App.lastWheelIdx = _bi;
     App.setSelection([l.id], { scrollPanel: true });
     if (App.requestFlashRefresh) App.requestFlashRefresh();
   }

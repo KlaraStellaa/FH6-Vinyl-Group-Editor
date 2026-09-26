@@ -47,8 +47,10 @@ App.initIO = function () {
   $('#btnLogClose').addEventListener('click', () => $('#logPanel').classList.add('hidden'));
   $('#btnOpenImage').addEventListener('click', App.openBgImageDialog);
   $('#btnSavePalette').addEventListener('click', function () {
-    const wb = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
-    App.exportForzaSVG(wb ? [wb] : undefined);
+    const items = App.operationTargets();
+    const sel = (items || []).slice()
+      .sort((a, b) => App.state.layers.indexOf(a) - App.state.layers.indexOf(b));
+    App.exportForzaSVG(sel.length ? sel : undefined);
   });
   App.startHistAnchors();
 };
@@ -183,6 +185,21 @@ App.buildExportString = function () {
   if (layersRoot) {
     layersRoot.removeAttribute('id');
     layersRoot.removeAttribute('style');
+    const ex = App.currentExcluded ? App.currentExcluded() : null;
+    if (ex) {
+      const scopeEls = [];
+      App.state.layers.forEach(l => {
+        if (ex.has(l)) return;
+        const el = c.querySelector('[data-layer="' + l.id + '"]');
+        if (el) scopeEls.push(el);
+      });
+      if (scopeEls.length >= 2) {
+        const wrapG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        wrapG.setAttribute('id', App.i18n.t('name.mergedLayer'));
+        scopeEls[0].parentNode.insertBefore(wrapG, scopeEls[0]);
+        scopeEls.forEach(el => wrapG.appendChild(el));
+      }
+    }
   }
   c.removeAttribute('id');
   c.setAttribute('data-sve-version', '1');
@@ -301,6 +318,7 @@ App.importOwn = function (root) {
       rot: data.rot, skew: data.skew, flipH: data.flipH, flipV: data.flipV,
       isMask: data.isMask, symbolKey: data.symbolKey, patternKey: data.patternKey
     });
+    const sizeFixed = App.normalizeSymbolSize(l);
     l.el = el;
     el.setAttribute('data-layer', l.id);
     el.setAttribute('data-kind', l.kind);
@@ -329,6 +347,7 @@ App.importOwn = function (root) {
         l.w = sym.w; l.h = sym.h;
       }
       if (l.dataUri) App.ensureSymbolImageDef(l);
+      if (sizeFixed) App.rebuildLayerContent(l);
     } else if (l.kind === 'pattern') {
       const rect = el.querySelector('rect');
       const fillM = rect ? /url\(#(svePat\d+)\)/.exec(rect.getAttribute('fill') || '') : null;
@@ -665,6 +684,7 @@ App.buildWorkCopyData = function (layers, b, stateData, histColors) {
     bgDisplayOpacity: stateData.bgDisplayOpacity ?? 1,
     layersHidden: !!stateData.layersHidden,
     layersDisplayOpacity: stateData.layersDisplayOpacity ?? 1,
+    groupEdit: stateData.groupEdit || null,
     histColors: (histColors || stateData.histColors || []).slice(0, 16),
     lastColor: stateData.lastColor,
     view: {
@@ -683,7 +703,13 @@ App.buildWorkCopyString = function () {
     layersHidden: !!s.layersHidden,
     layersDisplayOpacity: s.layersDisplayOpacity ?? 1,
     lastColor: s.lastColor,
-    view: s.view
+    view: s.view,
+    groupEdit: (s.groupEdit && s.groupEdit.length)
+      ? s.groupEdit.map(fr => ({
+          excluded: s.layers.map((l, i) => (fr.excluded.has(l) ? i : -1)).filter(i => i >= 0),
+          anchor: fr.anchor ? s.layers.indexOf(fr.anchor) : -1
+        }))
+      : null
   };
   const data = App.buildWorkCopyData(
     s.layers.map(l => App.serializeLayer(l, true)),
@@ -816,6 +842,13 @@ App.restoreWorkCopy = function (data) {
   App.histColors = Array.isArray(data.histColors) ? data.histColors.slice(0, 16) : [];
   App.renderHistGrid();
   if (data.lastColor) App.state.lastColor = data.lastColor;
+  App.state.groupEdit = (data.groupEdit || []).map(fr => {
+    const set = new Set();
+    (fr.excluded || []).forEach(i => { const l = App.state.layers[i]; if (l) set.add(l); });
+    const anchor = (typeof fr.anchor === 'number' && App.state.layers[fr.anchor]) ? App.state.layers[fr.anchor] : null;
+    return { excluded: set, anchor: anchor };
+  });
+  App.state.hideOthers = false;
   App.state.layersHidden = !!data.layersHidden;
   App.state.layersDisplayOpacity = (typeof data.layersDisplayOpacity === 'number') ? data.layersDisplayOpacity : 1;
   App.updateHideLayersButton();

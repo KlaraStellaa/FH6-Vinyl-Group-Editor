@@ -261,7 +261,9 @@ App.fzaSvgThumb = function (name, text, ver) {
 App.fzaComputeThumbDataUrl = async function (root) {
   try {
     if (!root || !(root.children || []).length) return null;
-    const { str } = App.FZA.svgStringFromModel(root);
+    let { str } = App.FZA.svgStringFromModel(root);
+    const TR = window.SveThumbRenderer;
+    if (TR && typeof TR.frameToContent === 'function') str = TR.frameToContent(str);
     const rasterUrl = (App.thumbSvgHasMasks && App.thumbSvgHasMasks(str) && App.thumbKnockoutRaster)
       ? await App.thumbKnockoutRaster(str) : '';
     const url = rasterUrl || ('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(str));
@@ -272,33 +274,33 @@ App.fzaComputeThumbDataUrl = async function (root) {
     full.width = W; full.height = H;
     const fg = full.getContext('2d', { willReadFrequently: true });
     fg.drawImage(img, 0, 0, W, H);
-    const d = fg.getImageData(0, 0, W, H).data;
-    let minX = W, minY = H, maxX = -1, maxY = -1;
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      if (d[(y * W + x) * 4 + 3] === 0) continue;
-      if (x < minX) minX = x; if (x > maxX) maxX = x;
-      if (y < minY) minY = y; if (y > maxY) maxY = y;
-    }
-    if (maxX < 0) return null;
-    const bw = maxX - minX + 1, bh = maxY - minY + 1;
-    const sc = Math.min(256 / bw, 256 / bh);
-    const dw = Math.max(1, Math.round(bw * sc)), dh = Math.max(1, Math.round(bh * sc));
+    const boxOf = (thresh) => {
+      const d = fg.getImageData(0, 0, W, H).data;
+      let minX = W, minY = H, maxX = -1, maxY = -1;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        if (d[(y * W + x) * 4 + 3] <= thresh) continue;
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      }
+      if (maxX < 0) return null;
+      return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+    };
+    let box = boxOf(200) || boxOf(8);
+    if (!box) return null;
+    const PAD = 2;
+    const bx = Math.max(0, box.x - PAD), by = Math.max(0, box.y - PAD);
+    box = { x: bx, y: by, w: Math.min(W - bx, box.w + PAD * 2), h: Math.min(H - by, box.h + PAD * 2) };
+    const SIZE = 256;
+    const sc = Math.min(SIZE / box.w, SIZE / box.h);
+    const dw = Math.max(1, Math.min(SIZE, Math.floor(box.w * sc)));
+    const dh = Math.max(1, Math.min(SIZE, Math.floor(box.h * sc)));
+    const dx = Math.floor((SIZE - dw) / 2), dy = Math.floor((SIZE - dh) / 2);
     const c = document.createElement('canvas');
-    c.width = 256; c.height = 256;
+    c.width = SIZE; c.height = SIZE;
     const g = c.getContext('2d');
-    if (rasterUrl) {
-      g.drawImage(full, minX, minY, bw, bh, (256 - dw) / 2, (256 - dh) / 2, dw, dh);
-      const masked = c.toDataURL('image/webp', 0.95);
-      return masked.indexOf('data:image/webp') === 0 ? masked : c.toDataURL('image/png');
-    }
-    const str2 = str
-      .replace(/viewBox="[^"]*"/, 'viewBox="' + minX + ' ' + minY + ' ' + bw + ' ' + bh + '"')
-      .replace(/width="[^"]*"/, 'width="' + dw + '"')
-      .replace(/height="[^"]*"/, 'height="' + dh + '"');
-    const url2 = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(str2);
-    const img2 = new Image();
-    await new Promise((res, rej) => { img2.onload = res; img2.onerror = () => rej(new Error('svg render2')); img2.src = url2; });
-    g.drawImage(img2, (256 - dw) / 2, (256 - dh) / 2, dw, dh);
+    g.imageSmoothingEnabled = true;
+    if (g.imageSmoothingQuality !== undefined) g.imageSmoothingQuality = 'high';
+    g.drawImage(full, box.x, box.y, box.w, box.h, dx, dy, dw, dh);
     const w = c.toDataURL('image/webp', 0.95);
     return w.indexOf('data:image/webp') === 0 ? w : c.toDataURL('image/png');
   } catch (e) { console.warn('[fzaComputeThumbDataUrl] 生成失败：', e && e.message); return null; }
