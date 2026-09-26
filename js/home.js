@@ -416,6 +416,38 @@ App.Home = {
   }
 };
 
+App.thumbFrameToContent = function (svg, layers) {
+  try {
+    if (!svg || !layers || !layers.length) return svg;
+    const geo = App.mergedThumbGeometry({ kind: 'merged', children: layers });
+    const lb = geo && geo.lb;
+    if (!lb || !(lb.w > 0) || !(lb.h > 0)) return svg;
+    const pad = Math.max(lb.w, lb.h) * 0.02;
+    const vb = (lb.x - pad) + ' ' + (lb.y - pad) + ' ' + (lb.w + 2 * pad) + ' ' + (lb.h + 2 * pad);
+    const w = Math.round(lb.w + 2 * pad), h = Math.round(lb.h + 2 * pad);
+    return svg.replace(/<svg\b[^>]*>/, function (tag) {
+      let out = tag.replace(/\bwidth="[^"]*"/, 'width="' + w + '"')
+        .replace(/\bheight="[^"]*"/, 'height="' + h + '"');
+      out = /\bviewBox="[^"]*"/.test(out)
+        ? out.replace(/\bviewBox="[^"]*"/, 'viewBox="' + vb + '"')
+        : out.replace(/<svg\b/, '<svg viewBox="' + vb + '"');
+      return out;
+    });
+  } catch (e) {
+    console.warn('[thumb] 缩略图取景放宽失败', String(e && e.message || e).slice(0, 160));
+    return svg;
+  }
+};
+
+App.buildThumbSvgForLayers = function (layers) {
+  const built = App.buildForzaExportString(true, layers);
+  if (!built) return built;
+  const str = (built && built.str) ? built.str : String(built);
+  const fixed = App.thumbFrameToContent(str, layers);
+  if (built && typeof built === 'object') { built.str = fixed; return built; }
+  return fixed;
+};
+
 App.buildSvgFromWorkCopy = async function (name) {
   const r = await window.sveApi.fileRead('workcopy', name);
   if (!r.ok) { showToast(App.i18n.tf('toast.home.readFail', { v: (r.error || '') })); return null; }
@@ -429,7 +461,7 @@ App.buildSvgFromWorkCopy = async function (name) {
     if (T) { prevSilent = !!T._silentRender; T._silentRender = true; }
     App._workCopyRenderSeq = (App._workCopyRenderSeq || 0) + 1;
     const layers = App.deserializeLayersDetached(data.layers || [], 'workcopy_' + App._workCopyRenderSeq + '_');
-    return App.buildForzaExportString(true, layers);
+    return App.buildThumbSvgForLayers(layers);
   } catch (e) {
     console.warn('[home] 工作进程离屏导出失败', String(e && e.message || e).slice(0, 160));
     return null;
@@ -451,7 +483,7 @@ App.buildSvgFromAnchor = async function (name) {
     if (T) { prevSilent = !!T._silentRender; T._silentRender = true; }
     App._workCopyRenderSeq = (App._workCopyRenderSeq || 0) + 1;
     const layers = App.deserializeLayersDetached(data.layers || [], 'anchor_' + App._workCopyRenderSeq + '_');
-    return App.buildForzaExportString(true, layers);
+    return App.buildThumbSvgForLayers(layers);
   } catch (e) {
     console.warn('[anchor] 锚点离屏导出失败', String(e && e.message || e).slice(0, 160));
     return null;

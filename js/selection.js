@@ -490,10 +490,9 @@ App.pasteClipboard = function () {
   if (App.state.plusAnchorActive && App.state.layers.length) {
     const insertAt = App.state.layers.length;
     const topEl = App.state.layers[insertAt - 1] ? App.state.layers[insertAt - 1].el : null;
-    newLayers.forEach((l, k) => {
+    newLayers.forEach((l) => {
       if (!l.el) App.buildLayerElement(l);
-      const ref = k === 0 ? topEl : newLayers[k - 1].el;
-      if (ref && ref.parentNode) ref.before(l.el); else App.layersRoot.appendChild(l.el);
+      if (topEl && topEl.parentNode) topEl.after(l.el); else App.layersRoot.appendChild(l.el);
       App.state.layers.splice(insertAt, 0, l);
       App.registerChildren(l);
       l.thumbDirty = true;
@@ -518,7 +517,7 @@ App.pasteClipboard = function () {
       if (!l.el) App.buildLayerElement(l);
       const ref = k === 0 ? anchor.el : newLayers[k - 1].el;
       ref.before(l.el);
-      App.state.layers.splice(idx + k, 0, l);
+      App.state.layers.splice(idx, 0, l);
       App.registerChildren(l);
       l.thumbDirty = true;
     });

@@ -27,8 +27,7 @@
       "css/**/*",
       "assets/**/*",
       "icons/**/*",
-      "!css/**/*.bak*",
-      "!*.bak*",
+      "!**/*.bak*",
       "!icons/*-prev*.ico",
       "!icons/electron-default.ico"
     ],

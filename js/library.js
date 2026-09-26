@@ -314,6 +314,7 @@ App.replaceSelectedPattern = function (spec) {
     layer.symbolKey = spec.key;
     layer.name = sym.label;
     layer.dataUri = App.symbolUri(sym);
+    App.normalizeSymbolSize(layer);
   } else {
     const pat = App.patterns.find(p => p.key === spec.key);
     if (!pat) return;

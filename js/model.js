@@ -607,6 +607,23 @@ App.serializeLayer = function (layer, forClipboard) {
   }
   return slim;
 };
+App.normalizeSymbolSize = function (layer) {
+  if (!layer || layer.kind !== 'symbol' || !layer.symbolKey) return false;
+  if (!App.symbolMap || !App.symbolMap.get) return false;
+  const sym = App.symbolMap.get(layer.symbolKey);
+  if (!sym || !(sym.w > 0) || !(sym.h > 0)) return false;
+  const oldW = Number(layer.w), oldH = Number(layer.h);
+  if (Number.isFinite(oldW) && Math.abs(oldW - sym.w) < 1e-6 &&
+      Number.isFinite(oldH) && Math.abs(oldH - sym.h) < 1e-6) return false;
+  if (Number.isFinite(oldW) && oldW > 0 && Number.isFinite(oldH) && oldH > 0) {
+    layer.sx = (Number(layer.sx) || 1) * (oldW / sym.w);
+    layer.sy = (Number(layer.sy) || 1) * (oldH / sym.h);
+  }
+  layer.w = sym.w;
+  layer.h = sym.h;
+  return true;
+};
+
 App.deserializeLayer = function (slim) {
   const l = App.newLayer({
     kind: slim.kind, name: slim.name, color: slim.color, opacity: slim.opacity,
@@ -615,6 +632,7 @@ App.deserializeLayer = function (slim) {
     isMask: slim.isMask, symbolKey: slim.symbolKey,
     patternKey: slim.patternKey, dataUri: slim.dataUri, importMarkup: slim.importMarkup
   });
+  App.normalizeSymbolSize(l);
   if (slim.kind === 'merged' && slim.children) {
     l.children = slim.children.map(ch => App.deserializeLayer(ch));
   }
@@ -652,6 +670,7 @@ App.deserializeLayersDetached = function (slims, prefix) {
       const sym = App.symbolMap && App.symbolMap.get(layer.symbolKey);
       if (sym) layer.dataUri = App.symbolUri(sym);
     }
+    App.normalizeSymbolSize(layer);
     if (layer.kind === 'merged') layer.children = (slim.children || []).map(build);
     return layer;
   };

@@ -857,7 +857,7 @@ App.startHistAnchors = function () {
     if (App.state.layers.length > 0 || (App.state.bg.image && App.state.bg.image.el)) {
       App.saveHistAnchor();
     }
-  }, 600000);
+  }, 900000);
 };
 
 App.saveHistAnchor = async function () {

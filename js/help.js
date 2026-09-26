@@ -2,6 +2,7 @@
 (function () {
   var MAP = [
     ['#btnOpen', 'btnOpen'], ['#btnSave', 'btnSave'], ['#btnSaveWork', 'btnSaveWork'],
+    ['#btnOpenWork', 'btnOpenWork'],
     ['#btnHistAnchor', 'btnHistAnchor'], ['#btnBase', 'btnBase'], ['#btnGrid', 'btnGrid'],
     ['#btnZoomWheel', 'btnZoomWheel'], ['#btnShortcuts', 'btnShortcuts'],
     ['#helpFab', 'helpFab'],
@@ -60,6 +61,17 @@
   function t(k) { return App.i18n.t(k); }
   function tf(k, p) { return App.i18n.tf ? App.i18n.tf(k, p) : App.i18n.t(k); }
   function known(k) { return t(k) !== k; }
+
+  var KBD = { btnHideLayers: 'hideLayers', btnHideBg: 'hideBg' };
+
+  function comboText(id) {
+    if (!App.keymap || !App.keymap.combos || !window.SVE_KEYMAP) return '';
+    return (App.keymap.combos(id) || []).map(function (c) {
+      return window.SVE_KEYMAP.displayParts(c).map(function (p) {
+        return p.i18n ? t(p.i18n) : p.text;
+      }).join('+');
+    }).join('/');
+  }
 
   function labelOf(node, key) {
     if (key) {
@@ -121,6 +133,11 @@
     var name = (last.node && last.node.isConnected) ? labelOf(last.node, last.key) : last.label;
     var txt = last.key ? t('help.' + last.key) : '';
     if (!txt || txt === 'help.' + last.key) txt = tf('help.unknown', { name: name });
+    else {
+      var act = last.key ? KBD[last.key] : null;
+      var k = act ? comboText(act) : '';
+      if (k) txt = txt + tf('help.kbdSuffix', { k: k });
+    }
     titleEl.textContent = t('help.title') + ' · ' + name;
     bodyEl.textContent = txt;
     okBtn.textContent = t('help.close');

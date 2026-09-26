@@ -172,6 +172,106 @@
     }
   }
 
+  function mulMat(A, B) {
+    return [
+      A[0] * B[0] + A[2] * B[1], A[1] * B[0] + A[3] * B[1],
+      A[0] * B[2] + A[2] * B[3], A[1] * B[2] + A[3] * B[3],
+      A[0] * B[4] + A[2] * B[5] + A[4], A[1] * B[4] + A[3] * B[5] + A[5]
+    ];
+  }
+
+  function applyMat(M, x, y) {
+    return [M[0] * x + M[2] * y + M[4], M[1] * x + M[3] * y + M[5]];
+  }
+
+  function parseTransformAttr(str) {
+    let M = [1, 0, 0, 1, 0, 0];
+    const re = /([a-zA-Z]+)\s*\(([^)]*)\)/g;
+    let m;
+    while ((m = re.exec(String(str || '')))) {
+      const v = m[2].replace(/,/g, ' ').trim().split(/\s+/).map(Number).filter(Number.isFinite);
+      let T = null;
+      if (m[1] === 'matrix' && v.length === 6) T = v.slice(0, 6);
+      else if (m[1] === 'translate') T = [1, 0, 0, 1, v[0] || 0, v[1] || 0];
+      else if (m[1] === 'scale') T = [v[0] === undefined ? 1 : v[0], 0, 0,
+        v[1] === undefined ? (v[0] === undefined ? 1 : v[0]) : v[1], 0, 0];
+      else if (m[1] === 'rotate') {
+        const r = (v[0] || 0) * Math.PI / 180, ca = Math.cos(r), sa = Math.sin(r);
+        T = [ca, sa, -sa, ca, 0, 0];
+        if (v.length >= 3) {
+          const cx = v[1] || 0, cy = v[2] || 0;
+          T[4] = cx - cx * ca + cy * sa;
+          T[5] = cy - cx * sa - cy * ca;
+        }
+      } else if (m[1] === 'skewX') T = [1, 0, Math.tan((v[0] || 0) * Math.PI / 180), 1, 0, 0];
+      else if (m[1] === 'skewY') T = [1, Math.tan((v[0] || 0) * Math.PI / 180), 0, 1, 0, 0];
+      if (T) M = mulMat(M, T);
+    }
+    return M;
+  }
+
+  function frameToContent(svgText) {
+    const text = String(svgText || '');
+    if (!text || text.indexOf('<use') < 0) return text;
+    try {
+      const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+      const root = doc.documentElement;
+      if (!root || tagOf(root) !== 'svg' || root.querySelector('parsererror')) return text;
+      const box = viewBoxOf(root);
+      const symBox = {};
+      Array.prototype.slice.call(root.querySelectorAll('symbol')).forEach(function (s) {
+        const id = s.getAttribute('id');
+        const vb = String(s.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+        if (id && vb.length === 4 && vb.every(Number.isFinite) && vb[2] > 0 && vb[3] > 0) symBox[id] = vb;
+      });
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      const grow = function (M, bx) {
+        [[bx[0], bx[1]], [bx[0] + bx[2], bx[1]], [bx[0], bx[1] + bx[3]], [bx[0] + bx[2], bx[1] + bx[3]]]
+          .forEach(function (p) {
+            const q = applyMat(M, p[0], p[1]);
+            if (q[0] < x0) x0 = q[0];
+            if (q[0] > x1) x1 = q[0];
+            if (q[1] < y0) y0 = q[1];
+            if (q[1] > y1) y1 = q[1];
+          });
+      };
+      const walk = function (el, M) {
+        const tag = tagOf(el);
+        if (NON_DRAW.test(tag) || tag.indexOf('namedview') >= 0) return;
+        const T = mulMat(M, parseTransformAttr(el.getAttribute && el.getAttribute('transform')));
+        if (tag === 'g' || tag === 'svg') {
+          Array.prototype.slice.call(el.children || []).forEach(function (ch) { walk(ch, T); });
+          return;
+        }
+        if (tag === 'use') {
+          const href = String(el.getAttribute('xlink:href') || el.getAttribute('href') || '').replace(/^#/, '');
+          if (symBox[href]) grow(T, symBox[href]);
+          return;
+        }
+        if (tag === 'image' || tag === 'rect') {
+          const w = parseFloat(el.getAttribute('width')), h = parseFloat(el.getAttribute('height'));
+          if (w > 0 && h > 0) {
+            grow(T, [parseFloat(el.getAttribute('x')) || 0, parseFloat(el.getAttribute('y')) || 0, w, h]);
+          }
+        }
+      };
+      Array.prototype.slice.call(root.children || []).forEach(function (el) { walk(el, [1, 0, 0, 1, 0, 0]); });
+      if (!(x1 > x0) || !(y1 > y0)) return text;
+      const eps = Math.max(x1 - x0, y1 - y0) * 1e-4;
+      if (x0 >= box.x - eps && y0 >= box.y - eps &&
+          x1 <= box.x + box.w + eps && y1 <= box.y + box.h + eps) return text;
+      const pad = Math.max(x1 - x0, y1 - y0) * 0.02;
+      const nw = (x1 - x0) + 2 * pad, nh = (y1 - y0) + 2 * pad;
+      root.setAttribute('viewBox', (x0 - pad) + ' ' + (y0 - pad) + ' ' + nw + ' ' + nh);
+      root.setAttribute('width', String(Math.round(nw)));
+      root.setAttribute('height', String(Math.round(nh)));
+      return new XMLSerializer().serializeToString(doc);
+    } catch (e) {
+      console.warn('[thumb-core] 缩略图取景放宽失败', String(e && e.message || e).slice(0, 180));
+      return text;
+    }
+  }
+
   function loadSvg(text) {
     return new Promise(function (resolve, reject) {
       const url = URL.createObjectURL(new Blob([text], { type: 'image/svg+xml;charset=utf-8' }));
@@ -240,7 +340,8 @@
   }
 
   async function renderCardBlob(svgText, outputSize) {
-    let processed = hasMasks(svgText) ? knockoutMasks(svgText) : String(svgText || '');
+    const framed = frameToContent(svgText);
+    let processed = hasMasks(framed) ? knockoutMasks(framed) : String(framed || '');
     const img = await loadSvg(processed);
     processed = '';
     svgText = '';
@@ -283,5 +384,5 @@
     return blobToDataUrl(await renderCardBlob(svgText, outputSize));
   }
 
-  global.SveThumbRenderer = { hasMasks, knockoutMasks, rasterizeKnockout, renderCard, renderCardBlob };
+  global.SveThumbRenderer = { hasMasks, knockoutMasks, rasterizeKnockout, renderCard, renderCardBlob, frameToContent };
 })(window);

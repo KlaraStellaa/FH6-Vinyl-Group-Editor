@@ -372,6 +372,14 @@ App.wireKeyboard = function () {
       if (A === 'delete') { App.deleteSelection(); return; }
     }
     if (A === 'base') { App.toggleBase(); e.preventDefault(); return; }
+    if (A === 'hideLayers' || A === 'hideBg') {
+      if (App.Home && App.Home.shown) return;
+      if (!e.repeat) {
+        if (A === 'hideLayers') App.toggleLayersHidden();
+        else App.toggleBgHidden();
+      }
+      return;
+    }
   });
   const anyMatch = (id, e) => App.keymap.combos(id).some(c => window.SVE_KEYMAP.matchesEvent(c, e));
   window.addEventListener('keyup', e => {

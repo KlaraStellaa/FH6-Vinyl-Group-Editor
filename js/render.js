@@ -1501,14 +1501,20 @@ App.handleSizePx = function (box) {
   return Math.max(3, Math.min(9, short / 4));
 };
 
+App.handleHitPx = function (box) {
+  const short = (box && box.w > 0 && box.h > 0)
+    ? Math.min(box.w, box.h) * (App.state.view.scale || 1) : Infinity;
+  return Math.max(6, Math.min(14, short * 0.4));
+};
+
 App.drawHandles = function () {
   App.handleG.innerHTML = '';
   App.handleEls = [];
   const g = App.handleGeometry();
   if (!g) return;
   const sc = App.state.view.scale;
-  const hpx = App.handleSizePx(g.box);
-  const s = hpx / sc, hs = hpx / sc;
+  const s = App.handleSizePx(g.box) / sc;
+  const hs = App.handleHitPx(g.box) / sc;
   const keys = [
     ['nw', g.nw, 'nwse-resize'], ['n', g.n, 'ns-resize'],
     ['ne', g.ne, 'nesw-resize'], ['e', g.e, 'ew-resize'],
@@ -2570,6 +2576,15 @@ App.mergedThumbUrl = async function (layer, size, preparedGeometry) {
         await new Promise(resolve => setTimeout(resolve, 0));
         sliceStart = performance.now();
       }
+    }
+    if (layer.flipH || layer.flipV) {
+      const c2 = document.createElement('canvas');
+      c2.width = size; c2.height = size;
+      const x2 = c2.getContext('2d');
+      x2.translate(layer.flipH ? size : 0, layer.flipV ? size : 0);
+      x2.scale(layer.flipH ? -1 : 1, layer.flipV ? -1 : 1);
+      x2.drawImage(cv, 0, 0);
+      return await App.canvasPngUrl(c2, 'merged-thumb');
     }
     const out = await App.canvasPngUrl(cv, 'merged-thumb');
     return out;

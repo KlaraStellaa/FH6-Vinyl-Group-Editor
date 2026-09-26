@@ -1078,9 +1078,8 @@ App.onEditPointerDown = function (e) {
       if (b.corners && b.corners.length >= 4 && App.pointInQuad(pd, b.corners)) { inside = true; break; }
     }
     let h = hEl ? hEl.getAttribute('data-h') : null;
-    if (h && ['nw', 'ne', 'se', 'sw'].includes(h) && inside) h = null;
     if (!h && !inside && gizmo) {
-      const R = App.handleSizePx(g.box);
+      const R = App.handleHitPx(g.box) / 2;
       let best = null, bestD = R;
       for (const k of ['nw', 'ne', 'se', 'sw']) {
         const hp = g[k];
@@ -1288,7 +1287,8 @@ App.onEditPointerMove = function (e) {
     let skewD = 0;
     if (App.state.shiftDown && (h === 'n' || h === 's')) {
       gx = 0; gy = 0;
-      skewD = (-lx / (App.drag.box.h || 1)) * 60;
+      const skewDir = (h === 'n') ? -1 : 1;
+      skewD = (skewDir * lx / (App.drag.box.h || 1)) * 60;
       App.drag.skewLock = skewD;
     } else {
       skewD = App.drag.skewLock || 0;

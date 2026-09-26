@@ -163,10 +163,6 @@ input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px 
 #selToolbar::-webkit-scrollbar { width: 6px; }
 #selToolbar .st-sep { width: auto; height: 1px; margin: 2px 0; }
 #selToolbar .btn-group { display: flex; flex-direction: column; gap: 6px; }
-#selToolbar #btnToMask:disabled { display: none; }
-#selToolbar #btnToLayer:disabled { display: none; }
-#selToolbar #btnSplit:disabled { display: none; }
-#selToolbar:has(#btnSplit:not(:disabled)) #btnMerge { display: none; }
 
 #editBar { position: absolute; top: 10px; left: 10px; display: flex; flex-direction: column; align-items: stretch; gap: 8px; background: var(--overlay-bg); border: 1px solid var(--border); padding: 8px 10px; border-radius: 8px; z-index: 5; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
 .edit-modes { display: flex; gap: 6px; }

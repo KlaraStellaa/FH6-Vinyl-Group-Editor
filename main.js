@@ -12,7 +12,7 @@ const DLG = require('./dlg-i18n');
 
 function uiLang() {
   try {
-    const s = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'settings.json'), 'utf8'));
+    const s = JSON.parse(fs.readFileSync(settingsPath(), 'utf8'));
     return DLG.dicts[s && s.lang] ? s.lang : 'zh-CN';
   } catch (e) { return 'zh-CN'; }
 }
@@ -20,11 +20,24 @@ function dt(key, params) { return DLG.get(uiLang(), key, params); }
 const NAME_I18N = require('./js/name-i18n');
 function nt(key, params) { return NAME_I18N.get(uiLang(), key, params); }
 
+const _dataDirs = {};
+function appDataDir() {
+  let base;
+  if (!app.isPackaged) base = __dirname;
+  else base = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath('exe'));
+  if (!_dataDirs.__base) {
+    if (!fs.existsSync(base)) { try { fs.mkdirSync(base, { recursive: true }); } catch (e) { /* ignore */ } }
+    _dataDirs.__base = base;
+  }
+  return _dataDirs.__base;
+}
+
 const ISOLATE = process.env.SVGBIANJI_ISOLATE === '1';
 if (ISOLATE) {
   const isoDir = process.env.SVGBIANJI_ISOLATE_DIR || path.join(os.tmpdir(), 'groupfh6-cdp-' + process.pid);
   app.setPath('userData', isoDir);
 } else {
+  try { app.setPath('userData', path.join(appDataDir(), '_userdata')); } catch (e) { /* ignore */ }
   const gotLock = app.requestSingleInstanceLock();
   if (!gotLock) {
     app.quit();
@@ -152,7 +165,7 @@ async function renderSvgThumbFile(name) {
   const sourcePath = path.join(ensureDataDir(DATA_DIRS.svg), safeName);
   const stat = await fs.promises.stat(sourcePath);
   if (!stat.isFile() || stat.size <= 0 || stat.size > 80 * 1024 * 1024) throw new Error('SVG 文件无效或过大');
-  const cacheKey = crypto.createHash('sha1').update('thumb-v6-480\0' + sourcePath + '\0' + stat.size + '\0' + stat.mtimeMs).digest('hex');
+  const cacheKey = crypto.createHash('sha1').update('thumb-v7-480\0' + sourcePath + '\0' + stat.size + '\0' + stat.mtimeMs).digest('hex');
   const cacheDir = path.join(app.getPath('userData'), 'svg-thumb-cache');
   const cachePath = path.join(cacheDir, cacheKey + '.png');
   try {
@@ -197,15 +210,7 @@ ipcMain.on('sve-thumb-result', (event, result) => {
 const LOG_MAX = 3000;
 const logBuf = [];
 let logSavedPath = null;
-const _dataDirs = {};
-function appDataDir() {
-  const base = app.isPackaged ? path.dirname(app.getPath('exe')) : __dirname;
-  if (!_dataDirs.__base) {
-    if (!fs.existsSync(base)) { try { fs.mkdirSync(base, { recursive: true }); } catch (e) { /* ignore */ } }
-    _dataDirs.__base = base;
-  }
-  return _dataDirs.__base;
-}
+function settingsPath() { return path.join(appDataDir(), 'settings.json'); }
 const DATA_DIRS = {
   svg: 'SVGImages',
   workcopy: 'WorkCopies',
@@ -568,7 +573,7 @@ app.whenReady().then(() => {
       while (fs.existsSync(path.join(dir, name))) name = histAnchorName(d) + '-' + (++i) + '.svework';
       fs.writeFileSync(path.join(dir, name), payload.content, 'utf8');
       const files = fs.readdirSync(dir).filter(f => /^锚点-.*\.svework$/.test(f)).sort();
-      while (files.length > 20) {
+      while (files.length > 10) {
         const oldest = files.shift();
         try { fs.unlinkSync(path.join(dir, oldest)); } catch (e2) { /* ignore */ }
       }
@@ -615,7 +620,7 @@ app.whenReady().then(() => {
   }));
   ipcMain.handle('settings-get', async () => {
     try {
-      const p = path.join(app.getPath('userData'), 'settings.json');
+      const p = settingsPath();
       return { ok: true, settings: JSON.parse(fs.readFileSync(p, 'utf8')) };
     } catch (err) {
       return { ok: true, settings: {} };
@@ -623,7 +628,7 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('settings-set', async (e, s) => {
     try {
-      const p = path.join(app.getPath('userData'), 'settings.json');
+      const p = settingsPath();
       fs.writeFileSync(p, JSON.stringify(s || {}, null, 2), 'utf8');
       return { ok: true, settings: s || {} };
     } catch (err) {
@@ -645,7 +650,7 @@ app.whenReady().then(() => {
       const dir = ensureDataDir(dirName);
 
       let uiLang = null;
-      try { uiLang = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'settings.json'), 'utf8')).lang || null; } catch (err3) { }
+      try { uiLang = JSON.parse(fs.readFileSync(settingsPath(), 'utf8')).lang || null; } catch (err3) { }
       const name = resolveAutoSaveName(kind, payload && payload.fileName, n => fs.existsSync(path.join(dir, n)), undefined, uiLang);
       const fp = path.join(dir, name);
       fs.writeFileSync(fp, String(payload && payload.content || ''), 'utf8');
