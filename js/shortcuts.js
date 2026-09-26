@@ -1,12 +1,3 @@
-/* ---------- 快捷键面板（工具栏最右圆形按钮 → 弹出全部快捷键与说明） ----------
-   数据来源：逐条对照 js/main.js 的 window keydown、js/panels.js 的「+」栏 Enter
-   与 js/editmode.js 的鼠标修饰键整理；2026-09-14 按用户逐条要求改版。
-   多语言：App.SHORTCUTS 只存 **i18n key**，文案在下方 App.SC_I18N 里
-   （加载时并入 App.i18n.dicts），切语言由 App.refreshShortcutPanel 重渲。 */
-
-/* keys 数组里每一项要么是字符串（i18n key 或各语言通用字面量），
-   要么是 { act: '动作 id' } —— 后者渲染成该动作**当前**的绑定（改键后这里立刻跟着变）。
-   鼠标/修饰键类（单击、滚轮、Shift+手柄拖动）不参与自定义，保持字面量。 */
 App.SHORTCUTS = [
   {
     group: 'sc.g.canvas', items: [
@@ -67,7 +58,6 @@ App.SHORTCUTS = [
   }
 ];
 
-/* 快捷键面板专属词典（加载时并入 App.i18n.dicts） */
 App.SC_I18N = {
   'zh-CN': {
     'sc.g.canvas': '画布与视图', 'sc.g.select': '图层选择', 'sc.g.edit': '图层编辑',
@@ -195,7 +185,6 @@ App.SC_I18N = {
     'sc.d.finish': '편집 완료 후 변경 유지', 'sc.d.cancelEdit': '이 편집을 취소하고 이전 상태로 되돌림'
   }
 };
-/* 并入主词典（i18n.js 先加载，这里追加即可） */
 Object.keys(App.SC_I18N).forEach(function (lang) {
   if (App.i18n.dicts[lang]) Object.assign(App.i18n.dicts[lang], App.SC_I18N[lang]);
 });
@@ -207,7 +196,6 @@ App.initShortcutPanel = function () {
   if (!btn || !panel || !list || App.shortcutPanelReady) return;
   App.shortcutPanelReady = true;
 
-  /* 渲染：分组标题 + 「键位 chip + 说明」行。抽成函数以便切语言时整体重渲。 */
   App.refreshShortcutPanel = function () {
     const t = function (k) { return App.i18n.t(k); };
     list.innerHTML = '';
@@ -236,7 +224,6 @@ App.initShortcutPanel = function () {
         };
         it.keys.forEach(function (k, i) {
           if (i > 0) sep('+', 'sc-plus');
-          /* { act }：取该动作**当前**的绑定（设置窗里改键后这里立刻同步） */
           if (k && typeof k === 'object' && k.act) {
             const combos = App.keymap ? App.keymap.combos(k.act) : [];
             combos.forEach(function (combo, j) {
@@ -248,7 +235,6 @@ App.initShortcutPanel = function () {
             });
             return;
           }
-          /* 以 sc.k. 开头的才是词典 key，其余（Enter / Esc …）各语言通用字面量 */
           chip(k.indexOf('sc.k.') === 0 ? t(k) : k);
         });
         const d = document.createElement('div');
@@ -273,21 +259,15 @@ App.initShortcutPanel = function () {
     btn.classList.remove('active');
   };
 
-  /* 悬停气泡：必须挂在 <body> 上，不能放在按钮内部。
-     原因：#toolbar 带了 backdrop-filter（亚克力），它会**创建层叠上下文**——
-     气泡无论 z-index 多高都被关在 toolbar 的上下文里，压不过 z-index:100 的 #tabBar，
-     表现为「上方气泡被标签栏遮挡」。挂到 body 后气泡在根上下文里以 z-index:105 参与
-     层叠，> 标签栏(100)、< 标签页缩略图(110)，不再被遮。 */
   const tip = document.createElement('span');
   tip.id = 'scTip';
   tip.className = 'sc-tooltip';
-  tip.setAttribute('data-i18n', 'toolbar.tip');
   tip.textContent = 'QuQ';
   document.body.appendChild(tip);
   const placeTip = function () {
     const r = btn.getBoundingClientRect();
     tip.style.left = (r.left + r.width / 2) + 'px';
-    tip.style.top = (r.top - 8) + 'px';       /* 气泡底边落在按钮上方 8px（translateY(-100%) 抬上去） */
+    tip.style.top = (r.top - 8) + 'px';
   };
   btn.addEventListener('mouseenter', function () { placeTip(); tip.classList.add('sc-tip-show'); });
   btn.addEventListener('mouseleave', function () { tip.classList.remove('sc-tip-show'); });
@@ -301,15 +281,12 @@ App.initShortcutPanel = function () {
   const closeBtn = document.getElementById('btnShortcutClose');
   if (closeBtn) closeBtn.addEventListener('click', function () { App.closeShortcutPanel(); });
 
-  /* 点击面板以外任意处关闭（按钮自身已 stopPropagation，不会误关） */
   document.addEventListener('click', function (e) {
     if (!isOpen()) return;
     if (panel.contains(e.target)) return;
     App.closeShortcutPanel();
   }, true);
 
-  /* Esc 关闭：用捕获阶段并掐断传播，避免同时触发 main.js 的 Esc 链路
-     （取色器/退出编辑/清空选择）。面板开着时 Esc 只关面板。 */
   window.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' || !isOpen()) return;
     e.preventDefault();

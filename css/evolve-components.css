@@ -1,11 +1,3 @@
-/* ============================================================
-   EvolveUI 全组件 CSS 备用库
-   来源：EvolveUI-main/components/*.qml（MIT 许可证）
-   行为参数逐文件提取后以 CSS 等价实现。
-   使用方式：index.html 中在 style.css 之后引入本文件即可。
-   ============================================================ */
-
-/* ===== 全局设计令牌 ===== */
 :root {
   --ev-accent: #00C4B3;
   --ev-accent-light: #00C4B333;
@@ -27,9 +19,6 @@
   --ev-transition-transform: transform .12s cubic-bezier(.34,1.35,.4,1);
 }
 
-/* ===== 按钮（EButton.qml）=====
-   radius 20、hover=darker(1.2)、press=scale(.96)+opacity .85、
-   release=Spring(spring 2.5,damping .25)、shadow、bold、150ms 色彩过渡 */
 .ev-btn {
   border: none;
   border-radius: var(--ev-radius-btn);
@@ -44,8 +33,6 @@
 .ev-btn:not(:active) { transition: transform .25s cubic-bezier(.34,1.56,.64,1), var(--ev-transition-color); }
 .ev-btn:disabled { opacity: .4; box-shadow: none; transform: none; }
 
-/* ===== 输入框（EInput.qml）=====
-   radius 10、focus:border-width 2 + accent 色 + 外发光、150ms 色彩过渡 */
 .ev-input {
   border-radius: var(--ev-radius-input);
   border: 1px solid var(--border);
@@ -60,8 +47,6 @@
   outline: none;
 }
 
-/* ===== 滑条（ESlider.qml）=====
-   track=secondaryColor、fill=focusColor(#00C4B3)、handle=textColor+accent border */
 .ev-slider {
   appearance: none; height: 6px; border-radius: 3px;
   background: var(--panel2);
@@ -77,8 +62,6 @@
 .ev-slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
 .ev-slider::-webkit-slider-thumb:active { transform: scale(.9); cursor: grabbing; }
 
-/* ===== 开关（ESwitchButton.qml）=====
-   track radius 20、thumb=focusColor(#00C4B3)、press scale .96、Spring 回弹 */
 .ev-switch {
   position: relative; width: 48px; height: 24px;
   border-radius: 20px;
@@ -95,8 +78,6 @@
 .ev-switch.ev-switch-on { background: var(--ev-accent-light); }
 .ev-switch.ev-switch-on::after { transform: translateX(24px); }
 
-/* ===== 复选框（ECheckBox.qml）=====
-   选中时 accent 底 + 白色对勾图标 */
 .ev-checkbox {
   width: 20px; height: 20px;
   border-radius: 6px;
@@ -105,8 +86,6 @@
 }
 .ev-checkbox.ev-checkbox-on { background: var(--ev-accent); border-color: var(--ev-accent); }
 
-/* ===== 对话框（EAlertDialog.qml）=====
-   overlay rgba(0,0,0,.45) 220ms OutCubic、卡片 radius 18 scale .92→1 OutBack */
 .ev-dialog-overlay {
   position: fixed; inset: 0; z-index: 2000;
   background: rgba(0,0,0,.45);
@@ -128,8 +107,6 @@
   to   { opacity: 1; scale: 1; }
 }
 
-/* ===== Toast（EToast.qml）=====
-   radius 16、enter y-12→0 OutCubic 220ms、exit y0→-12 InCubic 200ms、duration 2200ms */
 .ev-toast {
   border-radius: var(--ev-radius-toast);
   padding: 12px 20px;
@@ -140,16 +117,12 @@
 .ev-toast.ev-toast-enter { animation: evToastEnter .22s cubic-bezier(.25,.9,.35,1); }
 @keyframes evToastEnter { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
 
-/* ===== 卡片（ECard.qml）=====
-   radius 20、padding 15、shadow */
 .ev-card {
   border-radius: var(--ev-radius-card);
   padding: 15px;
   box-shadow: var(--ev-shadow-card);
 }
 
-/* ===== 抽屉（EDrawer.qml）=====
-   radius 24、panelWidth 300、从右滑入、shadow */
 .ev-drawer {
   position: fixed; top: 0; right: 0; bottom: 0;
   width: 300px; z-index: 1500;
@@ -161,8 +134,6 @@
 }
 .ev-drawer.ev-drawer-open { transform: translateX(0); }
 
-/* ===== 悬停提示（tooltip.py）=====
-   radius 6、padding 8、跟随鼠标右上角（x+4,y-height）、文本刷新闪高光 */
 .ev-tooltip {
   position: fixed; z-index: 3000; pointer-events: none;
   border-radius: var(--ev-radius-tooltip);
@@ -179,8 +150,6 @@
 .ev-tooltip .ev-tip-hl.ev-tip-flash { animation: evTipFlash .35s ease-out; }
 @keyframes evTipFlash { from { opacity: .5; } to { opacity: 0; } }
 
-/* ===== 下拉菜单（EDropdown.qml）=====
-   弹出时 scale .95→1 + fade，200ms OutCubic */
 .ev-dropdown {
   border-radius: 10px;
   box-shadow: 0 4px 16px rgba(0,0,0,.3);
@@ -188,7 +157,6 @@
 }
 @keyframes evDropdownIn { from { opacity: 0; transform: scale(.95) translateY(-4px); } to { opacity: 1; transform: none; } }
 
-/* ===== 进度条（EFitnessProgress.qml 风格）===== */
 .ev-progress {
   height: 8px; border-radius: 4px;
   background: var(--panel2); overflow: hidden;
@@ -199,5 +167,4 @@
   transition: width .3s var(--ev-ease-glide);
 }
 
-/* ===== 分隔线 ===== */
 .ev-divider { height: 1px; background: var(--border); margin: 10px 0; }

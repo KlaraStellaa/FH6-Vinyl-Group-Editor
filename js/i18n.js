@@ -1,19 +1,8 @@
 'use strict';
-/* 多语言（i18n）：词典 + App.i18n（lang / t / set / apply / onApply）+ data-i18n 扫描应用。
-   语言集合与选项文字（用各语言自身文字）由主线锁定：
-   中文(zh-CN) / 繁體中文(zh-TW) / English(en) / 日本語(ja) / 한국어(ko)。
-   自动命名前缀随语言（App.autoNamePrefix），STEM_MAX/去重上限等逻辑在 auto-name.js 不变。
-
-   2026-09-14 扩容：原来只有 25 个 key，工具栏开关、左侧功能栏、编辑栏、颜色面板、
-   主页左下角 Forza 坞及其弹出窗口全部漏网。本次补齐「静态 UI 文案」，
-   并新增 App.i18n.onApply(fn) 注册机制——凡是**由 JS 动态设置**的文案
-   （如「滚轮缩放：开/关」「隐藏图层/显示图层」）都在 apply() 末尾重刷，
-   这样切语言时它们才会跟着变。 */
 App.i18n = {
   lang: 'zh-CN',
   dicts: {
     'zh-CN': {
-      /* --- 原有 --- */
       'home.sort.recent': '最近使用', 'home.sort.name': '名称', 'home.sort.size': '大小',
       'tab.home': '主页', 'tab.new': '新建文档', 'tab.settings': '设置',
       'edit.finish': '完成',
@@ -22,7 +11,6 @@ App.i18n = {
       'home.head': '最近使用项', 'home.search': '搜索文件名…', 'home.empty': '暂无文件',
       'home.openBtn': '打开', 'home.rename': '重命名', 'home.import': '导入', 'home.refresh': '刷新', 'home.exportAs': '另存为…', 'home.delete': '删除',
       'lp.title': '此处的图层', 'lp.close': '关闭', 'lp.unnamed': '未命名图层', 'lp.mask': '蒙版',
-      /* 自绘标题栏（UI 改良 C 项）：窗口控制键的无障碍名与提示 */
       'win.minimize': '最小化', 'win.maximize': '最大化', 'win.restore': '向下还原', 'win.close': '关闭窗口',
       'tab.untitled': '未命名', 'panel.plusTip': '注入 SVG（同「将 SVG 导入存档」的选择窗口）',
       'app.title': 'FH6 Vinyl Group Editor',
@@ -33,7 +21,6 @@ App.i18n = {
       'edit.flip.none': '无翻转', 'edit.flip.h': '水平翻转', 'edit.flip.hv': '水平+垂直翻转', 'edit.flip.v': '垂直翻转',
       'settings.title': '设置', 'settings.lang': '语言 / Language', 'settings.theme': '主题颜色',
       'settings.dark': '深色', 'settings.light': '浅色', 'settings.close': '关闭',
-      /* --- 编辑速率设置（设置面板两个入口 + 同一个编辑器窗口） --- */
       'settings.speedWasm': '更改编辑速率', 'settings.speedNudge': '更改微调编辑速率', 'settings.change': '更改',
       'speed.title.wasm': '编辑速率（WASD 连续调整）', 'speed.title.nudge': '微调编辑速率（方向键单步）',
       'speed.move': '移动', 'speed.size': '大小', 'speed.rotate': '旋转', 'speed.skew': '倾斜', 'speed.opacity': '透明度',
@@ -43,13 +30,11 @@ App.i18n = {
       'toolbar.open': '打开 SVG 文件', 'toolbar.save': '保存 SVG', 'toolbar.saveWork': '保存工作进程',
       'toolbar.histAnchor': '恢复工作进程', 'toolbar.log': '日志',
       'panel.lib': '彩绘纹饰形状', 'panel.color': '颜色', 'panel.sub.saved': '已保存的彩绘',
-      /* --- 工具栏（画布上方） --- */
       'toolbar.baseLight': '背景：灰白', 'toolbar.baseDark': '背景：灰黑',
       'toolbar.gridOn': '网格：开', 'toolbar.gridOff': '网格：关',
       'toolbar.zoomOn': '滚轮缩放：开', 'toolbar.zoomOff': '滚轮缩放：关',
       'toolbar.openImage': '打开背景图片文件', 'toolbar.bgNone': '背景图片：未设置',
       'toolbar.bgSet': '背景图片：已设置', 'toolbar.shortcuts': '快捷键', 'toolbar.shortcutsAria': '查看快捷键', 'toolbar.tip': 'QuQ',
-      /* --- 编辑栏（进入编辑后左上角） --- */
       'edit.mode.move': '移动', 'edit.mode.size': '大小', 'edit.mode.rotate': '旋转',
       'edit.mode.skew': '倾斜', 'edit.mode.opacity': '透明度',
       'edit.handlesOn': '手柄显示：开', 'edit.handlesOff': '手柄显示：关',
@@ -58,13 +43,10 @@ App.i18n = {
       'edit.propRatio': '等比', 'edit.propFree': '自由',
       'edit.label.rotate': '旋转角度', 'edit.label.skew': '倾斜角度', 'edit.label.opacity': '透明度',
       'edit.removeBg': '移除背景',
-      /* --- 画布右上角 --- */
       'canvas.hideLayers': '隐藏图层', 'canvas.showLayers': '显示图层',
       'canvas.hideBg': '隐藏背景', 'canvas.showBg': '显示背景',
       'canvas.opLayers': '图层', 'canvas.opBg': '背景',
-      /* --- 左侧图层面板 --- */
       'panel.layers': '图层', 'panel.totalPrefix': '图案总数：',
-      /* --- 左侧功能栏 16 键 --- */
       'sel.editPos': '编辑位置', 'sel.editColor': '改变颜色', 'sel.replace': '更换图案',
       'sel.toMask': '切换为蒙版', 'sel.toLayer': '切换为图层',
       'sel.flipH': '水平翻转', 'sel.flipV': '垂直翻转',
@@ -72,20 +54,16 @@ App.i18n = {
       'sel.cut': '剪切', 'sel.copy': '复制', 'sel.delete': '删除',
       'sel.selectAll': '高亮所有图层', 'sel.clearSel': '取消高亮所有图层', 'sel.locateLayer': '定位图层位置',
       'sel.savePalette': '保存', 'sel.deleteAll': '删除所有图层',
-      /* --- 右侧颜色面板 --- */
       'color.eyeLayer': '图层取色', 'color.eyeBg': '背景取色',
       'color.applySection': '应用颜色', 'color.apply': '应用',
       'color.histSection': '历史使用过的颜色', 'color.favSection': '收藏颜色',
       'color.favAdd': '+ 收藏当前', 'color.noHist': '暂无历史颜色', 'color.noFav': '还没有收藏颜色',
-      /* --- 主页 / Forza 功能坞 --- */
       'home.account': '账户', 'home.accountTitle': '当前账户（存档操作作用于该账户）',
       'fza.geo': '从 Geometrize JSON 生成', 'fza.vinyl': '从 Vinylizer JSON 生成',
       'fza.backup': '备份当前账户存档', 'fza.inject': '将 SVG 导入存档', 'fza.export': '从存档导出 SVG',
-      /* --- Forza 弹出窗口 --- */
       'fza.pickGroup': '选择彩绘纹饰分组', 'fza.pickSvgOpen': '选择要打开的 SVG',
       'fza.pickSvgInject': '选择要注入的 SVG', 'fza.importFile': '导入 SVG 文件…',
-      'fza.multi': '多选', 'fza.ok': '确定', 'fza.cancel': '取消', 'fza.cont': '继续', 'fza.empty': '没有可选项',
-      /* --- 日志面板 / 加载 --- */
+      'fza.pickGroupNth': '选择第 {n}/{total} 个 SVG 要注入的分组', 'fza.batchTitle': '即将覆盖以下 {n} 个彩绘纹饰分组', 'fza.batchMsg': '注入会覆盖这些分组原有的内容。', 'fza.needExact': '请选择 {n} 个分组（当前已选 {got} 个）', 'fza.pickGroupExactPrompt': '本次需要勾选正好 {n} 个分组：逐个点击分组勾选，勾满 {n} 个「确定」才会亮起；已达上限再点会提示。', 'fza.maxPicked': '最多只能选 {n} 个分组（已选满 {n} 个），请先取消一个再选其他分组', 'fza.multi': '多选', 'fza.multiCount': '（已选 {n} 项）', 'fza.undo': '撤销注入', 'fza.undoPickTitle': '选择要撤销的注入记录', 'fza.undoRec': '{time} · {count} 个分组', 'fza.undoGroupsTitle': '即将恢复以下 {n} 个分组', 'fza.undoMsg': '{time} 那次注入覆盖了这些分组。恢复会把它们还原成注入前的内容，当前内容会被覆盖，此操作不可撤销。', 'fza.undoOk': '恢复', 'fza.undoMissingTitle': '原位置已不存在', 'fza.undoMissingMsg': '以下 {n} 个分组在游戏内已被删除，无法恢复：{list}。是否把它们注入前的原内容导出为 SVG 文件？', 'fza.undoExportOk': '导出', 'fza.backupFailTitle': '备份失败', 'fza.backupFailMsg': '注入前的备份失败：{why}。取消注入可保住当前存档内容；直接注入会跳过备份，这次注入将无法撤销。', 'fza.backupFailCancel': '取消注入', 'fza.backupFailGo': '直接注入', 'fza.ok': '确定', 'fza.cancel': '取消', 'fza.cont': '继续', 'fza.empty': '没有可选项', 'fza.emptyNoSvg': 'SVG图像目录暂无文件，可点上方「{v}…」选择本地文件', 'fza.emptyNoAccount': '未找到游戏账户（GameSave/pgs 下没有 u_*_16D460 账户）', 'fza.pickGroupPrompt': '请选择要操作的彩绘纹饰分组（缩略图不一定正确，以游戏内为准）', 'fza.pickGroupMultiPrompt': '可多选：点「多选」进入多选，再点各分组切换勾选；确定后一次性导出全部分组', 'fza.softLabel': '软件内彩绘', 'fza.gameLabel': '游戏内彩绘', 'fza.opInject': '注入', 'fza.opExport': '导出', 'fza.opBackup': '备份', 'fza.thumbGenFail': '缩略图生成失败', 'fza.svgReadFail': 'SVG 读取失败',
       'log.title': '日志', 'log.copy': '复制最近日志', 'log.open': '保存日志', 'log.close': '关闭',
       'log.view': '查看日志', 'log.savedPath': '已保存：{v}',
       'log.inMemory': '（日志在内存中，共 {n} 条；点「保存日志」才写入文件）',
@@ -101,7 +79,6 @@ App.i18n = {
       'home.head': '最近使用項', 'home.search': '搜尋檔名…', 'home.empty': '暫無檔案',
       'home.openBtn': '開啟', 'home.rename': '重新命名', 'home.import': '匯入', 'home.refresh': '重新整理', 'home.exportAs': '另存為…', 'home.delete': '刪除',
       'lp.title': '此處的圖層', 'lp.close': '關閉', 'lp.unnamed': '未命名圖層', 'lp.mask': '遮色片',
-      /* 自繪標題列（UI 改良 C 項）：視窗控制鍵的無障礙名與提示 */
       'win.minimize': '最小化', 'win.maximize': '最大化', 'win.restore': '向下還原', 'win.close': '關閉視窗',
       'tab.untitled': '未命名', 'panel.plusTip': '注入 SVG（同「將 SVG 匯入存檔」的選擇視窗）',
       'app.title': 'FH6 Vinyl Group Editor',
@@ -154,7 +131,7 @@ App.i18n = {
       'fza.backup': '備份目前帳戶存檔', 'fza.inject': '將 SVG 匯入存檔', 'fza.export': '從存檔匯出 SVG',
       'fza.pickGroup': '選擇彩繪紋飾群組', 'fza.pickSvgOpen': '選擇要開啟的 SVG',
       'fza.pickSvgInject': '選擇要匯入的 SVG', 'fza.importFile': '匯入 SVG 檔案…',
-      'fza.multi': '多選', 'fza.ok': '確定', 'fza.cancel': '取消', 'fza.cont': '繼續', 'fza.empty': '沒有可選項',
+      'fza.pickGroupNth': '選擇第 {n}/{total} 個 SVG 要注入的分組', 'fza.batchTitle': '即將覆蓋以下 {n} 個彩繪紋飾分組', 'fza.batchMsg': '注入會覆蓋這些分組原有的內容。', 'fza.needExact': '請選擇 {n} 個分組（目前已選 {got} 個）', 'fza.pickGroupExactPrompt': '本次需要勾選正好 {n} 個分組：逐個點擊分組勾選，勾滿 {n} 個「確定」才會亮起；已達上限再點會提示。', 'fza.maxPicked': '最多只能選 {n} 個分組（已選滿 {n} 個），請先取消一個再選其他分組', 'fza.multi': '多選', 'fza.multiCount': '（已選 {n} 項）', 'fza.undo': '撤銷注入', 'fza.undoPickTitle': '選擇要撤銷的注入記錄', 'fza.undoRec': '{time} · {count} 個分組', 'fza.undoGroupsTitle': '即將還原以下 {n} 個分組', 'fza.undoMsg': '{time} 那次注入覆蓋了這些分組。還原會把它們回復成注入前的內容，目前內容會被覆蓋，此操作不可撤銷。', 'fza.undoOk': '還原', 'fza.undoMissingTitle': '原位置已不存在', 'fza.undoMissingMsg': '以下 {n} 個分組在遊戲內已被刪除，無法還原：{list}。是否將它們注入前的原內容匯出為 SVG 檔案？', 'fza.undoExportOk': '匯出', 'fza.backupFailTitle': '備份失敗', 'fza.backupFailMsg': '注入前的備份失敗：{why}。取消注入可保住目前存檔內容；直接注入會跳過備份，這次注入將無法撤銷。', 'fza.backupFailCancel': '取消注入', 'fza.backupFailGo': '直接注入', 'fza.ok': '確定', 'fza.cancel': '取消', 'fza.cont': '繼續', 'fza.empty': '沒有可選項', 'fza.emptyNoSvg': 'SVG圖像目錄暫無檔案，可點上方「{v}…」選擇本機檔案', 'fza.emptyNoAccount': '未找到遊戲帳戶（GameSave/pgs 下沒有 u_*_16D460 帳戶）', 'fza.pickGroupPrompt': '請選擇要操作的彩繪紋飾分組（縮圖不一定正確，以遊戲內為準）', 'fza.pickGroupMultiPrompt': '可多選：點「多選」進入多選，再點各分組切換勾選；確定後一次匯出全部分組', 'fza.softLabel': '軟體內彩繪', 'fza.gameLabel': '遊戲內彩繪', 'fza.opInject': '注入', 'fza.opExport': '匯出', 'fza.opBackup': '備份', 'fza.thumbGenFail': '縮圖產生失敗', 'fza.svgReadFail': 'SVG 讀取失敗',
       'log.title': '日誌', 'log.copy': '複製最近日誌', 'log.open': '儲存日誌', 'log.close': '關閉',
       'log.view': '檢視日誌', 'log.savedPath': '已儲存：{v}',
       'log.inMemory': '（日誌在記憶體中，共 {n} 筆；點「儲存日誌」才寫入檔案）',
@@ -224,7 +201,7 @@ App.i18n = {
       'fza.export': 'Export SVG from save',
       'fza.pickGroup': 'Select a vinyl group', 'fza.pickSvgOpen': 'Select an SVG to open',
       'fza.pickSvgInject': 'Select an SVG to import', 'fza.importFile': 'Import SVG file…',
-      'fza.multi': 'Multi-select', 'fza.ok': 'OK', 'fza.cancel': 'Cancel', 'fza.cont': 'Continue', 'fza.empty': 'No options',
+      'fza.pickGroupNth': 'Pick the group to inject SVG {n} of {total} into', 'fza.batchTitle': 'About to overwrite {n} vinyl groups', 'fza.batchMsg': 'Injecting overwrites the existing content of these groups.', 'fza.needExact': 'Please select exactly {n} groups (currently {got})', 'fza.pickGroupExactPrompt': 'This time you must tick exactly {n} groups: click groups to tick them — "OK" only lights up once {n} are ticked. Clicking beyond the limit shows a hint.', 'fza.maxPicked': 'You can select at most {n} groups ({n} already selected). Untick one first.', 'fza.multi': 'Multi-select', 'fza.multiCount': ' ({n} selected)', 'fza.undo': 'Undo injection', 'fza.undoPickTitle': 'Pick an injection to undo', 'fza.undoRec': '{time} · {count} group(s)', 'fza.undoGroupsTitle': 'About to restore these {n} group(s)', 'fza.undoMsg': 'The injection at {time} overwrote these groups. Restoring puts back their pre-injection content and overwrites what is there now. This cannot be undone.', 'fza.undoOk': 'Restore', 'fza.undoMissingTitle': 'Original location is gone', 'fza.undoMissingMsg': 'These {n} group(s) were deleted in the game and cannot be restored: {list}. Export their pre-injection content as SVG file(s)?', 'fza.undoExportOk': 'Export', 'fza.backupFailTitle': 'Backup failed', 'fza.backupFailMsg': 'The pre-injection backup failed: {why}. Cancel to keep the save untouched, or inject directly — this injection will not be undoable.', 'fza.backupFailCancel': 'Cancel injection', 'fza.backupFailGo': 'Inject anyway', 'fza.ok': 'OK', 'fza.cancel': 'Cancel', 'fza.cont': 'Continue', 'fza.empty': 'No options', 'fza.emptyNoSvg': 'No files in the SVG folder yet. Use "{v}…" above to pick a local file.', 'fza.emptyNoAccount': 'No game account found (no u_*_16D460 account under GameSave/pgs)', 'fza.pickGroupPrompt': 'Pick the vinyl group to work on (thumbnails may be inaccurate; trust the game)', 'fza.pickGroupMultiPrompt': 'Multi-select: click "Multi-select", then click groups to toggle; confirming exports them all at once', 'fza.softLabel': 'Artwork in app', 'fza.gameLabel': 'Vinyl in game', 'fza.opInject': 'Injection', 'fza.opExport': 'Export', 'fza.opBackup': 'Backup', 'fza.thumbGenFail': 'Thumbnail generation failed', 'fza.svgReadFail': 'Failed to read SVG',
       'log.title': 'Log', 'log.copy': 'Copy recent log', 'log.open': 'Save log', 'log.close': 'Close',
       'log.view': 'View log', 'log.savedPath': 'Saved: {v}',
       'log.inMemory': '(Log lives in memory, {n} entries; click "Save log" to write it to disk)',
@@ -240,7 +217,6 @@ App.i18n = {
       'home.head': '最近のファイル', 'home.search': 'ファイルを検索…', 'home.empty': 'ファイルなし',
       'home.openBtn': '開く', 'home.rename': '名前を変更', 'home.import': 'インポート', 'home.refresh': '更新', 'home.exportAs': '名前を付けて保存…', 'home.delete': '削除',
       'lp.title': 'この位置のレイヤー', 'lp.close': '閉じる', 'lp.unnamed': '無名レイヤー', 'lp.mask': 'マスク',
-      /* 自前描画のタイトルバー（UI 改良 C 項）：ウィンドウ操作のアクセシブル名 */
       'win.minimize': '最小化', 'win.maximize': '最大化', 'win.restore': '元のサイズに戻す', 'win.close': 'ウィンドウを閉じる',
       'tab.untitled': '無題', 'panel.plusTip': 'SVG を注入（「SVG をセーブに取り込む」と同じ選択画面）',
       'app.title': 'FH6 Vinyl Group Editor',
@@ -294,7 +270,7 @@ App.i18n = {
       'fza.export': 'セーブから SVG を書き出す',
       'fza.pickGroup': 'ペイントグループを選択', 'fza.pickSvgOpen': '開く SVG を選択',
       'fza.pickSvgInject': '取り込む SVG を選択', 'fza.importFile': 'SVGファイルを読み込む…',
-      'fza.multi': '複数選択', 'fza.ok': 'OK', 'fza.cancel': 'キャンセル', 'fza.cont': '続行', 'fza.empty': '項目がありません',
+      'fza.pickGroupNth': '{n}/{total} 個目の SVG を注入するグループを選択', 'fza.batchTitle': '以下 {n} 個のビニールグループを上書きします', 'fza.batchMsg': '注入するとこれらのグループの内容が上書きされます。', 'fza.needExact': '{n} 個のグループを選択してください（現在 {got} 個）', 'fza.pickGroupExactPrompt': '今回はちょうど {n} 個のグループをチェックしてください：グループをクリックしてチェックし、{n} 個そろって初めて「OK」が有効になります。上限を超えてクリックするとヒントが出ます。', 'fza.maxPicked': '選択できるのは最大 {n} 個です（すでに {n} 個選択済み）。先に1つ外してください', 'fza.multi': '複数選択', 'fza.multiCount': '（{n} 個選択中）', 'fza.undo': '注入の取り消し', 'fza.undoPickTitle': '取り消す注入を選択', 'fza.undoRec': '{time} · {count} 個のグループ', 'fza.undoGroupsTitle': '以下の {n} 個のグループを復元します', 'fza.undoMsg': '{time} の注入でこれらのグループが上書きされました。復元すると注入前の内容に戻り、現在の内容は上書きされます。元に戻せません。', 'fza.undoOk': '復元', 'fza.undoMissingTitle': '元の場所が存在しません', 'fza.undoMissingMsg': '以下の {n} 個のグループはゲーム内で削除されたため復元できません：{list}。注入前の元の内容を SVG ファイルとして書き出しますか？', 'fza.undoExportOk': '書き出す', 'fza.backupFailTitle': 'バックアップに失敗', 'fza.backupFailMsg': '注入前のバックアップに失敗しました：{why}。キャンセルするとセーブはそのまま、直接注入するとバックアップを飛ばすため今回の注入は取り消せません。', 'fza.backupFailCancel': '注入を中止', 'fza.backupFailGo': 'そのまま注入', 'fza.ok': 'OK', 'fza.cancel': 'キャンセル', 'fza.cont': '続行', 'fza.empty': '項目がありません', 'fza.emptyNoSvg': 'SVG画像フォルダにファイルがありません。上の「{v}…」から選択してください。', 'fza.emptyNoAccount': 'ゲームアカウントが見つかりません（GameSave/pgs に u_*_16D460 アカウントがありません）', 'fza.pickGroupPrompt': '操作するビニールグループを選択（サムネイルは正確でない場合があります。ゲーム内を基準に）', 'fza.pickGroupMultiPrompt': '複数選択：「複数選択」を押してから各グループをクリックで切り替え。確定でまとめて書き出します', 'fza.softLabel': 'アプリ内のペイント', 'fza.gameLabel': 'ゲーム内のペイント', 'fza.opInject': '注入', 'fza.opExport': '書き出し', 'fza.opBackup': 'バックアップ', 'fza.thumbGenFail': 'サムネイルの生成に失敗', 'fza.svgReadFail': 'SVG の読み込みに失敗',
       'log.title': 'ログ', 'log.copy': '最近のログをコピー', 'log.open': 'ログを保存', 'log.close': '閉じる',
       'log.view': 'ログを表示', 'log.savedPath': '保存しました：{v}',
       'log.inMemory': '（ログはメモリ上に {n} 件。書き出すには「ログを保存」を押してください）',
@@ -364,7 +340,7 @@ App.i18n = {
       'fza.export': '세이브에서 SVG 내보내기',
       'fza.pickGroup': '페인트 그룹 선택', 'fza.pickSvgOpen': '열 SVG 선택',
       'fza.pickSvgInject': '가져올 SVG 선택', 'fza.importFile': 'SVG 파일 가져오기…',
-      'fza.multi': '다중 선택', 'fza.ok': '확인', 'fza.cancel': '취소', 'fza.cont': '계속', 'fza.empty': '항목이 없습니다',
+      'fza.pickGroupNth': '{n}/{total}번째 SVG 를 주입할 그룹을 선택', 'fza.batchTitle': '다음 {n} 개 비닐 그룹을 덮어씁니다', 'fza.batchMsg': '주입하면 이 그룹들의 기존 내용이 덮어써집니다.', 'fza.needExact': '{n} 개 그룹을 선택하세요 (현재 {got} 개)', 'fza.pickGroupExactPrompt': '이번에는 정확히 {n}개 그룹을 체크해야 합니다: 그룹을 클릭해 체크하고, {n}개가 채워져야 「확인」이 활성화됩니다. 한도를 넘겨 클릭하면 안내가 표시됩니다.', 'fza.maxPicked': '최대 {n}개 그룹만 선택할 수 있습니다({n}개 선택됨). 먼저 하나를 해제하세요', 'fza.multi': '다중 선택', 'fza.multiCount': ' ({n}개 선택됨)', 'fza.undo': '주입 실행 취소', 'fza.undoPickTitle': '취소할 주입 선택', 'fza.undoRec': '{time} · {count}개 그룹', 'fza.undoGroupsTitle': '다음 {n}개 그룹을 복원합니다', 'fza.undoMsg': '{time} 주입에서 이 그룹들을 덮어썼습니다. 복원하면 주입 전 내용으로 되돌리고 현재 내용은 덮어씁니다. 되돌릴 수 없습니다.', 'fza.undoOk': '복원', 'fza.undoMissingTitle': '원래 위치가 없습니다', 'fza.undoMissingMsg': '다음 {n}개 그룹은 게임에서 삭제되어 복원할 수 없습니다: {list}. 주입 전 원본 내용을 SVG 파일로 내보낼까요?', 'fza.undoExportOk': '내보내기', 'fza.backupFailTitle': '백업 실패', 'fza.backupFailMsg': '주입 전 백업에 실패했습니다: {why}. 취소하면 저장 파일이 그대로 유지되고, 그냥 주입하면 백업을 건너뛰므로 이번 주입은 취소할 수 없습니다.', 'fza.backupFailCancel': '주입 취소', 'fza.backupFailGo': '그냥 주입', 'fza.ok': '확인', 'fza.cancel': '취소', 'fza.cont': '계속', 'fza.empty': '항목이 없습니다', 'fza.emptyNoSvg': 'SVG 이미지 폴더에 파일이 없습니다. 위의 "{v}…"로 로컬 파일을 선택하세요.', 'fza.emptyNoAccount': '게임 계정을 찾을 수 없습니다 (GameSave/pgs 아래에 u_*_16D460 계정이 없습니다)', 'fza.pickGroupPrompt': '작업할 비닐 그룹을 선택하세요 (썸네일이 부정확할 수 있으니 게임 내 기준)', 'fza.pickGroupMultiPrompt': '다중 선택: "다중 선택"을 누른 뒤 그룹을 클릭해 선택/해제하세요. 확인하면 한 번에 모두 내보냅니다', 'fza.softLabel': '앱 내 페인팅', 'fza.gameLabel': '게임 내 페인팅', 'fza.opInject': '주입', 'fza.opExport': '내보내기', 'fza.opBackup': '백업', 'fza.thumbGenFail': '썸네일 생성 실패', 'fza.svgReadFail': 'SVG 읽기 실패',
       'log.title': '로그', 'log.copy': '최근 로그 복사', 'log.open': '로그 저장', 'log.close': '닫기',
       'log.view': '로그 보기', 'log.savedPath': '저장했습니다: {v}',
       'log.inMemory': '(로그는 메모리에 {n}건 있습니다. 파일로 쓰려면 「로그 저장」을 누르세요)',
@@ -372,26 +348,18 @@ App.i18n = {
       'loading.lib': '도형 라이브러리 불러오는 중…'
     }
   },
-  /* 动态文案重刷器：由各模块注册，apply() 末尾统一调用。
-     （app 里很多文案是 JS 按当前状态拼出来的，如「滚轮缩放：开/关」，
-      data-i18n 扫描管不到，必须靠这里重刷，否则切语言时它们不变。） */
   refreshers: [],
   onApply(fn) { if (typeof fn === 'function') this.refreshers.push(fn); },
   t(key) {
     const d = this.dicts[this.lang] || this.dicts['zh-CN'];
     return (d && d[key]) || (this.dicts['zh-CN'] || {})[key] || key;
   },
-  /* 带占位符的取词：词典里写 '已导入 {n} 个图层'，调用 tf('toast.imported', {n: 5})。
-     未提供的占位符替换为空串——{extra}/{files}/{ov} 这类「可选片段」正是靠这个语义。 */
   tf(key, params) {
     const s = this.t(key);
     if (!params) return s;
     return s.replace(/\{(\w+)\}/g, (m, k) =>
       (params[k] === undefined || params[k] === null) ? '' : String(params[k]));
   },
-  /* 扫描 [data-i18n]（textContent）与 [data-i18n-attr]（指定属性，如 placeholder/title）。
-     textContent 同时写入同名属性（判据 UI 探针按 getAttribute('textContent') 读取）；
-     标签栏文案由 renderBar 用 t() 动态生成，这里只在 Tabs 可用时重渲一次 */
   apply(root) {
     const scope = root || document;
     scope.querySelectorAll('[data-i18n]').forEach(el => {
@@ -399,7 +367,6 @@ App.i18n = {
       const attr = el.getAttribute('data-i18n-attr');
       if (attr) el.setAttribute(attr, v);
       else {
-        /* 编辑栏的模式按钮内含 <kbd> 子元素：只替换文本节点，别把 kbd 冲掉 */
         const keep = el.getAttribute('data-i18n-keep');
         if (keep) {
           let done = false;
@@ -414,7 +381,6 @@ App.i18n = {
       }
     });
     if (App.Tabs && App.Tabs.renderBar) App.Tabs.renderBar();
-    /* 动态文案重刷：某个刷新器抛错不能拖垮其它刷新器 */
     this.refreshers.forEach(fn => {
       try { fn(); } catch (e) { console.warn('[i18n] refresher failed', e); }
     });
@@ -427,7 +393,6 @@ App.i18n = {
     if (App.settings) App.settings.save();
   }
 };
-/* 自动命名前缀（主线锁定口径；前缀表与 main 侧 auto-name.js 保持一致） */
 App.autoNamePrefix = function (lang) {
   const table = { 'zh-CN': '图案-', 'zh-TW': '圖案-', 'en': 'Pattern-', 'ja': 'パターン-', 'ko': '패턴-' };
   return table[lang || (App.i18n && App.i18n.lang) || 'zh-CN'] || '图案-';

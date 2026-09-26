@@ -1,8 +1,3 @@
-/* ---------- 原生对话框 / 应用内确认框 文案（主进程 + 渲染层共用） ----------
-   为什么单独一份：**原生对话框由 OS 渲染**，标题/按钮/过滤器名必须由主进程在
-   打开对话框时按「当前界面语言」传进去，渲染层的 App.i18n 管不到它们。
-   主进程：const DLG = require('./dlg-i18n.js');  DLG.get(lang, 'dlg.openSvg')
-   渲染层：<script src="dlg-i18n.js"></script> 加载后自动并入 App.i18n.dicts（dlg.*） */
 (function () {
   var DICT = {
     'zh-CN': {
@@ -13,7 +8,7 @@
       'dlg.filterZip': 'ZIP 压缩包', 'dlg.filterImage': '图片文件',
       'dlg.yes': '是', 'dlg.no': '否', 'dlg.cancel': '取消',
       'dlg.closeMsg': '要在关闭之前存储对 {app} 文档“{name}”的更改吗？',
-      'dlg.delTitle': '删除确认', 'dlg.delMsg': '确定要删除「{name}」吗？\n此操作不可撤销。', 'dlg.delOk': '删除',
+      'dlg.delTitle': '删除确认', 'dlg.updTitle': '发现新版本', 'dlg.updMessage': '发现新版本 {v}', 'dlg.updCurrent': '当前版本：{v}', 'dlg.updLatest': '最新版本：{v}', 'dlg.updNotes': '更新说明：', 'dlg.updDownload': '前往下载', 'dlg.updLater': '以后再说', 'dlg.updSkip': '跳过此版本', 'dlg.delMsg': '确定要删除「{name}」吗？\n此操作不可撤销。', 'dlg.delOk': '删除',
       'dlg.injectTitle': '确认注入',
       'dlg.injectMsg': '将覆盖以下分组：\n{group} - {author}\n\n确定继续吗？',
       'dlg.injectOk': '确定注入',
@@ -27,7 +22,7 @@
       'dlg.filterZip': 'ZIP 壓縮檔', 'dlg.filterImage': '圖片檔案',
       'dlg.yes': '是', 'dlg.no': '否', 'dlg.cancel': '取消',
       'dlg.closeMsg': '要在關閉之前儲存對 {app} 文件「{name}」的變更嗎？',
-      'dlg.delTitle': '刪除確認', 'dlg.delMsg': '確定要刪除「{name}」嗎？\n此操作無法復原。', 'dlg.delOk': '刪除',
+      'dlg.delTitle': '刪除確認', 'dlg.updTitle': '發現新版本', 'dlg.updMessage': '發現新版本 {v}', 'dlg.updCurrent': '目前版本：{v}', 'dlg.updLatest': '最新版本：{v}', 'dlg.updNotes': '更新說明：', 'dlg.updDownload': '前往下載', 'dlg.updLater': '稍後再說', 'dlg.updSkip': '跳過此版本', 'dlg.delMsg': '確定要刪除「{name}」嗎？\n此操作無法復原。', 'dlg.delOk': '刪除',
       'dlg.injectTitle': '確認注入',
       'dlg.injectMsg': '將覆蓋以下群組：\n{group} - {author}\n\n確定要繼續嗎？',
       'dlg.injectOk': '確定注入',
@@ -41,7 +36,7 @@
       'dlg.filterZip': 'ZIP archive', 'dlg.filterImage': 'Image files',
       'dlg.yes': 'Yes', 'dlg.no': 'No', 'dlg.cancel': 'Cancel',
       'dlg.closeMsg': 'Do you want to save the changes to the {app} document "{name}" before closing?',
-      'dlg.delTitle': 'Confirm deletion', 'dlg.delMsg': 'Delete "{name}"?\nThis cannot be undone.', 'dlg.delOk': 'Delete',
+      'dlg.delTitle': 'Confirm deletion', 'dlg.updTitle': 'New version available', 'dlg.updMessage': 'New version available: {v}', 'dlg.updCurrent': 'Current version: {v}', 'dlg.updLatest': 'Latest version: {v}', 'dlg.updNotes': 'Release notes:', 'dlg.updDownload': 'Download', 'dlg.updLater': 'Later', 'dlg.updSkip': 'Skip this version', 'dlg.delMsg': 'Delete "{name}"?\nThis cannot be undone.', 'dlg.delOk': 'Delete',
       'dlg.injectTitle': 'Confirm injection',
       'dlg.injectMsg': 'This will overwrite the following group:\n{group} - {author}\n\nContinue?',
       'dlg.injectOk': 'Inject',
@@ -55,7 +50,7 @@
       'dlg.filterZip': 'ZIP アーカイブ', 'dlg.filterImage': '画像ファイル',
       'dlg.yes': 'はい', 'dlg.no': 'いいえ', 'dlg.cancel': 'キャンセル',
       'dlg.closeMsg': '閉じる前に {app} ドキュメント「{name}」の変更を保存しますか？',
-      'dlg.delTitle': '削除の確認', 'dlg.delMsg': '「{name}」を削除しますか？\nこの操作は取り消せません。', 'dlg.delOk': '削除',
+      'dlg.delTitle': '削除の確認', 'dlg.updTitle': '新しいバージョンがあります', 'dlg.updMessage': '新しいバージョン：{v}', 'dlg.updCurrent': '現在のバージョン：{v}', 'dlg.updLatest': '最新バージョン：{v}', 'dlg.updNotes': '更新内容：', 'dlg.updDownload': 'ダウンロードへ', 'dlg.updLater': 'あとで', 'dlg.updSkip': 'このバージョンをスキップ', 'dlg.delMsg': '「{name}」を削除しますか？\nこの操作は取り消せません。', 'dlg.delOk': '削除',
       'dlg.injectTitle': '注入の確認',
       'dlg.injectMsg': '次のグループを上書きします：\n{group} - {author}\n\n続行しますか？',
       'dlg.injectOk': '注入する',
@@ -69,7 +64,7 @@
       'dlg.filterZip': 'ZIP 압축 파일', 'dlg.filterImage': '이미지 파일',
       'dlg.yes': '예', 'dlg.no': '아니오', 'dlg.cancel': '취소',
       'dlg.closeMsg': '닫기 전에 {app} 문서 "{name}"의 변경 사항을 저장할까요?',
-      'dlg.delTitle': '삭제 확인', 'dlg.delMsg': '"{name}"을(를) 삭제할까요?\n이 작업은 되돌릴 수 없습니다.', 'dlg.delOk': '삭제',
+      'dlg.delTitle': '삭제 확인', 'dlg.updTitle': '새 버전이 있습니다', 'dlg.updMessage': '새 버전: {v}', 'dlg.updCurrent': '현재 버전: {v}', 'dlg.updLatest': '최신 버전: {v}', 'dlg.updNotes': '업데이트 내용:', 'dlg.updDownload': '다운로드', 'dlg.updLater': '나중에', 'dlg.updSkip': '이 버전 건너뛰기', 'dlg.delMsg': '"{name}"을(를) 삭제할까요?\n이 작업은 되돌릴 수 없습니다.', 'dlg.delOk': '삭제',
       'dlg.injectTitle': '주입 확인',
       'dlg.injectMsg': '다음 그룹을 덮어씁니다:\n{group} - {author}\n\n계속할까요?',
       'dlg.injectOk': '주입',
@@ -88,14 +83,12 @@
     DICT[lang]['dlg.overwriteMsg'] = overwrite[lang][1];
     DICT[lang]['dlg.fileChanged'] = overwrite[lang][2];
   });
-  /* 窗口标题（主进程侧；渲染层 <title data-i18n> 用 i18n.js 里的同名键） */
   var titles = { 'zh-CN': 'FH6 Vinyl Group Editor', 'zh-TW': 'FH6 Vinyl Group Editor', 'en': 'FH6 Vinyl Group Editor',
     'ja': 'SVG パターンコラージュエディター', 'ko': 'SVG 패턴 콜라주 편집기' };
   Object.keys(titles).forEach(function (l) { if (DICT[l]) DICT[l]['app.title'] = titles[l]; });
   var api = {
     dicts: DICT,
     langs: ['zh-CN', 'zh-TW', 'en', 'ja', 'ko'],
-    /* 取词 + {占位符} 替换（与渲染层 App.i18n.tf 同语义） */
     get: function (lang, key, params) {
       var d = DICT[lang] || DICT['zh-CN'];
       var s = d[key] || DICT['zh-CN'][key] || key;
@@ -109,7 +102,6 @@
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.DLG_I18N = api;
-  /* 渲染层：并入 App.i18n.dicts，这样 fzaConfirm 等能直接用 App.i18n.t('dlg.*') */
   if (typeof App !== 'undefined' && App.i18n && App.i18n.dicts) {
     Object.keys(DICT).forEach(function (lang) {
       if (App.i18n.dicts[lang]) Object.assign(App.i18n.dicts[lang], DICT[lang]);

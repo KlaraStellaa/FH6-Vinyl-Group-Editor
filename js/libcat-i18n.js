@@ -1,8 +1,3 @@
-/* ---------- 素材库（画布右侧「彩绘纹饰」图案栏）分组名词典 ----------
-   与 js/i18n.js 同机制：加载时并入 App.i18n.dicts，切语言时由「重建素材面板」重刷器生效。
-   分组 id 是稳定数据键（由 assets/FH6_Vinyl_Symbols.svg 的 inkscape:label 分类段映射而来，
-   见 js/library.js 的 App.LIB_CAT_MAP）：14–35 已按用户要求两两合并成 11 组字体；
-   「填充图案」组按用户要求隐藏，词条仍保留，放开 App.LIB_HIDE_PATTERN_GROUP 即可复用。 */
 App.LIB_CAT_I18N = {
   'zh-CN': {
     'lib.cat.all': '全部分组',
@@ -110,7 +105,6 @@ App.LIB_CAT_I18N = {
     'lib.cat.pattern': '채우기 패턴'
   }
 };
-/* 并入主词典（i18n.js 先加载） */
 Object.keys(App.LIB_CAT_I18N).forEach(function (lang) {
   if (App.i18n.dicts[lang]) Object.assign(App.i18n.dicts[lang], App.LIB_CAT_I18N[lang]);
 });

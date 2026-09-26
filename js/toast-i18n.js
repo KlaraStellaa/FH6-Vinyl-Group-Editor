@@ -1,8 +1,3 @@
-/* ---------- Toast（画布中下方弹窗提示）文案词典 ----------
-   与 js/i18n.js 同机制：加载时并入 App.i18n.dicts。
-   toast 是**瞬时**提示，调用时按当前语言取词即可，不需要注册重刷器；
-   带变量的用 `{name}` 占位，调用侧走 App.i18n.tf(key, {…})。
-   键名分区：toast.bg / color / edit / sel / forza / fza / home / io / lib / main / tab */
 App.TOAST_I18N = {
   'zh-CN': {
     'toast.bg.removed': '背景图片已移除',
@@ -41,7 +36,7 @@ App.TOAST_I18N = {
     'toast.sel.highlightedAll': '已高亮全部 {n} 个图层',
     'toast.forza.noLayers': '画布上还没有图层，无法导出',
     'toast.forza.noSymbols': '没有可导出的符号图层，图案与导入图层无法写入导出文件',
-    'toast.forza.exportWarn': '导出提示：{v}',
+    'toast.forza.exportWarn': '导出提示：{v}', 'toast.forza.exportSkipped': '{n} 个图案或导入图层不会写入导出文件',
     'toast.forza.noRecognized': '该 SVG 中没有可识别的符号图层',
     'toast.imported': '已导入 {n} 个图层',
     'toast.fza.readSaveFail': '读取存档失败：{v}',
@@ -67,7 +62,10 @@ App.TOAST_I18N = {
     'toast.fza.convertFail': '{v} 转换失败：生成的 SVG 无法解析',
     'toast.fza.noGroupPicked': '未选择任何分组',
     'toast.fza.batchExport': '批量导出完成：成功 {ok} / 失败 {fail}{files}',
-    'toast.fza.noSvgPicked': '未选择任何 SVG',
+    'toast.fza.noSvgPicked': '未选择任何 SVG', 'toast.fza.undoBackupFail': '备份失败，已取消注入：{why}', 'toast.fza.undoBackupSkipped': '已跳过备份：本次注入无法撤销', 'toast.fza.undoNothing': '还没有可撤销的注入记录', 'toast.fza.undoDone': '已恢复 {ok} 个分组', 'toast.fza.undoFail': '撤销失败：{why}', 'toast.fza.undoExportDone': '已导出 {n} 个 SVG 文件', 'toast.fza.undoExportFail': '部分文件导出失败',
+    'toast.fza.pickSvgTypeErr': '选择结果不是有效的 SVG 文本，已停止（请重新选择文件）',
+    'toast.fza.readSvgFail': '读取 SVG 失败：{name}（{why}）。窗口已保留，可重试或取消。',
+    'toast.fza.batchSomeNotWritable': '{total} 个 SVG 中有 {n} 个没有可写入游戏的符号图层（第 {list} 个），已整批停止',
     'toast.fza.batchInject': '批量注入完成：成功 {ok} / 失败 {fail}',
     'toast.fza.liveryExported': '车辆彩绘已导出 {n} 个 SVG',
     'toast.home.newDoc': '已新建空白文档',
@@ -173,7 +171,7 @@ App.TOAST_I18N = {
     'toast.sel.highlightedAll': '已反白全部 {n} 個圖層',
     'toast.forza.noLayers': '畫布上還沒有圖層，無法匯出',
     'toast.forza.noSymbols': '沒有可匯出的符號圖層，圖案與匯入圖層無法寫入匯出檔',
-    'toast.forza.exportWarn': '匯出提示：{v}',
+    'toast.forza.exportWarn': '匯出提示：{v}', 'toast.forza.exportSkipped': '{n} 個圖案或匯入圖層不會寫入匯出檔案',
     'toast.forza.noRecognized': '該 SVG 中沒有可辨識的符號圖層',
     'toast.imported': '已匯入 {n} 個圖層',
     'toast.fza.readSaveFail': '讀取存檔失敗：{v}',
@@ -199,7 +197,10 @@ App.TOAST_I18N = {
     'toast.fza.convertFail': '{v} 轉換失敗：產生的 SVG 無法解析',
     'toast.fza.noGroupPicked': '未選擇任何群組',
     'toast.fza.batchExport': '批次匯出完成：成功 {ok} / 失敗 {fail}{files}',
-    'toast.fza.noSvgPicked': '未選擇任何 SVG',
+    'toast.fza.noSvgPicked': '未選擇任何 SVG', 'toast.fza.undoBackupFail': '備份失敗，已取消注入：{why}', 'toast.fza.undoBackupSkipped': '已跳過備份：這次注入無法撤銷', 'toast.fza.undoNothing': '還沒有可撤銷的注入記錄', 'toast.fza.undoDone': '已還原 {ok} 個分組', 'toast.fza.undoFail': '撤銷失敗：{why}', 'toast.fza.undoExportDone': '已匯出 {n} 個 SVG 檔案', 'toast.fza.undoExportFail': '部分檔案匯出失敗',
+    'toast.fza.pickSvgTypeErr': '選擇結果不是有效的 SVG 文字，已停止（請重新選擇檔案）',
+    'toast.fza.readSvgFail': '讀取 SVG 失敗：{name}（{why}）。視窗已保留，可重試或取消。',
+    'toast.fza.batchSomeNotWritable': '{total} 個 SVG 中有 {n} 個沒有可寫入遊戲的符號圖層（第 {list} 個），已整批停止',
     'toast.fza.batchInject': '批次注入完成：成功 {ok} / 失敗 {fail}',
     'toast.fza.liveryExported': '車輛彩繪已匯出 {n} 個 SVG',
     'toast.home.newDoc': '已新建空白文件',
@@ -305,7 +306,7 @@ App.TOAST_I18N = {
     'toast.sel.highlightedAll': 'Highlighted all {n} layer(s)',
     'toast.forza.noLayers': 'The canvas has no layers yet — nothing to export',
     'toast.forza.noSymbols': 'No exportable symbol layers — pattern and imported layers cannot be written to the export file',
-    'toast.forza.exportWarn': 'Export notes: {v}',
+    'toast.forza.exportWarn': 'Export notes: {v}', 'toast.forza.exportSkipped': '{n} shape(s) or imported layer(s) will not be written to the export',
     'toast.forza.noRecognized': 'No recognizable symbol layers in that SVG',
     'toast.imported': 'Imported {n} layer(s)',
     'toast.fza.readSaveFail': 'Failed to read the save: {v}',
@@ -331,7 +332,10 @@ App.TOAST_I18N = {
     'toast.fza.convertFail': '{v} conversion failed: the generated SVG cannot be parsed',
     'toast.fza.noGroupPicked': 'No group selected',
     'toast.fza.batchExport': 'Batch export done: {ok} succeeded / {fail} failed{files}',
-    'toast.fza.noSvgPicked': 'No SVG selected',
+    'toast.fza.noSvgPicked': 'No SVG selected', 'toast.fza.undoBackupFail': 'Backup failed, injection cancelled: {why}', 'toast.fza.undoBackupSkipped': 'Backup skipped: this injection cannot be undone', 'toast.fza.undoNothing': 'No injection to undo yet', 'toast.fza.undoDone': 'Restored {ok} group(s)', 'toast.fza.undoFail': 'Undo failed: {why}', 'toast.fza.undoExportDone': 'Exported {n} SVG file(s)', 'toast.fza.undoExportFail': 'Some files failed to export',
+    'toast.fza.pickSvgTypeErr': 'The selection is not valid SVG text. Stopped — please pick the files again.',
+    'toast.fza.readSvgFail': 'Failed to read SVG: {name} ({why}). The window stays open so you can retry or cancel.',
+    'toast.fza.batchSomeNotWritable': '{n} of {total} SVGs have no symbol layers that can be written to the game (#{list}). The whole batch was stopped.',
     'toast.fza.batchInject': 'Batch import done: {ok} succeeded / {fail} failed',
     'toast.fza.liveryExported': 'Vehicle livery exported as {n} SVG file(s)',
     'toast.home.newDoc': 'New blank document created',
@@ -437,7 +441,7 @@ App.TOAST_I18N = {
     'toast.sel.highlightedAll': '{n} 個のレイヤーをすべて強調しました',
     'toast.forza.noLayers': 'キャンバスにレイヤーがないため書き出せません',
     'toast.forza.noSymbols': '書き出せるシンボルレイヤーがありません（図形・読み込みレイヤーは書き出せません）',
-    'toast.forza.exportWarn': '書き出しの注意：{v}',
+    'toast.forza.exportWarn': '書き出しの注意：{v}', 'toast.forza.exportSkipped': '{n} 個の図形または読み込みレイヤーは書き出しに含まれません',
     'toast.forza.noRecognized': 'その SVG に認識できるシンボルレイヤーがありません',
     'toast.imported': '{n} 個のレイヤーを読み込みました',
     'toast.fza.readSaveFail': 'セーブの読み込みに失敗：{v}',
@@ -463,7 +467,10 @@ App.TOAST_I18N = {
     'toast.fza.convertFail': '{v} の変換に失敗：生成した SVG を解析できません',
     'toast.fza.noGroupPicked': 'グループが選択されていません',
     'toast.fza.batchExport': '一括書き出し完了：成功 {ok} / 失敗 {fail}{files}',
-    'toast.fza.noSvgPicked': 'SVG が選択されていません',
+    'toast.fza.noSvgPicked': 'SVG が選択されていません', 'toast.fza.undoBackupFail': 'バックアップに失敗したため注入を中止しました：{why}', 'toast.fza.undoBackupSkipped': 'バックアップを飛ばしました：今回の注入は取り消せません', 'toast.fza.undoNothing': '取り消せる注入がまだありません', 'toast.fza.undoDone': '{ok} 個のグループを復元しました', 'toast.fza.undoFail': '取り消しに失敗しました：{why}', 'toast.fza.undoExportDone': '{n} 個の SVG ファイルを書き出しました', 'toast.fza.undoExportFail': '一部のファイルの書き出しに失敗しました',
+    'toast.fza.pickSvgTypeErr': '選択結果が有効な SVG テキストではありません。停止しました（ファイルを選び直してください）',
+    'toast.fza.readSvgFail': 'SVG の読み込みに失敗しました：{name}（{why}）。ウィンドウは開いたままなので、再試行かキャンセルができます。',
+    'toast.fza.batchSomeNotWritable': '{total} 個の SVG のうち {n} 個にゲームへ書き込めるシンボルレイヤーがありません（{list} 番目）。バッチ全体を停止しました',
     'toast.fza.batchInject': '一括注入完了：成功 {ok} / 失敗 {fail}',
     'toast.fza.liveryExported': '車両ペイントを {n} 個の SVG として書き出しました',
     'toast.home.newDoc': '新しい空のドキュメントを作成しました',
@@ -569,7 +576,7 @@ App.TOAST_I18N = {
     'toast.sel.highlightedAll': '레이어 {n}개를 모두 강조했습니다',
     'toast.forza.noLayers': '캔버스에 레이어가 없어 내보낼 수 없습니다',
     'toast.forza.noSymbols': '내보낼 수 있는 심볼 레이어가 없습니다(도형/가져온 레이어는 기록되지 않음)',
-    'toast.forza.exportWarn': '내보내기 알림: {v}',
+    'toast.forza.exportWarn': '내보내기 알림: {v}', 'toast.forza.exportSkipped': '{n}개 도형 또는 가져온 레이어는 내보내기에 포함되지 않습니다',
     'toast.forza.noRecognized': '해당 SVG에 인식할 수 있는 심볼 레이어가 없습니다',
     'toast.imported': '레이어 {n}개를 가져왔습니다',
     'toast.fza.readSaveFail': '세이브를 읽지 못했습니다: {v}',
@@ -595,7 +602,10 @@ App.TOAST_I18N = {
     'toast.fza.convertFail': '{v} 변환 실패: 생성된 SVG를 해석할 수 없습니다',
     'toast.fza.noGroupPicked': '선택한 그룹이 없습니다',
     'toast.fza.batchExport': '일괄 내보내기 완료: 성공 {ok} / 실패 {fail}{files}',
-    'toast.fza.noSvgPicked': '선택한 SVG가 없습니다',
+    'toast.fza.noSvgPicked': '선택한 SVG가 없습니다', 'toast.fza.undoBackupFail': '백업 실패로 주입을 취소했습니다: {why}', 'toast.fza.undoBackupSkipped': '백업을 건너뛰었습니다: 이번 주입은 취소할 수 없습니다', 'toast.fza.undoNothing': '아직 취소할 주입이 없습니다', 'toast.fza.undoDone': '{ok}개 그룹을 복원했습니다', 'toast.fza.undoFail': '취소 실패: {why}', 'toast.fza.undoExportDone': 'SVG 파일 {n}개를 내보냈습니다', 'toast.fza.undoExportFail': '일부 파일 내보내기에 실패했습니다',
+    'toast.fza.pickSvgTypeErr': '선택 결과가 유효한 SVG 텍스트가 아닙니다. 중단했습니다(파일을 다시 선택하세요).',
+    'toast.fza.readSvgFail': 'SVG 읽기에 실패했습니다: {name} ({why}). 창은 열린 상태이므로 다시 시도하거나 취소할 수 있습니다.',
+    'toast.fza.batchSomeNotWritable': '{total}개 SVG 중 {n}개에 게임에 기록할 수 있는 심볼 레이어가 없습니다({list}번째). 전체 배치를 중단했습니다',
     'toast.fza.batchInject': '일괄 주입 완료: 성공 {ok} / 실패 {fail}',
     'toast.fza.liveryExported': '차량 페인트를 SVG {n}개로 내보냈습니다',
     'toast.home.newDoc': '새 빈 문서를 만들었습니다',
@@ -665,7 +675,6 @@ App.TOAST_I18N = {
     'toast.tab.docCreated': '새 문서를 만들었습니다'
   }
 };
-/* 并入主词典（i18n.js 先加载） */
 Object.keys(App.TOAST_I18N).forEach(function (lang) {
   if (App.i18n.dicts[lang]) Object.assign(App.i18n.dicts[lang], App.TOAST_I18N[lang]);
 });

@@ -9,9 +9,6 @@
   <link rel="stylesheet" href="css/thumb-loader.css">
 </head>
 <body>
-<!-- 自绘标题栏（UI 改良 C 项）：main.js 已 frame:false，这里补上窗口控制键。
-     整条是拖动区（CSS: -webkit-app-region: drag），三个按钮在 CSS 里显式 no-drag。
-     标题文字由 js/titlebar.js 从既有 <title data-i18n="app.title"> 读取，不新增品牌名。 -->
 <div id="titleBar">
   <div class="titlebar-drag">
     <span class="titlebar-appicon" aria-hidden="true">
@@ -90,7 +87,6 @@
         <g id="flashG"></g>
         <g id="outlineG"></g>
         <g id="handleG"></g>
-        <!-- 缩放锚点图标：文档坐标定位 + 1/scale 反向缩放 → 屏幕上恒定尺寸；不拦截指针 -->
         <g id="anchorG" pointer-events="none"></g>
       </g>
     </svg>
@@ -156,7 +152,6 @@
             </div>
           </div>
           <div id="homeSelBar">
-            <span id="homeSelName"></span>
             <button id="btnHomeOpen" data-i18n="home.openBtn">打开</button>
             <button id="btnHomeRename" data-i18n="home.rename">重命名</button>
             <button id="btnHomeExportAs" data-i18n="home.exportAs">另存为…</button>
@@ -164,6 +159,7 @@
             <span class="hs-sep"></span>
             <button id="btnHomeImport" data-i18n="home.import">导入</button>
             <button id="btnHomeRefresh" data-i18n="home.refresh">刷新</button>
+            <span id="homeSelName"></span>
           </div>
           <div id="homeTabs" class="ev-tabs">
             <div class="ev-tabs-track">
@@ -198,11 +194,9 @@
         </div>
       </div>
     </div>
-    <!-- 2026-09-12 用户要求删除：「彩绘纹饰形状 / 已保存的彩绘」两个子页签（已有别的功能代替） -->
     <div id="libTab">
       <div id="libScroll"></div>
     </div>
-    <!-- 2026-09-12 用户要求删除：已保存的彩绘面板（保存/导出/删除整块功能移除） -->
     <div id="colorTab" class="hidden">
       <div class="color-swatch-row">
         <div id="colorSwatch"></div>
@@ -244,7 +238,6 @@
   </div>
 </div>
 
-<!-- 日志面板：查看路径 / 复制最近日志 / 打开文件夹 -->
 <div id="logPanel" class="hidden">
   <div class="lp-title" data-i18n="log.title">日志</div>
   <div class="lp-path" id="logPathText"></div>
@@ -255,7 +248,6 @@
   </div>
 </div>
 
-<!-- 快捷键面板：列出全部快捷键与说明（样式与 #logPanel 同语言，随主题深浅色切换） -->
 <div id="shortcutPanel" class="hidden">
   <div class="sc-head">
     <div class="sc-title" data-i18n="toolbar.shortcuts">help</div>
@@ -269,10 +261,8 @@
 <script src="dlg-i18n.js"></script>
 <script src="js/toast-i18n.js"></script>
 <script src="js/libcat-i18n.js"></script>
-<!-- 帮助模式词条（95 条 × 5 语言）：加载后并入 App.i18n.dicts，必须在 js/i18n.js 之后 -->
+<script src="js/name-i18n.js"></script>
 <script src="js/help-i18n.js"></script>
-<!-- 快捷键绑定表（纯函数，主进程与渲染层共用）必须在 settings.js 之前加载：
-     settings.load() 会用它把 settings.json 里的 keymap 差分应用到绑定表 -->
 <script src="keymap.js"></script>
 <script src="js/keymap.js"></script>
 <script src="js/settings.js"></script>
@@ -283,9 +273,6 @@
 <script src="js/panels.js"></script>
 <script src="js/selection.js"></script>
 <script src="js/layerpicker.js"></script>
-<!-- 帮助模式：Esc 监听必须在加载期注册（早于 main.js 的全局键盘处理），
-     否则会出现「帮助模式退了、选中也被全局 Esc 一起清掉」——与 layerpicker 同一套案底。
-     同时它的捕获阶段拦截要早于其它模块的 document 捕获监听（如 shortcuts.js 的关面板）。 -->
 <script src="js/help.js"></script>
 <script src="js/colorpanel.js"></script>
 <script src="js/background.js"></script>
@@ -298,11 +285,7 @@
 <script src="js/home.js"></script>
 <script src="js/tabs.js"></script>
 <script src="js/fluent-icons.js"></script>
-<!-- 顶部工具栏图标化（6 个按钮）。必须在 i18n.js 之后：
-     它首跑时读的是 HTML 里的原文案，之后由 App.i18n.onApply 重挂（见 main.js 末尾）。 -->
 <script src="js/toolbar-icons.js"></script>
-<!-- 自绘标题栏：必须在 i18n.js 之后（要用 App.i18n.t / onApply），
-     且要晚于 <body> 开头的 #titleBar 被解析到。 -->
 <script src="js/titlebar.js"></script>
 <script src="js/shortcuts.js"></script>
 </body>

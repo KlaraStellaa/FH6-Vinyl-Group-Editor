@@ -1,5 +1,4 @@
 'use strict';
-/* 渲染：视图变换、网格、外框、手柄、缩略图（实时含旋转/倾斜/缩放） */
 App.viewRevision = App.viewRevision || 0;
 App.renderPerfCounters = App.renderPerfCounters || {
   viewCommits: 0, autoVisibleScans: 0, autoVisibleLeaves: 0,
@@ -26,12 +25,8 @@ App.initRender = function () {
   App.handleG = $('#handleG');
   App.anchorG = $('#anchorG');
   App.flashG = $('#flashG');
-  /* 大分组的预染色闪动图层独立常驻；放在普通闪动层下、内容层上。 */
   App.autoStaticFlashG = svgEl('g', { 'pointer-events': 'none' });
   App.flashG.parentNode.insertBefore(App.autoStaticFlashG, App.flashG);
-  /* 闪动颜色变量在初始化时就落到「动画起始色（黄）」：这样任何路径（含不带动画的刷新
-     updateFlashOverlays(false)）都不会出现「覆盖层已建、颜色未设」的无色状态
-     —— 旧代码此时会露出 CSS 兜底的红色 #ff3b30（更早三色动画的残留），2026-09-11 删除 */
   try { App.flashG.style.setProperty('--sve-flash-color', 'rgb(255,250,1)'); }
   catch (e) { console.warn('[render] 闪动颜色初始化失败', e); }
   App.overlayG = $('#overlayG');
@@ -65,11 +60,7 @@ App.updateGridRect = function () {
 App.updateView = function () {
   App.viewRevision = (App.viewRevision || 0) + 1;
   App.renderPerfCounters.viewCommits++;
-  /* 视图变更时间戳：周期性选中闪烁在视图交互进行中暂缓（整组闪动会盖住缩放/平移的
-     连续性，也会干扰按视口取帧的判据）；交互停止后下一个 5s 周期自然恢复 */
   App._viewMutT = performance.now();
-  /* 批量创建期间隐藏的图层容器：解除批量后恢复显示（一次布局）。
-     "隐藏图层"开关 / 背景取色器 的隐藏不能被恢复（否则隐藏/取色效果随视图变化失效） */
   if (App.layersRoot && App.layersRoot.style.display === 'none' && !(App.state && App.state.batching) &&
       !(App.state && App.state.layersHidden) && !(App.state && App.state.eyeMode === 'bg')) {
     App.layersRoot.style.display = '';
@@ -78,29 +69,18 @@ App.updateView = function () {
   const v = App.state.view;
   App.svg.setAttribute('viewBox', v.x + ' ' + v.y + ' ' + (r.width / v.scale) + ' ' + (r.height / v.scale));
   App.updateGridRect();
-  /* 编辑静态化视口烘焙：视图缩放/平移后背景按新视口防抖重烘焙（保持清晰） */
   if (App.updateEditStaticViewport) App.updateEditStaticViewport();
-  /* 分组烘焙分辨率自适应：放大到超过缓存清晰度时防抖重烘焙（借鉴 Inkscape
-     按屏幕尺寸重建缓存）；仅检查已烘焙分组，数量少开销可忽略 */
   if (App.maybeUpgradeProxyRes) App.maybeUpgradeProxyRes();
-  /* 大批图层 + 全览：切换视口静态位图（autostatic），避免逐帧光栅化上千元素 */
   if (App.autoStaticMaybe) App.autoStaticMaybe();
-  /* 2026-09-12 修复「切回标签后画布显示成别的图案」的根因：
-     视图（x/y/scale）是文档状态的一部分，但此前只有 captureDoc/切标签时才写回 d.data.view；
-     导入后的自动取景（fit）只改了 state.view 没写回 → 下次 loadDoc 用旧（fitted）视图恢复，
-     画布就停在另一个取景上（实测 scale 1 → 0.5488、x -557 → -1439）。
-     updateView 是所有视图变更的唯一漏斗，在这里同步最省且不会漏。 */
   try {
     if (App.Tabs && App.Tabs.current && App.Tabs.current.data) {
       App.Tabs.current.data.view = { x: App.state.view.x, y: App.state.view.y, scale: App.state.view.scale };
     }
   } catch (e) { /* ignore */ }
-  /* 视图变化同时刷新锚点图标：图标按 1/scale 反向缩放保持屏幕尺寸恒定，
-     scale 变了必须立刻重定位（否则只改视图不重绘的路径上图标尺寸会跟着画布缩放变） */
-  if (App.drawAnchorIcon && App.state.editMode === 'size') App.drawAnchorIcon();
+  const _am = App.state.editMode;
+  if (App.drawAnchorIcon && (_am === 'size' || _am === 'rotate' || _am === 'skew')) App.drawAnchorIcon();
 };
 
-/* 屏幕坐标 <-> 文档坐标 */
 App.screenToDoc = function (clientX, clientY) {
   const p = new DOMPoint(clientX, clientY).matrixTransform(App.svg.getScreenCTM().inverse());
   return { x: p.x, y: p.y };
@@ -110,10 +90,7 @@ App.docToScreen = function (x, y) {
   return { x: p.x, y: p.y };
 };
 
-/* 图层/背景在文档坐标中的包围盒（含旋转倾斜） */
 App.getItemDocBBox = function (item) {
-  /* 合并分组的本地包围盒不可变（子图层不能单独编辑、图片尺寸不随换色变化）：
-     缓存 getBBox 结果，大分组旋转/缩放时不再每帧强制整个子树布局 */
   if (item.kind === 'merged') {
     if (item._localBB === undefined) {
       const bb0 = item.el.getBBox();
@@ -127,8 +104,6 @@ App.getItemDocBBox = function (item) {
     }
     const loc = item._localBB;
     if (loc) {
-      /* 用 transform 属性链矩阵（零布局、永远最新）：getScreenCTM 返回缓存的 CTM，
-         viewBox 更新后不失效（大量图层/视图变化后包围盒错位 1.3× 的根因） */
       let m = null;
       try { m = App.transformChainMat(item); } catch (e) { m = null; }
       if (m) {
@@ -146,12 +121,7 @@ App.getItemDocBBox = function (item) {
       }
     }
   }
-  /* 非 merged：用模型数据计算包围盒（零布局）。
-     旧实现走 item.el.getBBox()/getScreenCTM()——单层查询会强制整棵 SVG 树同步布局，
-     1942 层时切换 size 模式/手柄拖拽卡数秒（日志 5.2s 阻塞） */
   if (item.kind === 'merged') {
-    /* merged 且 _localBB 不可用（getBBox 为空）：递归子层模型计算（组本地 AABB 角点），
-       再套分组自身变换得到文档坐标 */
     const lb = App.computeLocalBBox(item);
     const cs = [[lb.x, lb.y], [lb.x + lb.w, lb.y], [lb.x + lb.w, lb.y + lb.h], [lb.x, lb.y + lb.h]]
       .map(p => {
@@ -171,11 +141,6 @@ App.getItemDocBBox = function (item) {
   return App.modelBBox(item);
 };
 
-/* 模型计算图层文档包围盒：局部四角（-w/2..w/2）经图层变换得真实角点 + AABB。
-   不触发布局（getBBox/getScreenCTM 会强制整树布局，大量图层时极慢）。
-   嵌套在合并分组内的子图层：模型坐标是合并时的绝对位置，分组变换只写在分组元素上
-   （移动/缩放/旋转分组只改分组自身），必须用 DOM transform 属性链（含祖先分组）换算
-   文档坐标——否则子层包围盒停留在合并前位置，点击命中/视口判断全部失效 */
 App.modelBBox = function (item) {
   const hw = (item.w || 0) / 2, hh = (item.h || 0) / 2;
   const cs = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
@@ -205,16 +170,9 @@ App.modelBBox = function (item) {
   };
 };
 
-/* ---------- 编辑模式静态化：非编辑图层合成为背景位图（借鉴 Inkscape 静态位图缓存） ----------
-   大量顶层图层（未合并）时编辑单层会触发整画布重绘（1942 层时旋转一步卡 ~600ms）。
-   进入编辑后把非编辑图层异步烘焙成一张背景位图并隐藏原图层（DOM 保留），
-   编辑中只有编辑层矢量重绘 + 一张静态位图 → 流畅；退出编辑自动恢复。
-   取色器激活时恢复矢量（取色需要真实图层）。分辨率自适应（上限 4096），
-   背景模糊不影响编辑精度（编辑对象始终是矢量）。 */
 App.editStatic = { active: false, baking: false, items: [], bit: null, view: null, failedTop: null };
 App.editStaticBgEl = null;
 
-/* 当前视口矩形（文档坐标，含边距）——背景位图只烘视口内，放大时保持清晰 */
 App.editStaticViewportRect = function () {
   const v = App.state.view;
   const r = App.wrap.getBoundingClientRect();
@@ -224,8 +182,6 @@ App.editStaticViewportRect = function () {
 };
 App.layerInRect = function (l, rc) {
   try {
-    /* 顶层合并分组：modelBBox 用分组自身的 w/h 与锚点（合并分组 w/h 无意义、锚点远离内容），
-       必须走 getItemDocBBox（本地包围盒缓存 + 分组变换） */
     const b = l.kind === 'merged'
       ? App.getItemDocBBox(l)
       : (App.modelBBox ? App.modelBBox(l) : App.getItemDocBBox(l));
@@ -233,9 +189,6 @@ App.layerInRect = function (l, rc) {
   } catch (e) { return true; }
 };
 
-/* 烘焙取图统一入口：同一轮里相同的符号/蒙版只生成一次。
-   尤其是整组合并后切为蒙版的场景，旧实现会为 2000 个同源叶子各做一次
-   canvas + toDataURL，再各解码一次，形成数秒主线程长任务。 */
 App.bakeLayerSourceKey = function (layer, size) {
   if (!layer) return 'none';
   const symbol = layer.symbolKey || (layer.dataUri
@@ -252,14 +205,11 @@ App.bakeLayerSourceKey = function (layer, size) {
 };
 App.bakeLayerSource = function (layer, size, memo) {
   size = size || 256;
-  /* FH6 内嵌剪影通常为 513px。蒙版若先降到 256 再放大，全览边缘会明显糊；
-     512 保留原图有效细节，再由最终视口位图按屏幕分辨率采样。 */
   if (layer && layer.isMask && layer.kind !== 'import') size = Math.max(size, 512);
   const key = App.bakeLayerSourceKey(layer, size);
   if (memo && memo.has(key)) return memo.get(key);
   let source;
   try {
-    /* 历史瘦身快照可能没带 dataUri，取图前按 symbolKey 补齐。 */
     if (layer.kind === 'symbol' && !layer.dataUri && layer.symbolKey && App.relinkSymbolData) App.relinkSymbolData(layer);
     if (layer.isMask && layer.kind !== 'import' && App.maskBakeUrl) source = App.maskBakeUrl(layer, size);
     else if (layer.kind === 'symbol') source = App.symbolColorUrl(layer);
@@ -278,8 +228,6 @@ App.bakeLayerSource = function (layer, size, memo) {
   return result;
 };
 
-/* 大集合按「实际图源键」只等待一次。图源生成也限并发，避免数百个蒙版 canvas
-   在同一个微任务批次里同时合成/编码，拖住指针和绘制。 */
 App.resolveBakeLayerSources = function (leaves, size, concurrency, shouldContinue) {
   leaves = leaves || [];
   size = size || 256;
@@ -401,9 +349,6 @@ App.loadBakeImages = function (urls, warnLabel, shouldContinue) {
   });
 };
 
-/* 烘焙非编辑顶层图层为一张位图（异步分片；merged 递归到叶子）。
-   viewport 指定时只烘该文档矩形内的层（位图像素 ≈ 屏幕像素，放大不模糊）；
-   缺省烘全部（自适应分辨率，上限 4096） */
 App.bakeEditStatic = function (items, viewport, shouldContinue) {
   const vis = viewport ? items.filter(l => App.layerInRect(l, viewport)) : items;
   const leaves = [];
@@ -446,15 +391,12 @@ App.bakeEditStatic = function (items, viewport, shouldContinue) {
       }
       if (i < leaves.length) { setTimeout(bboxStep, 0); return; }
       if (!isFinite(minx)) { finishResult(null); return; }
-      /* 位图范围：视口 = 视口矩形（层在其外部分被 canvas 裁剪）；否则 = 全部层包围盒 */
       const bx = viewport ? viewport.x : minx;
       const by = viewport ? viewport.y : miny;
       const bw = viewport ? viewport.w : Math.max(1, maxx - minx);
       const bh = viewport ? viewport.h : Math.max(1, maxy - miny);
       let f;
       if (viewport) {
-        /* 边距用于平移复用，不应把可见区密度压低；以 zoom×DPR 为目标，
-           再由 4096 单图上限裁定实际密度。 */
         const dpr = window.devicePixelRatio || 1;
         const target = (App.state.view.scale || 1) * dpr;
         f = Math.min(target, 4096 / Math.max(bw, bh));
@@ -480,7 +422,6 @@ App.bakeEditStatic = function (items, viewport, shouldContinue) {
             rootRect: { x: bx, y: by, w: bw, h: bh }, shouldContinue: alive
           }).then(function (drawn) {
             if (!drawn || !alive()) { finishResult(null); return; }
-            /* 编辑背景沿用 data URL，生命周期由元素持有且不会留下未回收的 Blob URL。 */
             finishResult({ url: cv.toDataURL(), x: bx, y: by, w: bw, h: bh, f: f, failedTop: ready.failedTop });
           });
         }).catch(e => { console.warn('[bake] 编辑静态图源加载失败', String(e && e.message || e).slice(0, 160)); finishResult(null); });
@@ -492,13 +433,9 @@ App.bakeEditStatic = function (items, viewport, shouldContinue) {
 App.beginEditStatic = function () {
   const s = App.state;
   if (!s.edit || s.edit.type === 'bg') return;
-  if (App.state.eyeMode) return; // 取色器激活：保持矢量
+  if (App.state.eyeMode) return;
   const targets = App.editTargets();
   if (App.editStatic.active) {
-    /* 退出编辑后静态化保持：当前编辑目标退出背景快照（避免矢量与背景重复显示），
-       剩余非编辑层重烘焙背景（不恢复全部图层，不卡）。
-       重烘过渡期置位图未就绪（view/bit 清空）：编辑目标矢量显示无残影，
-       旧位图不残留（否则重烘完成前新目标与旧位图双显） */
     const before = App.editStatic.items.length;
     App.editStatic.items = App.editStatic.items.filter(l => !targets.includes(l));
     if (App.editStatic.items.length !== before) {
@@ -512,20 +449,16 @@ App.beginEditStatic = function () {
       }
       App.rebakeEditStaticViewport();
     }
-    /* 编辑目标立即恢复矢量显示（不再隐藏） */
     targets.forEach(l => App.restoreEsVisibility(l));
     return;
   }
   if (App.editStatic.baking) return;
-  /* 编辑目标必须矢量可见：可能被 autoStatic/上一轮静态化设过 visibility:hidden，
-     不恢复就会「停在原位原形状」，只有再次进入编辑才恢复（用户报障的不对称） */
   targets.forEach(l => App.restoreEsVisibility(l));
   const items = s.layers.filter(l => !targets.includes(l));
   if (!items.length) return;
   App.editStatic.active = true;
   App.editStatic.items = items;
   App.editStatic.view = null;
-  /* 视口内烘焙（防抖）：放大时背景保持清晰 */
   App.rebakeEditStaticViewport();
 };
 App.endEditStatic = function () {
@@ -546,11 +479,8 @@ App.endEditStatic = function () {
     if (App.editStaticStageEl.isConnected) App.editStaticStageEl.remove();
     App.editStaticStageEl = null;
   }
-  /* 恢复全部图层显示（只恢复静态化设置过的 visibility，不抹掉导入文件自带的数据级 visibility） */
   try { (App.state.layers || []).forEach(l => App.restoreEsVisibility(l)); } catch (e) { /* ignore */ }
 };
-/* 静态化隐藏/恢复的 visibility 原值管理：隐藏时记录原值，恢复时还原，
-   避免无条件 removeAttribute 抹掉导入 SVG 自带的数据级 visibility="hidden" */
 App.setEsHidden = function (l, hide) {
   if (!l || !l.el) return;
   if (hide) {
@@ -558,7 +488,7 @@ App.setEsHidden = function (l, hide) {
     if (l._esPrevVis === undefined) l._esPrevVis = l.el.getAttribute('visibility');
     l.el.setAttribute('visibility', 'hidden');
   } else {
-    if (l._esPrevVis === undefined) return; // 不是静态化隐藏的层：不动
+    if (l._esPrevVis === undefined) return;
     if (l._esPrevVis === null) l.el.removeAttribute('visibility');
     else l.el.setAttribute('visibility', l._esPrevVis);
     delete l._esPrevVis;
@@ -566,9 +496,6 @@ App.setEsHidden = function (l, hide) {
 };
 App.restoreEsVisibility = function (l) { App.setEsHidden(l, false); };
 
-/* autoStatic 接管后整棵矢量树无需参与布局/绘制。使用 display:none 而非 visibility:hidden，
-   否则 Chromium 仍会为隐藏的数千个 SVG mask 做滤镜/蒙版准备，后续任一 DOM 提交会形成长帧。
-   编辑静态化仍使用上面的 visibility 管理，两套原值互不覆盖。 */
 App.setAutoStaticHidden = function (l, hide) {
   if (!l || !l.el) return;
   if (hide) {
@@ -582,20 +509,10 @@ App.setAutoStaticHidden = function (l, hide) {
 };
 App.restoreAutoStaticDisplay = function (l) { App.setAutoStaticHidden(l, false); };
 
-﻿/* ---------- autoStatic：普通模式下的「大批图层 + 全览」视口静态位图 ----------
-   场景：拆分/无合并的大批量图层（如 2973 层）在画布全览时逐帧矢量光栅化 → 实测 211~375ms/帧。
-   做法（复用编辑模式静态位图的思路，但独立一套，互不干扰）：
-     触发 = 叶子图层数 ≥ threshold 且 view.scale ≤ maxScale 且 存在「未被代理位图覆盖的顶层」
-     烘焙 = 当前视口矩形内的全部顶层（含 merged 内叶子）→ 1 张视口位图（像素≈屏幕像素）
-     安装 = 位图插到 layersRoot 最底 + 全部图层 visibility hidden（DOM 保留，命中/导出/拆分不受影响）
-     退出 = 放大超过 maxScale / 图层数降下来 / 进入编辑 / 取色器 / 隐藏图层 / 结构变化
-   与 merged 代理分工：顶层全都有代理位图时不介入（避免与代理重复烘焙，也保住 A/B/D 三档指标）。 */
 App.autoStatic = { active: false, baking: false, bit: null, view: null, token: 0, hiding: [], url: null, flashUrls: null, contentRevision: null };
 App.autoStaticBgEl = null;
 App.autoStaticFlashPair = null;
 App.autoStaticLayerThreshold = 300;
-/* 指针/滚轮交互保护：烘焙只在手势结束后的静默窗口启动；已经开始的分片也会让位。
-   这只推迟缓存生成，不改变矢量显示与模型状态。 */
 App.renderPointerActive = false;
 App.renderInteractionUntil = 0;
 App.renderResizeUntil = 0;
@@ -625,12 +542,8 @@ App.renderInteractionBusy = function () {
   const now = performance.now();
   return !!App.renderPointerActive || now < (App.renderInteractionUntil || 0) || now < (App.renderResizeUntil || 0);
 };
-/* 触发依据 = 视口内可见图层数（不再用全局 scale 当门槛：放大到局部后视口内仍可能有几百层） */
 App.autoStaticViewportPad = 1.0;
-/* 总开关：2026-09-11 用户否决（放大后位图被拉伸、清晰度不足，无法正常使用）→ 默认关闭，退回纯矢量渲染。
-   实现保留待改进（改进方向：位图分辨率低于屏幕需求时也要重烘，见 maybeUpgradeProxyRes 的同款口径）。 */
-App.autoStaticEnabled = true;   /* 2026-09-11 方案A：重启，清晰度口径已修为「f 跟随 zoom×dpr，不足即重烘」 */   /* 烘焙范围 = 视口 ×(1+2*pad) = 视口×3 的边距比（0.5 即 2 倍面积） */
-
+App.autoStaticEnabled = true;
 
 App.autoStaticLeafCount = function () {
   let n = 0;
@@ -641,7 +554,6 @@ App.autoStaticLeafCount = function () {
   }
   return n;
 };
-/* 只要还有「没被代理位图覆盖的顶层」，autoStatic 就有意义 */
 App.autoStaticNeeded = function () {
   const layers = App.state.layers || [];
   const prof = App._proxyBake;
@@ -653,23 +565,17 @@ App.autoStaticNeeded = function () {
   return false;
 };
 App.autoStaticEligible = function () {
-  /* 编辑静态化已接管时不许再上视口位图：两套机制会抢同一份 visibility（
-     案底：重新进入编辑时目标图层被 autoStatic 位图压住，视觉停在原位原形状） */
   if (App.editStatic && App.editStatic.active) return false;
-  if (!App.autoStaticEnabled) return false;   /* 退回：默认不启用视口静态位图 */
+  if (!App.autoStaticEnabled) return false;
   if (!App.state.layers || !App.state.layers.length) return false;
-  if (App.state.edit) return false;            /* 编辑模式由 editStatic 负责 */
-  if (App.state.eyeMode) return false;         /* 取色器需要矢量 */
-  if (App.state.layersHidden) return false;    /* 用户主动隐藏图层：不干预 */
-  if (App.state.batching) return false;        /* 批量建层中 */
-  /* 颜色预览/提交期间让位：位图是按【数据色】烘的，接管显示会把预览盖住
-     （2026-09-12 用户报障：「ceshi这个文件没有颜色预渲染」——该工作副本 348 叶子 ≥ 阈值，
-     视口位图接管后预览只改被隐藏的矢量，全屏仅 0.02% 像素变化 = 看不见） */
+  if (App.state.edit) return false;
+  if (App.state.eyeMode) return false;
+  if (App.state.layersHidden) return false;
+  if (App.state.batching) return false;
   if (App._colorYield) return false;
   if (!App.autoStaticNeeded()) return false;
   return App.autoStaticVisibleLeafCount() >= App.autoStaticLayerThreshold;
 };
-/* 视口内可见图层数（叶子口径）：顶层用 layerInRect 判可见，命中则累加其叶子数 */
 App.autoStaticVisibleLeafCount = function () {
   const layers = App.state.layers || [];
   if (!layers.length) return 0;
@@ -687,7 +593,6 @@ App.autoStaticVisibleLeafCount = function () {
   App.renderPerfCounters.autoVisibleLeaves += n;
   return n;
 };
-/* 烘焙范围 = 当前视口 + pad（默认 1.0 → 边长 ×3、面积 ×9 太大；实际用 0.5 → 边长 ×2） */
 App.autoStaticContentBBox = function () {
   const layers = App.state.layers || [];
   if (!layers.length) return null;
@@ -721,11 +626,8 @@ App.autoStaticViewportRect = function (pad) {
   return { x: x, y: y, w: w, h: h, scale: sc };
 };
 
-/* 该矩形烘出来能达到的分辨率（位图像素 / 文档单位），受 4096 像素上限约束 */
 App.autoStaticRectF = function (rect) {
   const dpr = window.devicePixelRatio || 1;
-  /* pad 是预取区域，不应挤占可见视口的像素密度。目标密度始终按 zoom×DPR，
-     只有触及单图 4096 上限时才降低密度/收窄范围。 */
   const byScreen = (App.state.view.scale || 1) * dpr;
   const byCap = 4096 / Math.max(rect.w, rect.h);
   return Math.min(byScreen, byCap);
@@ -735,9 +637,6 @@ App.bakeOpacity = function (layer) {
   return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 1;
 };
 
-/* Canvas 的 globalAlpha 会逐叶应用，不能表达 SVG `opacity` 对整个分组“先合成、
-   后透明”的语义。下面按模型树绘制：opacity=1 的分组零额外画布；只有半透明分组
-   才按其可见包围盒建立临时 surface，再以一次 globalAlpha 合回父级。 */
 App.prepareBakeTree = function (items, leaves, mats) {
   const leafIndex = new Map();
   (leaves || []).forEach(function (leaf, i) { leafIndex.set(leaf, i); });
@@ -844,7 +743,6 @@ App.drawBakeTree = function (ctx, items, options) {
           target.globalAlpha = opacity;
           target.drawImage(scratch, (b.x - origin.x) * f, (b.y - origin.y) * f);
           target.restore();
-          /* Chromium 可尽早释放半透明分组的临时像素面。 */
           scratch.width = 1; scratch.height = 1;
         }
       } else {
@@ -868,12 +766,10 @@ App.drawBakeTree = function (ctx, items, options) {
   };
   return drawNodes(items || [], ctx, { x: root.x, y: root.y });
 };
-/* 屏幕需要的分辨率：每文档单位多少设备像素（= zoom × dpr） */
 App.autoStaticNeedF = function () {
   const dpr = window.devicePixelRatio || 1;
   return (App.state.view.scale || 1) * dpr;
 };
-/* 视图签名：用于跳过无意义的重算（x/y/scale 量化到视口 1/8 粒度） */
 App.autoStaticViewSig = function () {
   const v = App.state.view;
   const r = App.wrap.getBoundingClientRect();
@@ -897,8 +793,6 @@ App.removeAutoStaticFlashPair = function (pair) {
   if (pair.g && pair.g.parentNode) pair.g.parentNode.removeChild(pair.g);
 };
 App.autoStaticRelease = function () {
-  /* 必须无条件清签名：否则「视图签名未变就节流跳过」会让它在结构变化后永远不再评估
-     （案底：拆分分组后视口未动，eligible 明明为 true，却因签名命中旧值被跳过 → 永不烘焙） */
   App._autoStaticSig = null;
   if (!App.autoStatic.active && !App.autoStatic.baking && !(App.autoStatic.hiding || []).length &&
       !App.autoStaticFlashPair && !App.autoStatic.flashUrls) return;
@@ -929,8 +823,6 @@ App.autoStaticRelease = function () {
     App.autoStaticBgEl.removeAttribute('href');
   }
 };
-/* 从最终静态位图的 alpha 直接生成同分辨率黄/蓝剪影。只在首次烘焙阶段编码；
-   选中后的每一帧只改两个 image 的 opacity，不再重算整张图的颜色矩阵。 */
 App.buildAutoStaticFlashUrls = function (source, shouldContinue) {
   if (!source || !source.width || !source.height) return Promise.resolve(null);
   const alive = typeof shouldContinue === 'function' ? shouldContinue : function () { return true; };
@@ -983,7 +875,6 @@ App.buildAutoStaticFlashUrls = function (source, shouldContinue) {
     return null;
   });
 };
-/* 烘焙：与 bakeEditStatic 同思路，但 ① toBlob 异步编码 ② 8ms 时间预算分片 ③ 图片按 url 去重 */
 App.bakeAutoStatic = function (items, viewport, shouldContinue) {
   const vis = viewport ? items.filter(function (l) { return App.layerInRect(l, viewport); }) : items;
   const leaves = [];
@@ -1089,8 +980,6 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
     matrixStep();
   });
 };
-/* 结构签名：图层 id 序列（增删/重建/换文档/导入中途合并都会变）。
-   异步烘焙装图前用它校验「这张位图还属不属于当前这份画布内容」（2026-09-12 根因修复）。 */
 App.autoStaticStructSig = function () {
   const L = App.state.layers || [];
   let s = String(L.length) + ':';
@@ -1146,7 +1035,6 @@ App.autoStaticInstall = function (bit, token) {
       if (settled) return;
       settled = true;
       clear();
-      /* SVG image 的 load 只表示资源就绪；再跨两帧，确保它已进入合成树后才隐藏旧图/矢量。 */
       requestAnimationFrame(function () { requestAnimationFrame(function () {
         if (token !== App.autoStatic.token || !stage.isConnected || App.autoStaticStageEl !== stage) {
           if (stage.isConnected) stage.remove();
@@ -1168,7 +1056,6 @@ App.autoStaticInstall = function (bit, token) {
         App.autoStaticStageEl = null;
         App.autoStatic.url = bit.url.indexOf('blob:') === 0 ? bit.url : null;
         App.autoStatic.flashUrls = bit.flashUrls || null;
-        /* 双缓冲期间可能还隐藏着旧结构中的层；新位图没包含的失败层必须恢复为矢量。 */
         (App.autoStatic.hiding || []).forEach(function (l) {
           if (!hidingIds.has(l.id)) { try { App.restoreAutoStaticDisplay(l); } catch (e) { console.warn('[bake] 恢复矢量层失败', l && l.id, String(e && e.message || e).slice(0, 120)); } }
         });
@@ -1184,7 +1071,6 @@ App.autoStaticInstall = function (bit, token) {
         if (oldFlashUrls && oldFlashUrls !== bit.flashUrls) {
           setTimeout(function () { App.revokeAutoStaticFlashUrls(oldFlashUrls); }, 0);
         }
-        /* 透明常驻并声明 opacity 动画，让 Chromium 在用户点击前完成解码与合成层准备。 */
         if (flashPair) {
           flashPair.yellow.style.opacity = '0.001';
           flashPair.blue.style.opacity = '0.001';
@@ -1205,8 +1091,6 @@ App.autoStaticRebake = function () {
   if (App.autoStatic.baking) return;
   if (App.renderInteractionBusy && App.renderInteractionBusy()) { App.autoStaticSchedule(120); return; }
   if (!App.autoStaticEligible()) { App.autoStaticRelease(); return; }
-  /* 清晰度优先：默认 pad=0.5（覆盖 2× 视口，平移不露白）；
-     若受 4096 上限导致 f 不足当前 zoom，收窄到只烘视口本身以提高分辨率 */
   const needF = App.autoStaticNeedF();
   let rect = App.autoStaticViewportRect(0.5);
   let rectPad = 0.5;
@@ -1223,7 +1107,7 @@ App.autoStaticRebake = function () {
   const token = ++App.autoStatic.token;
   const items = App.state.layers.slice();
   const contentRevision = App.contentRevision || 0;
-  const structSig = App.autoStaticStructSig();   /* 本次烘焙对应的画布结构 */
+  const structSig = App.autoStaticStructSig();
   const docId = App.Tabs && App.Tabs.current ? App.Tabs.current.id : null;
   const viewRevision = App.viewRevision || 0;
   App.renderPerfCounters.autoBakeStarts++;
@@ -1249,7 +1133,6 @@ App.autoStaticRebake = function () {
         catch (e) { console.warn('[bake] 回收废弃位图失败', String(e && e.message || e).slice(0, 120)); }
       }
       if (bit && bit.flashUrls) App.revokeAutoStaticFlashUrls(bit.flashUrls);
-      /* 过期任务不能改写新一轮烘焙的状态。 */
       if (token !== App.autoStatic.token) return;
       App.autoStatic.baking = false;
       App.autoStatic.lastErr = why;
@@ -1266,12 +1149,6 @@ App.autoStaticRebake = function () {
       if (App.autoStaticEligible && App.autoStaticEligible()) App.autoStaticSchedule(80);
       return;
     }
-    /* 装图前校验（2026-09-12 根因修复）：
-       烘焙是异步的（toBlob + 分片），期间画布可能已经被换掉 —— 切标签 loadDoc、导入中途合并、
-       撤销/拆分等。旧实现直接装上，于是「停在主页/切标签之后画布显示的是别的图案」，而且要等
-       下一次视图变化（用户手动缩放/刷新）才会被释放 → 用户报障「调一下缩放刷新一下又回来了」。
-       两道校验：①结构签名（位图是否属于当前这份图层）；②覆盖范围（当前视口需求是否仍被这张
-       位图覆盖，内容包围盒变了就说明几何已过期）。不合格=丢弃，不留残图。 */
     const install = function () {
       if (token !== App.autoStatic.token) { drop('superseded', false); return; }
       if (App.renderInteractionBusy && App.renderInteractionBusy()) { setTimeout(install, 60); return; }
@@ -1279,8 +1156,6 @@ App.autoStaticRebake = function () {
       if (structSig !== App.autoStaticStructSig()) { drop('stale-struct', true); App.autoStaticSchedule(); return; }
       if (viewRevision !== (App.viewRevision || 0)) { drop('stale-view', true); App.autoStaticSchedule(80); return; }
       if (!App.autoStaticEligible()) { drop('stale-ineligible', true); return; }
-      /* 覆盖校验用 pad=0（只要求覆盖「当前视口」本身）：本函数上面在受 4096 上限时会故意把
-         pad 收到 0 换分辨率，拿 pad=0.5 的需求矩形去比会把这类合法烘焙全部误杀。 */
       const want = App.autoStaticViewportRect(0);
       if (!(rect.x <= want.x && rect.y <= want.y && (rect.x + rect.w) >= (want.x + want.w) && (rect.y + rect.h) >= (want.y + want.h))) {
         drop('stale-cover', true);
@@ -1297,8 +1172,6 @@ App.autoStaticRebake = function () {
       App.autoStaticInstall(bit, token).then(function (installed) {
         if (!installed) { drop('stage-failed', false); return; }
         if (token === App.autoStatic.token) {
-          /* view 与 bit 必须作为同一次安装一起提交；预解码/双 rAF 期间继续保留旧
-             view+bit，避免监测与覆盖判断把“待安装高清图”误当成已经显示。 */
           App.autoStatic.contentRevision = contentRevision;
           App.autoStatic.baking = false;
           App.renderPerfCounters.autoBakeInstalls++;
@@ -1312,8 +1185,6 @@ App.autoStaticRebake = function () {
         drop('stage-throw', false);
       });
     };
-    /* 新位图先在独立 Image 中完成解码，再一次性改几何/href 并隐藏矢量。
-       这样首次接管和放大重烘都不会出现一帧空白或旧图被新几何拉偏。 */
     const preload = [loadImage(bit.url)];
     if (bit.flashUrls) {
       preload.push(loadImage(bit.flashUrls.yellow));
@@ -1326,8 +1197,6 @@ App.autoStaticRebake = function () {
   }).catch(function (e) { App.autoStatic.baking = false; App.autoStatic.lastErr = 'bake-throw: ' + String(e && e.message || e).slice(0, 120); });
 };
 
-/* 防抖排期：视图变化即重置定时器；到期后【无条件】按当前视图重烘
-   （上一版把它与「视图签名节流」叠加，导致 timer 被反复重置、永不执行 —— 这里只保留防抖） */
 App.autoStaticSchedule = function (delay) {
   if (App._autoStaticTimer) clearTimeout(App._autoStaticTimer);
   App._autoStaticTimer = setTimeout(function () {
@@ -1341,8 +1210,6 @@ App.autoStaticMaybe = function () {
   const nowTs = Date.now();
   const gap = nowTs - (App.autoStaticLastCheck || 0);
   if (gap < 60) {
-    /* 节流窗口内的这次视图变化不能丢：安排尾随检查
-       （否则「动作停止前最后一次 updateView」被吞 → 位图永不重烘 → 放大后一直模糊） */
     if (!App._autoStaticTrailTimer) {
       App._autoStaticTrailTimer = setTimeout(function () {
         App._autoStaticTrailTimer = null;
@@ -1353,15 +1220,11 @@ App.autoStaticMaybe = function () {
   }
   App.autoStaticLastCheck = nowTs;
   if (App.autoStatic.baking) {
-    /* 烘焙进行中也不能吞掉「已经不合格」这件事：换文档/结构变化发生在烘焙期间时，
-       这里的 release（token++）会让在途结果作废，否则那张属于上一份内容的位图会装到
-       新文档的画布上（2026-09-12 报障根因：切标签后画布显示的是别的图案，缩放才恢复）。 */
     if (!App.autoStaticEligible()) { App.autoStaticRelease(); return; }
     return;
   }
   if (!App.autoStaticEligible()) { if (App.autoStatic.active) App.autoStaticRelease(); return; }
   if (!App.autoStatic.active || !App.autoStatic.view) { App.autoStaticRebake(); return; }
-  /* 位置（旧图是否仍覆盖当前视口）与清晰度（f 是否够当前 zoom）任一不足 → 防抖重烘 */
   const v = App.autoStatic.view;
   /* Coverage must use the same pad as the installed bake. A bake narrowed to
      pad=0 for resolution is valid for the current viewport and should not be
@@ -1374,26 +1237,18 @@ App.autoStaticMaybe = function () {
   App.autoStaticSchedule();
 };
 
-/* 结构变化（合并/拆分/删除/撤销/导入等）时清除静态化：背景快照失效，恢复全部图层 */
 App.invalidateEditStatic = function () {
   if (App.editStatic && App.editStatic.active && App.endEditStatic) App.endEditStatic();
-  /* 结构变化同样让 autoStatic 视口位图失效（图层增删/合并/拆分/撤销/导入） */
   if (App.autoStaticRelease) App.autoStaticRelease();
-  /* 静态化已拆除：让视口位图重新评估接管（大文件性能保护不丢） */
   if (App.autoStaticMaybe) App.autoStaticMaybe();
 };
-/* 内容变化（图层增删/重排/合并/删除）后的统一收尾：位图缓存必须失效并按新内容重绘。
-   用户口径（2026-09-12）：「记得每次操作渲染都要更新」——案底：删图层后模型与图层栏都更新了，
-   但 autoStatic 视口位图不失效（它只按视口覆盖/分辨率判重烘，无内容判定），画布上仍显示含已删图层的旧位图。 */
 App.contentChanged = function (options) {
-  if (App.state.batching) return;   /* 批量期间不逐次失效（入口结束时由各路径统一刷） */
+  if (App.state.batching) return;
   App.contentRevision = (App.contentRevision || 0) + 1;
   const preserveRequested = !options || options.preserveAutoStatic !== false;
   const preserve = !!(preserveRequested && App.autoStatic && App.autoStatic.active &&
     App.autoStaticEligible && App.autoStaticEligible());
   if (preserve) {
-    /* 稳态内容更新走双缓冲：旧位图继续遮住矢量，新内容离屏烘好并预解码后原子换上。
-       新增层也先隐藏，避免它在旧底图上提前出现；删除/重排则在新图落地时一次生效。 */
     App._autoStaticSig = null;
     if (App.autoStatic.baking) { App.autoStatic.token++; App.autoStatic.baking = false; }
     const current = App.state.layers || [];
@@ -1404,16 +1259,12 @@ App.contentChanged = function (options) {
     if (App.autoStaticRelease) App.autoStaticRelease();
     if (App.autoStaticMaybe) App.autoStaticMaybe();
   }
-  /* 内容刷新只同步覆盖层，不能重播选中动画；大分组会因此整幅黄蓝闪一下。 */
   if (App.requestFlashRefresh) App.requestFlashRefresh(false);
 };
-/* 视口内背景烘焙（防抖）：编辑静态化只烘当前视口内的非交互层，
-   位图像素 ≈ 屏幕像素 → 放大视图背景依然清晰（不再模糊）。
-   退出编辑后只烘"交互层下方"的层（上方层保持矢量显示，z 顺序正确） */
 App.rebakeEditStaticViewport = function () {
   if (!App.editStatic || !App.editStatic.active) return;
   if (App._editStaticViewTimer) clearTimeout(App._editStaticViewTimer);
-  const token = ++App._editStaticToken; // 过期烘焙丢弃：重烘在途时 items/视口已变，旧结果不安装
+  const token = ++App._editStaticToken;
   App._editStaticViewTimer = setTimeout(() => {
     App._editStaticViewTimer = null;
     try {
@@ -1421,8 +1272,6 @@ App.rebakeEditStaticViewport = function () {
       if (App.renderInteractionBusy && App.renderInteractionBusy()) { App.rebakeEditStaticViewport(); return; }
       const vp = App.editStaticViewportRect();
       let items = App.editStatic.items.filter(l => App.layerInRect(l, vp));
-      /* 只烘"交互层下方"的层（编辑中/退出后一致）——上方层保持矢量显示，层序正确；
-         与 updateEditStaticViewport 的隐藏集合严格一致，不会隐藏了却没烘 */
       const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
       const editItems = (App.state.edit && App.editTargets) ? App.editTargets() : [];
       let interMin = -1;
@@ -1433,8 +1282,6 @@ App.rebakeEditStaticViewport = function () {
       if (interMin >= 0) items = items.filter(l => App.state.layers.indexOf(l) < interMin);
       else items = [];
       if (!items.length) {
-        /* 背景为空（无交互层下方层）：view 标记为当前视口（items 为空不会隐藏任何层），
-           避免 updateEditStaticViewport 视口检测反复触发重烘焙；清背景并恢复全部显示 */
         App.editStatic.view = vp;
         App.editStatic.bit = null;
         App.editStatic.failedTop = null;
@@ -1478,9 +1325,8 @@ App.rebakeEditStaticViewport = function () {
         });
       };
       App.bakeEditStatic(items, vp, shouldContinue).then(bit => {
-        if (!App.editStatic.active || token !== App._editStaticToken) return; // 过期烘焙：丢弃
+        if (!App.editStatic.active || token !== App._editStaticToken) return;
         if (!bit) {
-          /* 烘焙失败：恢复全部显示 + 清旧背景（否则图层带着旧隐藏状态残留 → 缺层） */
           failCurrent('bake-returned-null');
           return;
         }
@@ -1489,8 +1335,6 @@ App.rebakeEditStaticViewport = function () {
           App.rebakeEditStaticViewport();
           return;
         }
-        /* 新背景用独立 image 预装；load + 双 rAF 后再一次性替换旧背景并隐藏矢量，
-           避免先改旧图几何/href 导致过渡帧缺层或拉伸。 */
         if (App.editStaticStageEl && App.editStaticStageEl.isConnected) App.editStaticStageEl.remove();
         const stage = svgEl('image', { 'pointer-events': 'none', preserveAspectRatio: 'none', class: 'sve-edit-static' });
         App.editStaticStageEl = stage;
@@ -1530,7 +1374,6 @@ App.rebakeEditStaticViewport = function () {
             App.editStatic._bakedInterMin = interMin;
             App.editStatic.baking = false;
             if (old && old !== stage && old.isConnected) old.remove();
-            /* 烘焙完成后隐藏"烘焙视口内、交互层下方"的非交互层。 */
             App.updateEditStaticViewport();
             App.traceRenderTask('editStatic', 'install', {
               docId: docId, contentRevision: contentRevision, viewRevision: viewRevision,
@@ -1548,14 +1391,6 @@ App.rebakeEditStaticViewport = function () {
     } catch (e) { /* ignore */ }
   }, 300);
 };
-/* 视口/交互刷新：交互层（白框/选中/编辑目标）显示矢量。
-   隐藏判定与烘焙严格一致（借鉴 Inkscape 缓存一致性原则）：
-   - 用"烘焙时的视口"（editStatic.view）判定隐藏，被隐藏的层一定烘进了背景位图，不会缺层；
-   - 背景未就绪（view 为空）时不隐藏任何层（全部矢量显示，绝无"隐藏了但没烘"）；
-   - 只隐藏"交互层下方"的层（编辑中/退出后一致）——上方层保持矢量显示，
-     按 DOM 顺序渲染在交互层之上，z 序正确（编辑下层不再盖住上层）；
-   - 烘焙失败的叶子所属顶层不隐藏（背景里没有它）。
-   实时视口变化只触发防抖重烘焙（收敛），不直接隐藏未烘的层 */
 App.updateEditStaticViewport = function () {
   if (!App.editStatic || !App.editStatic.active) return;
   const s = App.state;
@@ -1563,13 +1398,8 @@ App.updateEditStaticViewport = function () {
   const es = App.editStatic;
   let interMinNow = -1;
   if (es.view && es.bit) {
-    /* 背景位图已就绪：按烘焙视口隐藏（与烘焙集合一致，不缺层）。
-       位图未就绪（bit 为空：烘焙中/失败/空背景）时不隐藏任何层 */
     const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
     const editItems = (s.edit && App.editTargets) ? App.editTargets() : [];
-    /* 交互层最低索引：其下方层进背景，上方层保持矢量（z 序正确）。
-       隐藏判定用【已烘焙时的 interMin】（_bakedInterMin）：白框/选中变化后、
-       重烘完成前，隐藏集合与旧背景保持一致（不缺失、不双显） */
     for (let i = 0; i < s.layers.length; i++) {
       const l = s.layers[i];
       if (l === box || s.selected.has(l.id) || editItems.includes(l)) { interMinNow = i; break; }
@@ -1581,43 +1411,31 @@ App.updateEditStaticViewport = function () {
       const inter = l === box || s.selected.has(l.id) || editItems.includes(l);
       const inItems = es.items.includes(l);
       const inView = App.layerInRect(l, es.view);
-      /* 隐藏条件：非交互 + 在快照中 + 烘焙视口内 + 位于【已烘焙】交互层下方 + 烘焙成功 */
       const hide = !inter && inItems && inView && (interMin < 0 || i < interMin) &&
         !(es.failedTop && es.failedTop.has(l.id));
       App.setEsHidden(l, hide);
     }
   }
-  /* 交互层最低索引变化（白框/选中/编辑目标移动）：背景按新交互集重烘；
-     防抖合并快速滚动，烘焙完成前隐藏集合保持旧值（见上） */
   if (es.view && es._bakedInterMin !== undefined && es._bakedInterMin !== interMinNow) {
     App.rebakeEditStaticViewport();
   }
-  /* 实时视口/缩放变化：防抖重烘焙（背景按新视口，保持清晰）；
-     背景未就绪（view 为空）时也触发：烘焙失败后允许重试 */
   const vpNow = App.editStaticViewportRect();
   if (!es.view || Math.abs(es.view.x - vpNow.x) > 5 || Math.abs(es.view.y - vpNow.y) > 5 ||
       Math.abs(es.view.scale - (App.state.view.scale || 1)) > 0.05) {
     App.rebakeEditStaticViewport();
   }
 };
-/* 编辑静态化：从快照移除某图层（删除/合并/拆分后背景不残留） */
 App.dropEditStaticItem = function (layer) {
   if (!App.editStatic || !App.editStatic.active || !layer) return;
   const idx = App.editStatic.items.indexOf(layer);
   if (idx >= 0) {
     App.editStatic.items.splice(idx, 1);
-    /* 恢复该层的静态化隐藏（否则残留 visibility:hidden：合并时整组空白） */
     App.restoreEsVisibility(layer);
-    /* 立即隐藏旧背景位图：防抖重烘完成前不显示被删层的"幽灵"残影 */
     if (App.editStaticBgEl) App.editStaticBgEl.style.display = 'none';
     App.rebakeEditStaticViewport();
   }
 };
-/* 编辑模式外框：大小模式下只画手柄（蓝框已按需求移除，避免遮挡视野；
-   拖动图案中心区域移动的交互仍按几何判定保留） */
 App.drawOutlines = function () {
-  /* 普通模式本来就不画蓝框/手柄。空组上反复写 innerHTML 仍会让 Chromium
-     把整棵 2000 叶 SVG 标成需重绘，单次可形成数百毫秒原生长帧。 */
   if (!App.state.edit && !App.outlineG.firstChild && !App.handleG.firstChild) {
     App.outlinePolys = [];
     if (App.anchorIconEl) App.anchorIconEl.style.display = 'none';
@@ -1627,18 +1445,12 @@ App.drawOutlines = function () {
   App.outlineG.setAttribute('pointer-events', 'none');
   App.handleG.setAttribute('pointer-events', 'none');
   App.outlinePolys = [];
-  /* 手柄与方向指示互相独立：手柄显示开关只管 8 个手柄（关时不绘制、鼠标无法命中）；
-     方向指示按 axisHint 单独绘制（手柄隐藏后仍显示 W/A 箭头，键盘缩放方向提示不丢）。
-     正在放置锚点时手柄与其命中区一并隐藏（放置点击不能被手柄吃掉），方向指示照旧 */
   App.handleG.innerHTML = '';
   if (App.state.edit && App.state.editMode === 'size') {
     if (App.state.showHandles !== false && !App.state.anchorPlacing) App.drawHandles();
     if (App.state.axisHint) App.drawAxisArrows();
   }
-  /* 缩放锚点图标：只改自身 transform/显隐，不重建（合并动画不被打断），不触发文档重绘 */
   if (App.drawAnchorIcon) App.drawAnchorIcon();
-  /* 编辑中：本次改动（移动/大小/旋转/倾斜/透明度）必须同步到闪动覆盖层，
-     否则闪烁副本停在进入编辑时的位置与大小。走轻量同步，不走整份刷新 */
   if (App.state.edit && App.syncFlashForEdit) App.syncFlashForEdit();
 };
 
@@ -1659,7 +1471,6 @@ App.editTargetBox = function () {
   return { x: minx, y: miny, w: maxx - minx, h: maxy - miny, cx: (minx + maxx) / 2, cy: (miny + maxy) / 2, corners };
 };
 
-/* 手柄几何：单个目标取图案变换后的真实角点/边中点（随旋转倾斜），多选取包围盒 */
 App.handleGeometry = function () {
   const items = App.editTargets();
   if (!items.length) return null;
@@ -1684,9 +1495,6 @@ App.handleGeometry = function () {
   };
 };
 
-/* 手柄屏幕像素尺寸（视觉 = 命中）：默认 9px；图层在屏幕上很小时
-   （包围盒屏幕短边 < 36px）手柄随图层同步缩小（短边/4），下限 3px——
-   小图层 8 个手柄不再挤成一团；图层正常大小或放大视图后自动回到 9px */
 App.handleSizePx = function (box) {
   if (!box || !(box.w > 0) || !(box.h > 0)) return 9;
   const short = Math.min(box.w, box.h) * (App.state.view.scale || 1);
@@ -1699,7 +1507,7 @@ App.drawHandles = function () {
   const g = App.handleGeometry();
   if (!g) return;
   const sc = App.state.view.scale;
-  const hpx = App.handleSizePx(g.box); // 命中区与视觉方块同尺寸（判定不再大于视觉）
+  const hpx = App.handleSizePx(g.box);
   const s = hpx / sc, hs = hpx / sc;
   const keys = [
     ['nw', g.nw, 'nwse-resize'], ['n', g.n, 'ns-resize'],
@@ -1722,8 +1530,6 @@ App.drawHandles = function () {
   });
 };
 
-/* W/A 缩放方向指示：独立于手柄显示开关绘制（手柄隐藏时方向指示仍可用）。
-   W 沿本地竖直向上、A 沿本地水平向左（随旋转转动，取自实时变换矩阵） */
 App.drawAxisArrows = function () {
   const g = App.handleGeometry();
   if (!g) return;
@@ -1732,7 +1538,7 @@ App.drawAxisArrows = function () {
   const items = App.editTargets();
   const c = { x: g.cx, y: g.cy };
   const L = 30 / sc, head = 7 / sc;
-  let axes = [[0, -1], [-1, 0]]; // 默认：W 上、A 左
+  let axes = [[0, -1], [-1, 0]];
   if (items.length === 1 && items[0].el) {
     const ctm = items[0].el.getScreenCTM();
     if (ctm) {
@@ -1770,13 +1576,10 @@ App.drawAxisArrows = function () {
   });
 };
 
-/* 选中/白框闪烁：图案 #FFFA01（黄）→ #0402FF（蓝）渐变，0.3 秒内完成，每 5 秒一次。
-   覆盖层按图层 id 增量维护（复用 DOM，不每周期重建），颜色用 CSS 变量一次性切换——
-   大量图层选中时不再卡顿。目标 = 全部选中图层 ∪ 白框所在图层（白框移动立即闪动提示）。 */
 App.flashTimers = [];
 App.flashSeq = 0;
 App.flashColor = null;
-App.flashOverlayMap = new Map(); // 图层 id -> {kind, el}
+App.flashOverlayMap = new Map();
 App.flashIntervalMs = 5000;
 App.flashDurationMs = 300;
 App.restoreDirectFlash = function (rec) {
@@ -1797,8 +1600,6 @@ App.applyDirectFlashColor = function (rec, color) {
   rec.active = true;
   return true;
 };
-/* 合成闪动的 PNG 直接以 Blob URL 挂到 SVG image；覆盖层销毁时一并回收。
-   避免把大 PNG 再复制成 base64 字符串，并消除随后集中回收大字符串造成的长帧。 */
 App.releaseFlashOverlay = function (rec) {
   if (rec && rec.kind === 'auto-static-direct') {
     App.restoreDirectFlash(rec);
@@ -1825,7 +1626,6 @@ App.ensureFlashRunning = function (reset) {
   }
 };
 App.startFlash = function () {
-  /* 新选择先立即闪一次；周期从这次闪动重新起算，避免沿用旧计时器导致间隔忽长忽短。 */
   App.ensureFlashRunning(true);
   App.updateFlashOverlays();
 };
@@ -1835,12 +1635,10 @@ App.stopFlash = function () {
   App.flashTimers.forEach(t => { cancelAnimationFrame(t); clearTimeout(t); });
   App.flashTimers = [];
   App.flashSeq++;
-  App.compFlashToken++; // 作废进行中的合成闪动
-  /* 清除在途签名/动画意图，否则同一集合再次请求会命中旧锁，且旧回调
-     被 token 丢弃后无人负责解锁。 */
+  App.compFlashToken++;
   App.compBuildSig = null;
   App.compBuildAnimate = false;
-  App.compAlignCheckToken++; // 作废进行中的分片偏差自检
+  App.compAlignCheckToken++;
   App.flashColor = null;
   App.flashOverlayMap.forEach(App.releaseFlashOverlay);
   App.flashG.innerHTML = '';
@@ -1848,21 +1646,16 @@ App.stopFlash = function () {
   App.flashOverlayMap.clear();
 };
 
-/* 单个图层的闪动覆盖层（symbol/pattern 用轻量 rect；import/merged 克隆原内容） */
 App.buildFlashOverlayFor = function (layer) {
   const t = layer.el.getAttribute('transform');
   const op = layer.el.getAttribute('opacity');
   if (layer.kind === 'symbol') {
     const g = svgEl('g', { transform: t, opacity: op, 'pointer-events': 'none' });
-    /* 闪动覆盖层自带蒙版（普通符号图层已无蒙版，避免影响画布渲染性能） */
     const m = svgEl('mask', {
       id: 'sveFM' + layer.id, maskUnits: 'userSpaceOnUse',
       x: -layer.w / 2, y: -layer.h / 2, width: layer.w, height: layer.h
     });
     if (layer.dataUri) {
-      /* 蒙版直接用原始图并按图层当前 w/h 拉伸——与图案 imgEl 显示完全一致。
-         不能用共享 def（#sveImg 是原始尺寸）：更换图案后图层 w/h 保持旧尺寸
-         （"更换保持大小"），def 尺寸与图层尺寸不同会导致蒙版裁剪/形状与图案不符 */
       m.appendChild(svgEl('image', {
         href: layer.dataUri,
         x: -layer.w / 2, y: -layer.h / 2,
@@ -1886,8 +1679,6 @@ App.buildFlashOverlayFor = function (layer) {
     return g;
   }
   if (layer.kind === 'merged') {
-    /* 合并分组：逐个孩子递归生成各自覆盖层（符号=剪影精确染色，图案/导入=原样染色），
-       整组覆盖 = 集体闪烁；不再整组克隆（克隆出的符号 <image> 无 fill 染不上色） */
     const g = svgEl('g', { transform: t, opacity: op, 'pointer-events': 'none' });
     (layer.children || []).forEach(ch => {
       const sub = App.buildFlashOverlayFor(ch);
@@ -1907,16 +1698,7 @@ App.buildFlashOverlayFor = function (layer) {
   return clone;
 };
 
-/* 合成闪动：把集合/合并分组的全部图案剪影一次性画到离屏画布，
-   只生成 1 个蒙版 + 1 个矩形（动画每帧只变色一个矩形，与图案数量无关）。
-   单个合并分组：画在分组本地坐标，拖动时只同步外框变换、不重算剪影；
-   多选集合：画在文档坐标，集合变化时重新合成一次。
-   位置一律用 transform 属性链（纯用户空间）计算——不能用 getCTM()：
-   getCTM 返回视口空间矩阵（含 viewBox 的平移/缩放），而蒙版/矩形
-   按 userSpaceOnUse 解释（用户空间），一旦画布平移缩放（viewBox 非恒等），
-   合成动画就会整体偏离原图层。 */
 App.compFlashToken = 0;
-/* 解析 SVG transform 属性为 DOMMatrix（支持 translate/scale/rotate(含中心)/skewX/skewY/matrix） */
 function parseTransformAttr(s) {
   const m = new DOMMatrix();
   if (!s) return m;
@@ -1939,7 +1721,6 @@ function parseTransformAttr(s) {
   }
   return m;
 }
-/* 元素自身起、沿父链上溯到 layersRoot 为止的 transform 属性乘积（用户空间文档矩阵） */
 function transformChainMat(l) {
   const chain = [];
   let el = l.el;
@@ -1951,12 +1732,10 @@ function transformChainMat(l) {
   for (let i = chain.length - 1; i >= 0; i--) m = m.multiply(parseTransformAttr(chain[i]));
   return m;
 }
-App.transformChainMat = transformChainMat; // 暴露给命中检测（零布局坐标换算）
+App.transformChainMat = transformChainMat;
 App.buildCompositeFlash = function (items) {
   App.__compBuildT0 = performance.now();
   const isMerged = items.length === 1 && items[0].kind === 'merged';
-  /* 代理快速路径：已烘出整幅底图的合并分组直接用底图的白色剪影蒙版——
-     不再逐叶生成剪影、不做同步 toDataURL 编码（2000 叶文档操作期间的主要卡顿源） */
   if (isMerged) {
     const g0 = items[0];
     const prec = App._proxyBake && App._proxyBake.get(g0.id);
@@ -1985,9 +1764,6 @@ App.buildCompositeFlash = function (items) {
       .catch(e => { console.warn('[flash] 导入图层剪影生成失败', l && l.id, String(e && e.message || e).slice(0, 160)); return null; });
   });
   return Promise.all(srcs).then(canvases => new Promise(resolve => {
-    /* 每个叶子相对合成根空间的真实矩阵：transform 属性链（用户空间，嵌套分组自身变换不丢失；
-       与 viewBox/窗口缩放无关，合成位置永不错位）；
-       根 = 合并分组（其本地空间，外框变换随拖动同步）；多选集合根 = 文档坐标（恒等） */
     const rootM = isMerged && items[0].el ? transformChainMat(items[0]) : null;
     const mats = leaves.map(l => {
       const m = transformChainMat(l);
@@ -1996,14 +1772,12 @@ App.buildCompositeFlash = function (items) {
       }
       return m;
     });
-    /* 大集合分片构建（每片 300 层）：包围盒与绘制循环不再一次性占满主线程，
-       千层文档（如 2096 层）合成构建期间界面保持可交互，不再卡顿吞操作 */
     const BUDGET = 8, MIN_CHUNK = 8;
     const token = App.compFlashToken;
     let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
     let bi = 0, di = 0, bw = 0, bh = 0, f = 1, cv = null, cx = null;
     const bboxStep = () => {
-      if (App.compFlashToken !== token) return resolve(null); // 选择已变化：作废本次构建
+      if (App.compFlashToken !== token) return resolve(null);
       const t0 = performance.now();
       let n = 0;
       while (bi < leaves.length && (n < MIN_CHUNK || performance.now() - t0 < BUDGET)) {
@@ -2033,7 +1807,6 @@ App.buildCompositeFlash = function (items) {
         const entry = canvases[di];
         if (entry && entry.canvas) {
           cx.save();
-          /* 画布坐标系 = (doc - (minx,miny)) × f：平移量必须与缩放同序（先乘 f 再平移）。 */
           const T = new DOMMatrix().translate(-minx * f, -miny * f).scale(f).multiply(mats[di]);
           cx.setTransform(T.a, T.b, T.c, T.d, T.e, T.f);
           cx.drawImage(entry.canvas, entry.rect.x, entry.rect.y, entry.rect.w, entry.rect.h,
@@ -2043,10 +1816,6 @@ App.buildCompositeFlash = function (items) {
         di++; n++;
       }
       if (di < leaves.length) { setTimeout(drawStep, 0); return; }
-      /* 蒙版位图必须保持透明背景（无底色填充）：任何底色都会让位图全不透明，
-         蒙版失效、闪动层变成覆盖整个包围盒的实心矩形（旋转图层的盒子并集远大于
-         图案内容，视觉上就是"闪动偏离图案坐标"，且矩形框位置按模型是对的，
-         偏差自检也无法发现）。只画剪影本身，透明处即蒙版透明处。 */
       const finish = href => {
         if (App.compFlashToken !== token || !href) {
           if (href && href.indexOf('blob:') === 0) {
@@ -2060,7 +1829,6 @@ App.buildCompositeFlash = function (items) {
           'pointer-events': 'none'
         });
         if (href.indexOf('blob:') === 0) g._sveFlashBlobUrl = href;
-        /* 蒙版/矩形必须放在并集的真实位置 (minx, miny)。 */
         const m = svgEl('mask', { id: 'sveFComp', maskUnits: 'userSpaceOnUse', x: minx, y: miny, width: bw, height: bh });
         m.appendChild(svgEl('image', { href, x: minx, y: miny, width: bw, height: bh, preserveAspectRatio: 'none' }));
         g.appendChild(m);
@@ -2071,7 +1839,6 @@ App.buildCompositeFlash = function (items) {
         } catch (e) { /* ignore */ }
         resolve(g);
       };
-      /* 编码放到浏览器异步路径，避免 cv.toDataURL() 在 2000 叶选择/刷新时同步卡住 UI。 */
       if (cv.toBlob) {
         cv.toBlob(blob => {
           if (!blob) { console.warn('[flash] 合成剪影编码返回空'); resolve(null); return; }
@@ -2091,23 +1858,16 @@ App.buildCompositeFlash = function (items) {
   }));
 };
 
-/* 合成覆盖层偏差自检（兜底保险丝）：复用路径下核对合成矩形与叶子实际渲染位置，
-   任何原因导致的偏离都会在节流内被发现并强制重建——确保“自动检测组成形状，
-   只算一次”的动画永不偏离原图案。期望包围盒与合成构建同源（transform 属性链，
-   纯矩阵运算，不触发布局） */
 App.compAlignCheckAt = 0;
 App.compAlignDrift = 0;
 App.compAlignCheckToken = 0;
 App.checkCompositeAlign = function (items, rec, sig, animate) {
   const now = performance.now();
-  if (now - App.compAlignCheckAt < 2000) return false; // 2 秒节流：快速多选时不重复扫描
+  if (now - App.compAlignCheckAt < 2000) return false;
   App.compAlignCheckAt = now;
   if (!items.length || !rec) return false;
   const rect = rec.el.querySelector('rect');
   if (!rect) return false;
-  /* 期望文档包围盒：全部叶子按 transform 链展开角点并集。
-     2000 叶同步扫描会在覆盖层刚显示时制造 100ms+ 长帧；按 6ms 预算分片，
-     保留同样的错位保险丝，但不再抢占交互帧。 */
   const leaves = [];
   const walk = l => { if (l.kind === 'merged') (l.children || []).forEach(walk); else leaves.push(l); };
   items.forEach(walk);
@@ -2131,8 +1891,6 @@ App.checkCompositeAlign = function (items, rec, sig, animate) {
     } while (i < leaves.length && performance.now() - t0 < 6);
     if (i < leaves.length) { setTimeout(step, 0); return; }
     if (!isFinite(minx)) return;
-    /* 矩形文档位置：rect 在根空间，乘合成 g 的【实际】变换链
-       （合并分组 g 有 transform；多选集合应无。用实际值才能发现 g 上任何错位） */
     const gM = parseTransformAttr(rec.el.getAttribute('transform') || '');
     const rx = parseFloat(rect.getAttribute('x')), ry = parseFloat(rect.getAttribute('y'));
     const rw = parseFloat(rect.getAttribute('width')), rh = parseFloat(rect.getAttribute('height'));
@@ -2143,7 +1901,6 @@ App.checkCompositeAlign = function (items, rec, sig, animate) {
     const dx2 = Math.max(...corners.map(p => p.x)) - maxx;
     const dy2 = Math.max(...corners.map(p => p.y)) - maxy;
     if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(dx2) < 1 && Math.abs(dy2) < 1) return;
-    /* 偏离：先隐藏旧覆盖层，再防抖重建，错误位置不会继续闪。 */
     App.compAlignDrift++;
     rec.sig = '__stale__';
     App.flashG.style.display = 'none';
@@ -2165,8 +1922,6 @@ App.checkCompositeAlign = function (items, rec, sig, animate) {
   return true;
 };
 
-/* 闪动覆盖层的内容指纹：更换图案（symbolKey/patternKey 变化）时强制重建，
-   否则 updateFlashOverlays 会因 kind 未变而复用旧图案的覆盖层（闪烁仍是原图案） */
 App.layerFlashContentSig = function (layer) {
   if (!layer) return '';
   if (layer.kind === 'symbol') return 'S:' + (layer.symbolKey || layer.dataUri || '') + (layer.isMask ? ':M' : '');
@@ -2193,8 +1948,6 @@ App.largeFlashSig = function (items) {
   return (App.contentRevision || 0) + ':' + (items || []).map(layer => layer.id).join(',');
 };
 
-/* 闪动目标集合：白框所在图层必闪；白框在多选集合内时，全部多选图层一起闪
-   （唯一口径，updateFlashOverlays 与编辑中的轻量同步共用，不许各写一套） */
 App.flashTargetLayers = function () {
   const items = [];
   const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
@@ -2208,10 +1961,6 @@ App.flashTargetLayers = function () {
   return items;
 };
 
-/* 编辑中的轻量闪动同步：只把覆盖层的 transform/opacity 跟到图层当前字段。
-   编辑每帧都会调用，必须绕开 updateFlashOverlays 里的重活
-   （refreshImpBitmaps / updateEditStaticViewport 都是 O(图层数)，逐帧调会拖垮编辑）。
-   案底：编辑里移动/缩放/旋转后，闪动覆盖层仍停在进入编辑时的位置与大小。 */
 App.syncFlashForEdit = function () {
   const map = App.flashOverlayMap;
   if (!map || !map.size) return;
@@ -2233,16 +1982,8 @@ App.syncFlashForEdit = function () {
   });
 };
 
-/* 增量刷新覆盖层：白框所在图层必闪；白框在多选集合内时，全部多选图层一起闪；
-   白框不在多选集合内时只闪白框图层（鼠标点击其他图层定位白框后，
-   多选图层不跟随闪烁；框选操作后白框会自动归位到框选集合内）。
-   图案总数 ≤400：每个图案单独渲染动画；>400：优先直接给当前整图缓存换色，
-   无法独占整图缓存时才异步合成一张剪影，任何路径都不逐叶播放动画。
-   animate=false 时只同步位置/增删，不重启动画 */
 App.updateFlashOverlays = function (animate) {
-  /* 白框/选中/编辑变化：同步 import 位图化显示（交互层恢复矢量、其余用位图） */
   if (App.refreshImpBitmaps) App.refreshImpBitmaps();
-  /* 退出编辑后静态化保持：交互层恢复矢量显示、视口内非交互层用背景位图 */
   if (App.updateEditStaticViewport) App.updateEditStaticViewport();
   const items = App.flashTargetLayers();
   const total = items.reduce((acc, l) => acc + App.countInLayer(l), 0);
@@ -2256,8 +1997,6 @@ App.updateFlashOverlays = function (animate) {
       App.flashOverlayMap.delete(key);
     });
 
-    /* 单个 ×2000 分组占据整份画布时，autoStatic 已经是最终清晰画面。
-       直接给这一个 image 做颜色矩阵动画：零新增全屏覆盖图、零逐叶工作，也不存在坐标偏移。 */
     if (directTarget) {
       if (App.compBuildSig) {
         App.compFlashToken++;
@@ -2278,7 +2017,6 @@ App.updateFlashOverlays = function (animate) {
       return;
     }
 
-    /* 不是整画布目标时走现有的单剪影异步合成；同一签名在途只保留一份任务。 */
     if (composite && composite.kind === 'composite' && composite.sig === sig) {
       if (items.length === 1 && items[0].kind === 'merged' && composite.el) {
         composite.el.setAttribute('transform', items[0].el.getAttribute('transform') || '');
@@ -2329,7 +2067,6 @@ App.updateFlashOverlays = function (animate) {
     App.compBuildSig = null;
     App.compBuildAnimate = false;
   }
-  /* ---------- 每个图案单独渲染（≤400 层）---------- */
   const wanted = new Set(items.map(l => 'L' + l.id));
   Array.from(App.flashOverlayMap.keys()).forEach(k => {
     if (!wanted.has(k)) {
@@ -2340,7 +2077,6 @@ App.updateFlashOverlays = function (animate) {
   items.forEach(layer => {
     const rec = App.flashOverlayMap.get('L' + layer.id);
     if (rec && rec.kind === layer.kind && rec.contentSig === App.layerFlashContentSig(layer)) {
-      /* 复用 DOM：只同步 transform/opacity（编辑操作拖拽/按键时闪动同步跟随） */
       rec.el.setAttribute('transform', layer.el.getAttribute('transform') || '');
       rec.el.setAttribute('opacity', layer.el.getAttribute('opacity') || '1');
       return;
@@ -2360,14 +2096,11 @@ App.updateFlashOverlays = function (animate) {
 
 App.applyFlashColor = function (c) {
   App.flashColor = c;
-  /* 一次 CSS 变量切换改变全部覆盖层颜色（不再逐元素 setAttribute） */
   App.flashG.style.setProperty('--sve-flash-color', c);
   const direct = App.flashOverlayMap.get('__composite__');
   if (direct && direct.kind === 'auto-static-direct') App.applyDirectFlashColor(direct, c);
 };
 function mixRGB(a, b, p) {
-  /* p 必须夹在 [0,1]：rAF 的 now 是本帧起始时间，animateFlash 可能在同一帧内被调用，
-     首帧 now - t0 会为负 → 外插出 rgb(260,255,-4) 这类越界色（判子实测踩到） */
   const t = p < 0 ? 0 : (p > 1 ? 1 : p);
   return 'rgb(' + Math.round(a[0] + (b[0] - a[0]) * t) + ',' +
     Math.round(a[1] + (b[1] - a[1]) * t) + ',' +
@@ -2376,15 +2109,9 @@ function mixRGB(a, b, p) {
 App.flashNow = function () {
   App.updateFlashOverlays();
 };
-/* 动画：#FFFA01 → #0402FF 渐变 0.3 秒，结束后隐藏覆盖层（保留 DOM，下个周期无需重建） */
 App.animateFlash = function (opts) {
-  /* 隐藏图层时：覆盖层保持隐藏（flashG 与 layersRoot 平级，隐藏图层盖不住它，
-     定时周期/交互触发都不能把它重新点亮） */
   if (App.state && App.state.layersHidden) { App.flashG.style.display = 'none'; return; }
-  /* 任何立即闪动都从此刻重置 5 秒倒计时；周期调用自身不重置，因而稳定保持 5 秒。 */
   if (!(opts && opts.periodic)) App.ensureFlashRunning(true);
-  /* 白框变化检测：白框移动后某些路径未刷新闪烁覆盖层（Tab+点击等），
-     每次闪烁前先同步（白框变了才重建，开销小） */
   try {
     const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
     if (box && App._flashBoxId !== box.id) {
@@ -2401,23 +2128,21 @@ App.animateFlash = function (opts) {
   }
   if (!App.flashOverlayMap.size) {
     App.flashG.style.display = 'none';
-    /* 静默刷新会故意不预建覆盖层；真正到下一次闪动时再建立，异步完成后自行播放。 */
     const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
     if (box && !App.compRebuildTimer) setTimeout(function () { App.updateFlashOverlays(true); }, 0);
     return;
   }
-  /* 周期自检：离屏合成覆盖层若与图案偏离，立即强制重建。直接缓存路径天然同位，无需扫描。 */
   const crec = App.flashOverlayMap.get('__composite__');
   if (crec && crec.kind === 'composite' && crec.items) App.checkCompositeAlign(crec.items, crec, crec.sig);
   App.flashG.style.display = crec && crec.kind === 'auto-static-direct' ? 'none' : '';
-  const colors = [[255, 250, 1], [4, 2, 255]]; // #FFFA01 → #0402FF
+  const colors = [[255, 250, 1], [4, 2, 255]];
   const seq = ++App.flashSeq;
   App.flashTimers.forEach(t => { cancelAnimationFrame(t); clearTimeout(t); });
   App.flashTimers = [];
-  App.applyFlashColor('rgb(' + colors[0].join(',') + ')'); // 起始 #FFFA01：瞬时（无渐变）
+  App.applyFlashColor('rgb(' + colors[0].join(',') + ')');
   const t0 = performance.now();
   const duration = App.flashDurationMs || 300;
-  const seg1 = t0 + duration; // #FFFA01 → #0402FF 渐变，0.3 秒内完成
+  const seg1 = t0 + duration;
   const step = now => {
     if (seq !== App.flashSeq) return;
     if (now < seg1) {
@@ -2426,18 +2151,15 @@ App.animateFlash = function (opts) {
     } else {
       const current = App.flashOverlayMap.get('__composite__');
       if (current && current.kind === 'auto-static-direct') App.restoreDirectFlash(current);
-      App.flashG.style.display = 'none'; // 隐藏覆盖层：瞬时（无渐变），DOM 保留复用
+      App.flashG.style.display = 'none';
       App.flashColor = null;
     }
   };
   App.flashTimers.push(requestAnimationFrame(step));
 };
 
-/* ---------- 缩略图 ---------- */
 const imgCache = new Map();
 const silhouetteCache = new Map();
-/* 把 data URL 转成 Blob：fetch(dataURL) 的 base64 解析在渲染线程极慢（1.8s+），
-   手动 atob 解析亚毫秒级（大量图层性能关键） */
 function dataUrlToBlob(uri) {
   const comma = uri.indexOf(',');
   const mime = (uri.slice(5, comma).split(';')[0]) || 'image/png';
@@ -2446,8 +2168,6 @@ function dataUrlToBlob(uri) {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return new Blob([bytes], { type: mime });
 }
-/* 解码符号位图：createImageBitmap（后台线程解码，不阻塞主线程）——
-   loadImage 对 data URL 的 JPEG 解码会占满渲染线程（千层合成首次构建卡死数秒的根因） */
 App.decodedImage = function (uri) {
   if (!imgCache.has(uri)) {
     const p = (window.createImageBitmap
@@ -2457,9 +2177,6 @@ App.decodedImage = function (uri) {
   }
   return imgCache.get(uri);
 };
-/* 大文件导入后的抢占式符号预热已停用。旧实现每 40ms 在编辑器线程解码、染色一张图，
-   两三千层文件会持续数秒制造 60~130ms 长帧，正好撞上导入后的首次操作。
-   autoStatic 首次烘焙已按实际可见内容生成所需图源，后续闪动也直接复用该位图。 */
 App._warmupTimer = null;
 App.warmupSymbols = function () {
   if (App._warmupTimer) clearTimeout(App._warmupTimer);
@@ -2475,7 +2192,6 @@ function fitDrawRect(img, size) {
   cx.drawImage(img, x, y, w, h);
   return { canvas: c, ctx: cx, rect: { x, y, w, h } };
 }
-/* 与图层 transform 同序：先 skewX，再 scale（含翻转负号），再 rotate（本地轴缩放随旋转） */
 function tfPoint(x, y, f) {
   let px = x + Math.tan(f.skew * D2R) * y;
   let py = y;
@@ -2483,7 +2199,6 @@ function tfPoint(x, y, f) {
   const a = f.rot * D2R, c = Math.cos(a), s = Math.sin(a);
   return [px * c - py * s, px * s + py * c];
 }
-/* 分析式计算图层内容的本地包围盒（不依赖 getBBox，合并图层克隆体 getBBox 会返回空） */
 App.computeLocalBBox = function (layer) {
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
   const addCorners = l => {
@@ -2504,7 +2219,6 @@ App.computeLocalBBox = function (layer) {
   if (!isFinite(minx)) return { x: 0, y: 0, w: 0, h: 0 };
   return { x: minx, y: miny, w: maxx - minx, h: maxy - miny };
 };
-/* 把基础图（canvas + 内容矩形）按图层旋转/倾斜/缩放绘制到 48px 缩略图 */
 App.renderTransformedThumb = function (base, rect, f) {
   const c = document.createElement('canvas');
   c.width = 48; c.height = 48;
@@ -2527,9 +2241,6 @@ App.renderTransformedThumb = function (base, rect, f) {
   cx.drawImage(base, -(rect.x + rect.w / 2), -(rect.y + rect.h / 2));
   return c;
 };
-/* 符号剪影基础图（亮度->透明度 + 颜色），按 uri+颜色+尺寸缓存。
-   并发去重：同一 key 的多次调用（如千层同符号的合成构建）共享同一个生成 promise，
-   避免 2096 层各自重复执行像素循环（之前会阻塞主线程数秒） */
 App.silhouettePending = new Map();
 App.silhouetteCanvas = function (uri, color, size) {
   const key = uri.length + ':' + uri.slice(0, 60) + uri.slice(-40) + '|' + color + '|' + size;
@@ -2541,7 +2252,6 @@ App.silhouetteCanvas = function (uri, color, size) {
     const d = ctx.getImageData(0, 0, size, size);
     const p2 = d.data;
     const rgb = hexToRgb(color) || { r: 255, g: 255, b: 255 };
-    /* 像素染色分片：大量符号并发生成时不占满主线程 */
     return tintPixels(p2, rgb).then(() => {
       ctx.putImageData(d, 0, 0);
       const entry = { canvas, rect };
@@ -2552,10 +2262,7 @@ App.silhouetteCanvas = function (uri, color, size) {
   App.silhouettePending.set(key, p);
   return p;
 };
-/* 蒙版显示开关：true = 画布/缩略图中蒙版不再显示灰色网格（改为透明）；
-   false（默认=原状） = 蒙版显示灰棋盘格指示 */
 const MASK_INDICATOR_TRANSPARENT = false;
-/* 蒙版指示基础图（随背景主题；透明模式下为空白透明画布） */
 App.maskIndicatorCanvas = function (size) {
   const themeKey = App.maskThemeKey();
   const key = 'ind:' + themeKey + ':' + size + (MASK_INDICATOR_TRANSPARENT ? ':t' : '');
@@ -2564,7 +2271,7 @@ App.maskIndicatorCanvas = function (size) {
   c.width = size; c.height = size;
   if (MASK_INDICATOR_TRANSPARENT) {
     silhouetteCache.set(key, c);
-    return c; // 透明蒙版：不画网格
+    return c;
   }
   const src = (App.patterns || []).find(p => p.key === themeKey);
   const cx = c.getContext('2d');
@@ -2585,9 +2292,6 @@ App.maskIndicatorCanvas = function (size) {
   silhouetteCache.set(key, c);
   return c;
 };
-/* 位图接管中的蒙版纹理必须保持 SVG 的 userSpaceOnUse 语义。
-   通用缩略图固定画 8x8 格；若直接拿来铺图层，图层越大格子就越粗，接管瞬间会明显跳变。
-   这里把图案原点固定在图层本地 (0,0)，并按图层实际宽高映射到源画布。 */
 App.maskBakeIndicatorCanvas = function (layer, size) {
   const themeKey = App.maskThemeKey();
   const w = Math.max(0.0001, Math.abs(Number(layer && layer.w) || 0));
@@ -2622,7 +2326,6 @@ App.maskBakeIndicatorCanvas = function (layer, size) {
   const maxCol = Math.ceil((w / 2) / pw) + 1;
   const minRow = Math.floor((-h / 2) / ph) - 1;
   const maxRow = Math.ceil((h / 2) / ph) + 1;
-  /* 源图案的内容组 translate(.5,.5)：矩形描边正好落在每个 11x11 单元边界上。 */
   const tx = 0.5, ty = 0.5;
   cx.beginPath();
   for (let row = minRow; row <= maxRow; row++) {
@@ -2645,16 +2348,6 @@ App.maskBakeIndicatorCanvas = function (layer, size) {
   silhouetteCache.set(key, c);
   return c;
 };
-/* 蒙版符号缩略图基础图：棋盘格 × 符号亮度（剪影），按主题缓存 */
-/* 蒙版图层在【位图烘焙】里的取图：必须与 DOM 显示一致 —— 棋盘格指示图案，
-   symbol 蒙版再按剪影裁形（DOM 是 指示图案矩形 + mask=剪影），pattern 蒙版铺满整个矩形。
-   import 蒙版不走这里（它的 markup 已被 styleImportAsMask 换成指示图案，交给 svgRasterThumb）。
-   案底（用户报障「渲染会把蒙版识别成图层并渲染」）：两个烘焙只按 kind 取图
-   （symbol → App.symbolColorUrl），蒙版层被当成普通图案按自身颜色画进了位图。 */
-/* 蒙版缩略图的底图：【棋盘格 ∩ 剪影】，与 DOM 显示和烘焙取图同一口径。
-   案底（用户报「缩略图的蒙版渲染也会变成图层」）：symbol 蒙版原来走 maskSilhouetteCanvas，
-   画出来是剪影本身 → 在图层栏里看着和普通图案一样，分不出这是蒙版。
-   返回 {canvas, rect}：rect 取剪影的内容盒，让缩略图保持「形状贴边」的取景（与普通层一致）。 */
 App.maskThumbEntry = async function (layer, size) {
   size = size || 96;
   const ind = App.maskIndicatorCanvas(size);
@@ -2664,7 +2357,7 @@ App.maskThumbEntry = async function (layer, size) {
   const cx = c.getContext('2d');
   if (ind) cx.drawImage(ind, 0, 0, size, size);
   if (entry && entry.canvas) {
-    cx.globalCompositeOperation = 'destination-in';   /* 棋盘格按剪影裁形 */
+    cx.globalCompositeOperation = 'destination-in';
     cx.drawImage(entry.canvas, 0, 0, size, size);
     cx.globalCompositeOperation = 'source-over';
   }
@@ -2705,16 +2398,13 @@ App.maskBakeUrlKey = function (layer, size) {
 App.maskBakeUrl = function (layer, size) {
   size = size || 256;
   if (!layer || !layer.isMask) return Promise.resolve("");
-  if (MASK_INDICATOR_TRANSPARENT) return Promise.resolve("");   /* 透明蒙版主题：本就不该画 */
+  if (MASK_INDICATOR_TRANSPARENT) return Promise.resolve("");
   const key = App.maskBakeUrlKey(layer, size);
   if (App.maskBakeUrlCache.has(key)) return App.maskBakeUrlCache.get(key);
   const promise = Promise.resolve().then(function () {
     const ind = App.maskBakeIndicatorCanvas(layer, size);
     if (!ind) return "";
     if (layer.kind !== "symbol" || !layer.dataUri) return App.canvasPngUrl(ind, 'mask-indicator');
-    /* DOM 蒙版里的 <image preserveAspectRatio="none"> 会把源图强制铺满图层框。
-       这里也先铺满方形源画布；若用 silhouetteCanvas 的 contain 取景，非方形 JPEG
-       会被额外留白，放大后蒙版笔画就会变细、断裂，和矢量真值明显不一致。 */
     return App.symbolColorCanvas(layer.dataUri, "#ffffff", size, size).then(function (maskCanvas) {
       if (!maskCanvas) return App.canvasPngUrl(ind, 'mask-indicator');
       const c = document.createElement("canvas");
@@ -2762,7 +2452,6 @@ App.maskSilhouetteCanvas = function (uri, size) {
     return entry;
   });
 };
-/* 填充图案基础图 */
 App.patternThumbCanvas = function (key, color, size) {
   const src = (App.patterns || []).find(p => p.key === key);
   const base = color || (src ? src.fill : '#888888');
@@ -2788,7 +2477,6 @@ App.patternThumb = function (key, color) {
   return App.patternThumbCanvas(key, color, 64).toDataURL();
 };
 
-/* 图案库缩略图：白色剪影（64px 图标） */
 App.libThumb = function (symbol) {
   if (symbol.thumb) return Promise.resolve(symbol.thumb);
   return App.silhouetteCanvas(App.symbolUri(symbol), '#ffffff', 64).then(entry => {
@@ -2798,19 +2486,6 @@ App.libThumb = function (symbol) {
   });
 };
 
-/* 导入/合并图层：SVG 光栅化（含旋转倾斜、子图层相对位置与颜色）；size 为输出方图边长。
-   结果按图层缓存（thumbDirty 时失效）：快速多选/合成重建时同一图层不重复加载，
-   避免数百个异步栅格反复生成导致卡顿 */
-/* 合并分组的缩略图：逐叶子【canvas 合成】，不走"整组序列化成 SVG 再光栅化"。
-   案底（用户报障）：导入生成的 SVG 后取消分组，里面的小分组在图层栏没有缩略图 ——
-   那些组的子层被压成发丝级细条（实测 sx≈0.0071），SVG 光栅化会把亚像素宽的 <image> 整块剔掉
-   （实测该口径下 ink 0%、714B 空图；同一组 canvas 逐层 drawImage 则 ink 18%，与画布放大后的 18.32% 一致）。
-   取图口径与烘焙一致（含蒙版指示图案），透明度逐层带。 */
-/* 缩略图专用：把「蒙版形状」改写成【挖空】（只影响缩略图显示，不改导出文件、不改画布渲染）。
-   语义（用户 2026-09-12 口径）：蒙版把【位于它下面的图层】在它的剪影范围内擦掉，露出缩略图底下的空白网格。
-   做法：给该蒙版之前的兄弟节点套 <g mask="url(#sveKnockN)">；掩膜 = 白底 + 一份“涂黑”的蒙版副本
-   （导出串里蒙版形状的填充是 mask_indicator_* 图案，副本 fill 改黑即得剪影）；蒙版自身不再绘制。
-   识别口径与导入侧一致：id 以 mask 开头 / fill 含 mask_indicator / data-forza-mask-group="1"。 */
 App.thumbKnockoutMasks = function (svgText) {
   try { return window.SveThumbRenderer ? SveThumbRenderer.knockoutMasks(svgText) : svgText; }
   catch (e) { console.warn('[thumb] thumbKnockoutMasks 失败', String(e && e.message || e).slice(0, 160)); return svgText; }
@@ -2823,8 +2498,6 @@ App.thumbKnockoutRaster = async function (svgText) {
   try { return window.SveThumbRenderer ? await SveThumbRenderer.rasterizeKnockout(svgText, 1920) : ''; }
   catch (e) { console.warn('[thumb] thumbKnockoutRaster 失败', String(e && e.message || e).slice(0, 160)); return ''; }
 };
-/* 合并缩略图的真实几何：直接沿离屏模型树累乘变换，不要求先创建数千个隐藏 DOM 节点。
-   根分组自身变换不计入缩略图，子分组的平移/旋转/缩放全部计入包围盒。 */
 App.mergedThumbGeometry = function (layer) {
   const leaves = [], mats = [];
   const modelMatrix = function (l) {
@@ -2890,8 +2563,6 @@ App.mergedThumbUrl = async function (layer, size, preparedGeometry) {
       const T = new DOMMatrix().translate(offx, offy).scale(f).multiply(M);
       cx.setTransform(T.a, T.b, T.c, T.d, T.e, T.f);
       cx.globalAlpha = (l && l.opacity >= 0 && l.opacity <= 1) ? l.opacity : 1;
-      /* 蒙版：不画自己，而是把【下面已画的图层】在它的剪影范围内挖空（露出空白网格）。
-         取图口径仍是 maskBakeUrl（其 alpha = 剪影形状），destination-out 按 alpha 擦除。 */
       cx.globalCompositeOperation = l.isMask ? 'destination-out' : 'source-over';
       cx.drawImage(img, 0, 0, img.width, img.height, -(l.w || 0) / 2, -(l.h || 0) / 2, l.w || 0, l.h || 0);
       cx.restore();
@@ -2915,12 +2586,8 @@ App.svgRasterThumb = async function (layer, size) {
     clone.removeAttribute('data-layer');
     clone.removeAttribute('data-kind');
     clone.removeAttribute('opacity');
-    /* import 位图化模式：矢量组被 display:none 隐藏，克隆光栅化前恢复显示 */
     $$('[style]', clone).forEach(el => { if (el.style && el.style.display === 'none') el.style.display = ''; });
-    /* 代理烘焙会把分组子层 visibility:hidden：克隆光栅化前恢复（否则 import 叶子
-       在编辑静态化背景中缺失——代理是渲染优化，光栅化要按"层可见"来烘） */
     $$('[data-layer]', clone).forEach(el => el.removeAttribute('visibility'));
-    /* 彩色剪影 PNG 可能尚未异步就绪：补填 href 后再光栅化 */
     const pendingFills = [];
     $$('[data-layer]', clone).forEach(el => {
       const id = parseInt(el.getAttribute('data-layer'), 10);
@@ -2933,11 +2600,6 @@ App.svgRasterThumb = async function (layer, size) {
     });
     if (pendingFills.length) await Promise.all(pendingFills);
     let lb = App.computeLocalBBox(layer);
-    /* 合并分组：模型字段算出的本地框可能与实际画出来的几何错位（导入的矢量形状
-       x/y 与 DOM transform 不同源），会让组缩略图只画出一部分或整体偏出去
-       （案底：4 方块夹具的组缩略图只露红色，均色 [186,60,69]；改 DOM 后 20 色桶齐全）。
-       光栅化是低频 + 按图层缓存的操作，直接取 DOM 包围盒最准，也与 getItemDocBBox
-       对 merged 的首选口径（_localBB 来自 el.getBBox）一致。 */
     if (layer.kind === "merged" && layer.el) {
       try { const bb = layer.el.getBBox(); if (bb && bb.width > 0 && bb.height > 0) lb = { x: bb.x, y: bb.y, w: bb.width, h: bb.height }; }
       catch (e) { console.warn('[thumb] 分组 DOM 包围盒读取失败', layer && layer.id, String(e && e.message || e).slice(0, 160)); }
@@ -2957,7 +2619,6 @@ App.svgRasterThumb = async function (layer, size) {
     clone.setAttribute('transform', 'rotate(' + f.rot + ') scale(' + (f.sx * sfx) + ' ' + (f.sy * sfy) + ') skewX(' + f.skew + ')');
     const host = svgEl('svg');
     host.setAttribute('viewBox', (minx - pad) + ' ' + (miny - pad) + ' ' + (w + 2 * pad) + ' ' + (h + 2 * pad));
-    /* 蒙版图层：克隆 sveMaskInd 定义进宿主，否则 url(#sveMaskInd) 无法解析 */
     let defsHost = null;
     const addDefs = () => {
       if (defsHost) return defsHost;
@@ -2969,22 +2630,18 @@ App.svgRasterThumb = async function (layer, size) {
       const ind = $('#sveMaskInd', App.defs);
       if (ind) addDefs().appendChild(ind.cloneNode(true));
     }
-    /* 共享符号图片定义：图层内 <use href="#sveImg*"> 需要把对应定义一并带进宿主 */
     $$('use', clone).forEach(u => {
       const h = (u.getAttribute('href') || '').replace(/^#/, '');
       if (h.indexOf('sveImg') !== 0) return;
       const d = $('#' + h, App.defs);
       if (d) addDefs().appendChild(d.cloneNode(true));
     });
-    /* 填充图案定义：fill=url(#svePat*) 的图层（含合并分组内的 pattern 子层）
-       需要把对应定义一并带进宿主，否则光栅化时图案填充为空 */
     $$('[fill]', clone).forEach(el => {
       const m = /url\(#(svePat\d+)\)/.exec(el.getAttribute('fill') || '');
       if (!m) return;
       const d = $('#' + m[1], App.defs);
       if (!d) return;
       const host = addDefs();
-      /* 注意：defsHost 为 null 时不能用 $('#'+id, defsHost)（会退化成查整个 document） */
       if (!$('#' + m[1], host)) host.appendChild(d.cloneNode(true));
     });
     host.appendChild(clone);
@@ -2994,7 +2651,7 @@ App.svgRasterThumb = async function (layer, size) {
       const { canvas } = fitDrawRect(im, size);
       const out = canvas.toDataURL();
       layer.rasterCache = { size, url: out };
-      layer.thumbCache = out; // 与面板缩略图缓存一致（同为 96px），避免 thumbDirty 被清后返回旧缩略图
+      layer.thumbCache = out;
       layer.thumbDirty = false;
       return out;
     }).catch(e => {
@@ -3008,19 +2665,14 @@ App.svgRasterThumb = async function (layer, size) {
   }
 };
 
-/* 图层缩略图：实时反映颜色、形状、旋转、倾斜、缩放、透明度 */
 App.getLayerThumb = function (layer) {
   if (layer.thumbCache && !layer.thumbDirty) return Promise.resolve(layer.thumbCache);
-  /* 蒙版在缩略图里【不画灰棋盘格】：它表现为"挖空"——下面的图层被遮掉、露出缩略图底下的空白网格。
-     所以本层自己的缩略图直接给空结果（行内显示占位网格）；组合缩略图里的挖空在 mergedThumbUrl 做。 */
   if (layer.isMask) return Promise.resolve('');
-  /* 空结果不落缓存：否则一次失败就永久空白（缩略图再也不会重生） */
   const done = url => { layer.thumbCache = url; if (url) layer.thumbDirty = false; return url; };
   let p;
   if (layer.kind === 'symbol') {
     if (!layer.dataUri) p = Promise.resolve('');
     else if (layer.isMask) {
-      /* 蒙版缩略图 = 棋盘格 ∩ 剪影（原来画的是剪影本身，看不出是蒙版） */
       p = App.maskThumbEntry(layer, 96).then(entry => {
         const out = App.renderTransformedThumb(entry.canvas, entry.rect, layer);
         return out ? out.toDataURL() : '';
@@ -3037,36 +2689,27 @@ App.getLayerThumb = function (layer) {
     const out = App.renderTransformedThumb(base, { x: 0, y: 0, w: 96, h: 96 }, layer);
     p = Promise.resolve(out ? out.toDataURL() : '');
   } else {
-    p = (layer.kind === "merged") ? App.mergedThumbUrl(layer, 96) : App.svgRasterThumb(layer);   /* 分组走 canvas 合成（发丝级细条不会被光栅化剔掉） */
+    p = (layer.kind === "merged") ? App.mergedThumbUrl(layer, 96) : App.svgRasterThumb(layer);
   }
   return p.then(done);
 };
 
 App.doRefreshLayerThumbs = function () {
-  /* 只更新可视区域内的缩略图（大量图层时避免全量遍历） */
   App.fillVisibleThumbs();
 };
-/* 持续操作（旋转/缩放等）期间做 60ms 防抖，避免每帧重建缩略图 */
 App.refreshLayerThumbs = function () {
   if (App.thumbTimer) clearTimeout(App.thumbTimer);
   App.thumbTimer = setTimeout(() => { App.thumbTimer = null; App.doRefreshLayerThumbs(); }, 60);
 };
 
-/* ---------- 大分组渲染代理（烘焙单图） ----------
-   合并分组内图层很多时（>400），SVG 要逐帧绘制数千个 <image>，全图显示时
-   缩放画布/编辑拖动只有 ~3fps。把分组内容烘焙成 1 张位图 + 1 个 <image> 代替：
-   渲染成本与图层数量无关（实测 325ms/帧 → 13ms/帧）。子层 DOM 保留（visibility
-   hidden），分组变换（移动/旋转/缩放/倾斜）由分组 g 统一驱动，无需重烘焙；
-   颜色/图案变化时防抖重烘焙。 */
-/* 2026-09-12 用户要求：取消分组的渲染（合并分组不再烘代理位图，全部走矢量渲染） */
 App.proxyEnabled = false;
 App.proxyThreshold = 400;
 App._proxyBake = new Map();      // merged.id -> {canvas, minx, miny, bw, bh, f}
-App._proxyQueue = new Map();     // 防抖重烘焙队列
+App._proxyQueue = new Map();
 App._proxyTimer = null;
 
 App.maybeBakeProxy = function (merged) {
-  if (!App.proxyEnabled) {                                   /* 取消分组渲染：已有代理就地拆掉，回到矢量 */
+  if (!App.proxyEnabled) {
     try { if (App._proxyBake && App._proxyBake.has(merged.id) && App.unbakeProxy) App.unbakeProxy(merged); } catch (e) { }
     return;
   }
@@ -3075,17 +2718,14 @@ App.maybeBakeProxy = function (merged) {
   if (App._proxyBake.has(merged.id)) return;
   App._enqueueProxyBake(merged);
 };
-/* 分组视觉变化（换色/换图案/蒙版切换等）：防抖重烘焙 */
 App.markProxyDirty = function (merged) {
   if (merged && merged.kind === 'merged' && App._proxyBake.has(merged.id)) {
     App._enqueueProxyBake(merged);
   }
 };
-/* 移除代理（拆分/删除分组时）：恢复子层显示、作废烘焙缓存；嵌套子分组递归清理。
-   底图（data-proxy-base）与其 blob url 一并清理，不泄漏 */
 App.unbakeProxy = function (merged) {
   if (!merged) return;
-  merged.__proxyEpoch = (merged.__proxyEpoch || 0) + 1;   /* 作废在途烘焙：完成时不得再安装 */
+  merged.__proxyEpoch = (merged.__proxyEpoch || 0) + 1;
   App._proxyQueue.delete(merged.id);
   const rec = App._proxyBake.get(merged.id);
   if (rec && rec.url) { try { URL.revokeObjectURL(rec.url); } catch (e) { /* ignore */ } }
@@ -3093,20 +2733,14 @@ App.unbakeProxy = function (merged) {
   if (rec && rec.baseMaskUrl) { try { URL.revokeObjectURL(rec.baseMaskUrl); } catch (e) { /* ignore */ } }
   App._proxyBake.delete(merged.id);
   if (merged.el) {
-    merged.el.querySelectorAll('image[data-proxy]').forEach(img => img.remove());   /* 活动裁剪图/退休图/底图一并移除 */
+    merged.el.querySelectorAll('image[data-proxy]').forEach(img => img.remove());
     merged.el.querySelectorAll('[data-layer]').forEach(el => el.removeAttribute('visibility'));
-    merged._localBB = undefined; // 代理图移除改变 getBBox：清缓存
+    merged._localBB = undefined;
   }
   (merged.children || []).forEach(ch => { if (ch.kind === 'merged') App.unbakeProxy(ch); });
 };
-/* ---------- import 图层自动位图化（大量 import 图层时渲染性能） ----------
-   借鉴 Inkscape 的"静态内容位图缓存"：顶层 import（矢量路径）图层过多（≥300）时，
-   非交互的 import 图层显示为预渲染位图（浏览器按 image 纹理合成，远快于逐路径光栅化）；
-   交互（白框/选中/编辑/颜色预览）的图层恢复矢量显示；颜色/蒙版/图案变化后重新烘焙。
-   位图随图层 transform 走（移动/旋转/缩放/倾斜/翻转无需重烘焙），
-   命中检测走几何/像素（不依赖 DOM 可见性），导出/序列化用矢量数据不受影响。 */
 App.impBitmapThreshold = 300;
-App.impBitmapMaxSide = 512; // 超过该尺寸的 import 层不位图化（保持矢量）
+App.impBitmapMaxSide = 512;
 App.impBakeQueue = [];
 App.impBakeTimer = null;
 
@@ -3117,7 +2751,6 @@ App.impBitmapActive = function () {
   }
   return false;
 };
-/* 该 import 层当前是否处于交互目标（白框/选中/编辑中） */
 App.impIsInteractive = function (layer) {
   if (!layer || layer.kind !== 'import') return false;
   if (App.state.selected.has(layer.id)) return true;
@@ -3129,7 +2762,6 @@ App.impIsInteractive = function (layer) {
   }
   return false;
 };
-/* 惰性创建位图 <image>（置于矢量组之下） */
 App.impEnsureEl = function (layer) {
   if (!layer.el || layer.bitmapEl) return;
   const img = svgEl('image', {
@@ -3139,12 +2771,10 @@ App.impEnsureEl = function (layer) {
   layer.el.insertBefore(img, layer.el.firstChild);
   layer.bitmapEl = img;
 };
-/* 烘焙：importMarkup → 独立 SVG → Blob URL → <image>（解码由浏览器后台完成） */
 App.impBakeLayer = function (layer) {
   if (!layer || layer.kind !== 'import' || layer.isMask) return;
   if (layer.w > App.impBitmapMaxSide || layer.h > App.impBitmapMaxSide) return;
   if (layer.impBaking || (layer.impBitmapUrl && !layer.impBitmapDirty)) return;
-  /* 引用外部 defs（渐变/滤镜等）的片段无法独立渲染：保持矢量 */
   if (/url\(#/.test(layer.importMarkup || '')) return;
   layer.impBaking = true;
   const w = Math.max(1, Math.round(layer.w)), h = Math.max(1, Math.round(layer.h));
@@ -3178,7 +2808,6 @@ App.impQueueBake = function (layer) {
     if (!App.impBakeQueue.length) { clearInterval(App.impBakeTimer); App.impBakeTimer = null; }
   }, 50);
 };
-/* 显示切换：交互层显示矢量，其余显示位图（有 diff，避免高频重复赋值） */
 App.updateImpDisplay = function (layer) {
   if (!layer || layer.kind !== 'import') return;
   if (!App.impBitmapActive()) return;
@@ -3197,20 +2826,17 @@ App.updateImpDisplay = function (layer) {
     App.impQueueBake(layer);
   }
 };
-/* 全量刷新（白框/选中/编辑/结构变化后调用）：遍历顶层 import 层 */
 App.refreshImpBitmaps = function () {
   if (!App.impBitmapActive()) return;
   for (let i = 0; i < App.state.layers.length; i++) {
     if (App.state.layers[i].kind === 'import') App.updateImpDisplay(App.state.layers[i]);
   }
 };
-/* 内容变化（改色/蒙版/更换图案）：作废位图并排队重烘焙 */
 App.impMarkDirty = function (layer) {
   if (!layer || layer.kind !== 'import') return;
   layer.impBitmapDirty = true;
   App.updateImpDisplay(layer);
 };
-/* 删除图层：释放位图 URL */
 App.impCleanup = function (layer) {
   if (!layer) return;
   if (layer.impBitmapUrl) { try { URL.revokeObjectURL(layer.impBitmapUrl); } catch (e) { /* ignore */ } }
@@ -3237,14 +2863,9 @@ App._enqueueProxyBake = function (merged) {
   if (App._proxyTimer) return;
   App._proxyTimer = setTimeout(App._drainProxyBakeQueue, 80);
 };
-/* 后台分片烘焙：彩色渲染全部分子到一张位图，替换为单个 <image> */
 App._bakeProxyAsync = function (merged) {
   if (!merged || merged.kind !== 'merged' || !merged.el) return;
-  /* 烘焙令牌：分片烘焙是异步的，取消失效后完成的任务不得再安装（
-     案底：拆分分组时在途烘焙完成后把代理图又塞回已拆开的组里 → proxyMapSize=1、帧间隔 78ms） */
   const bakeToken = (merged.__proxyEpoch = (merged.__proxyEpoch || 0) + 1);
-  /* 在途标记：烘焙期间旧位图仍在显示（分辨率看着「不足」），不加这个的话
-     updateView 每帧都会重新入队 → 烘完立刻再烘、永不停歇（实测 8x 场景 30s 不收敛、78ms/帧） */
   App._proxyBaking = App._proxyBaking || {};
   App._proxyBaking[merged.id] = true;
   merged.__bakeT0 = performance.now();
@@ -3252,9 +2873,6 @@ App._bakeProxyAsync = function (merged) {
   const walk = l => { if (l.kind === 'merged') (l.children || []).forEach(walk); else leaves.push(l); };
   (merged.children || []).forEach(walk);
   if (!leaves.length) return;
-  /* 矩阵与并集（分片）：上溯到分组自身为止（不含分组 transform）——
-     位图按【组本地坐标】烘焙，image 放在分组 g 内随分组变换渲染；
-     否则分组非恒等变换（移动/旋转/缩放后）时位图按文档坐标放置会整体错位 */
   const chainToGroup = el => {
     const chain = [];
     let e = el;
@@ -3266,11 +2884,9 @@ App._bakeProxyAsync = function (merged) {
     for (let i = chain.length - 1; i >= 0; i--) m = m.multiply(parseTransformAttr(chain[i]));
     return m;
   };
-  /* 必须传 DOM 元素 l.el：传模型对象 l 会因缺少 nodeType/getAttribute 得到空链=单位矩阵，
-     全部图案被画到原点挤成一团（2973 层合并后"渲染崩"的根因） */
   const mats = leaves.map(l => chainToGroup(l.el));
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
-  const SLICE_MS = 8;   // 每片按时间预算切片：不出现 >100ms 长任务（原固定 250 个/片，单耗大时超预算）
+  const SLICE_MS = 8;
   let i = 0;
   const bboxStep = () => {
     if (App.renderInteractionBusy && App.renderInteractionBusy()) { setTimeout(bboxStep, 60); return; }
@@ -3287,20 +2903,13 @@ App._bakeProxyAsync = function (merged) {
     if (i < leaves.length) { setTimeout(bboxStep, 0); return; }
     if (!isFinite(minx)) return;
     const bw = Math.max(1, maxx - minx), bh = Math.max(1, maxy - miny);
-    /* 方案A：烘焙范围 = 「分辨率允许的最大范围」∩ 整组包围盒，以当前视口为中心。
-       旧做法（整组包围盒）在 4096 上限下分辨率被压死 → 放大进分组内部一直模糊；
-       只取视口本身虽最清晰，但平移几步就跑出已烘范围 → 边平移边重烘（实测 p95 尖峰 97ms）。
-       折中：cropMax = px 预算 / 需求分辨率，取视口中心展开到该尺寸再与包围盒求交 */
     const needF = App.proxyNeedF(merged);
     const fWant = Math.max(0.2, needF * 1.15);
-    const CROP_PX_BUDGET = 6.0e6;                       /* ≈24MB RGBA，兼顾清晰与内存 */
+    const CROP_PX_BUDGET = 6.0e6;
     const cropMax = Math.max(1, Math.min(4096, Math.sqrt(CROP_PX_BUDGET)) / fWant);
     let cx0 = minx, cy0 = miny, cw0 = bw, ch0 = bh;
     const vrect = App.proxyLocalViewRect(merged, 0);
     if (vrect) {
-      /* 中心取「视口 ∩ 包围盒」的中心：视口中心可能整个落在内容之外
-         （例如缩小全览后再直接放大——位置没跟着变），拿它当中心会被包围盒裁掉一半，
-         覆盖不全 → 每帧都判「不覆盖」→ 反复重烘（实测 p95 187ms、settle 超时） */
       const ix0 = Math.max(minx, vrect.minx), iy0 = Math.max(miny, vrect.miny);
       const ix1 = Math.min(maxx, vrect.maxx), iy1 = Math.min(maxy, vrect.maxy);
       if (ix1 > ix0 && iy1 > iy0) {
@@ -3311,27 +2920,18 @@ App._bakeProxyAsync = function (merged) {
         if (gx1 > gx0 && gy1 > gy0) { cx0 = gx0; cy0 = gy0; cw0 = gx1 - gx0; ch0 = gy1 - gy0; }
       }
     }
-    /* 分辨率自适应（借鉴 Inkscape 按屏幕像素评分缓存）：至少 2048px，
-       按当前视图缩放需求提高（放大后仍清晰），上限 4096 控制内存 */
     const screenScale = App.state.view.scale || 1;
     const dpr = window.devicePixelRatio || 1;
     const target = Math.max(2048, Math.ceil(Math.max(bw, bh) * screenScale * dpr));
-    /* 允许超采样（f 可 > 1）：位图分辨率必须能超过「组本地 1:1」，否则放大视图时被拉伸变模糊 */
-    /* 分辨率跟随屏幕需求（×1.15 余量），上限由 4096 与 crop 尺寸决定；下限 0.2 防退化。
-       与旧口径的区别：不再用「整组包围盒」定 f，裁剪后同样的 4096 上限能给出更高分辨率 */
     const f = Math.max(0.2, Math.min(fWant, 4096 / Math.max(cw0, ch0)));
     const cw = Math.max(1, Math.round(cw0 * f)), ch = Math.max(1, Math.round(ch0 * f));
     const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
     const cx = cv.getContext('2d');
-    /* 彩色图加载（symbolColorUrl 缓存命中后快） */
     Promise.all(leaves.map(l => App.symbolColorUrl(l).catch(() => ''))).then(urls => {
-      /* 按 url 去重后再加载：2973 个叶子实际只有 ≤121 个不同 url，
-         无去重 = 近 3k 次 Image 加载/解码（代理烘焙超时的首要根因） */
       const uniq = Array.from(new Set(urls.filter(Boolean)));
       const tLoad = performance.now();
       return App.loadBakeImages(uniq, '[proxy-bake] 图片加载异常').then(byUrl => {
         const imgs = urls.map(u => (u ? (byUrl.get(u) || null) : null));
-        /* 单叶绘制（裁剪位图与整幅底图共用的同一条绘制路径） */
         const drawLeaf = (ctx2, di2, f2, ox, oy) => {
           const img = imgs[di2];
           if (!img) return;
@@ -3339,13 +2939,10 @@ App._bakeProxyAsync = function (merged) {
           ctx2.save();
           const T = new DOMMatrix().translate(-ox * f2, -oy * f2).scale(f2).multiply(mats[di2]);
           ctx2.setTransform(T.a, T.b, T.c, T.d, T.e, T.f);
-          ctx2.globalAlpha = (l && l.opacity >= 0 && l.opacity <= 1) ? l.opacity : 1;   /* 烘焙带上图案原本的透明度 */
+          ctx2.globalAlpha = (l && l.opacity >= 0 && l.opacity <= 1) ? l.opacity : 1;
           ctx2.drawImage(img, 0, 0, img.width, img.height, -(l.w || 0) / 2, -(l.h || 0) / 2, l.w || 0, l.h || 0);
           ctx2.restore();
         };
-        /* 整幅低分辨率底图：垫在裁剪位图之下，消除「裁剪框外先空白、新位图落地才补上」的
-           缩放抽动（Inkscape drawing-item 的整幅缓存思路；我们受 4096 上限约束裁剪，故补底图
-           而不是取消裁剪）。范围 = 完整包围盒，fBase = min(2, 2048/长边)；复用同一批已加载图片 */
         const bakeBase = () => {
           const fBase = Math.max(0.05, Math.min(2, 2048 / Math.max(bw, bh)));
           const bcv = document.createElement('canvas');
@@ -3378,10 +2975,10 @@ App._bakeProxyAsync = function (merged) {
             App._installProxy(merged, cv, cx0, cy0, cw0, ch0, f,
               { leaves: leaves.length, uniqUrls: uniq.length, loadMs: Math.round(performance.now() - tLoad), drawMs: Math.round(performance.now() - tDraw),
                 needF: needF, full: { minx: minx, miny: miny, bw: bw, bh: bh }, token: bakeToken });
-            if (bakeToken === merged.__proxyEpoch) bakeBase();   /* 底图总是随裁剪位图重烘：退休式换图保证无空窗，且内容/颜色一变立即跟上 */
+            if (bakeToken === merged.__proxyEpoch) bakeBase();
           }
           catch (err) { console.warn('[proxy-bake] 安装异常', merged.id, String(err).slice(0, 200)); }
-          finally { if (App._proxyBaking) delete App._proxyBaking[merged.id]; }   /* 在途标记必清：安装可能因令牌过期/已拆分而跳过 */
+          finally { if (App._proxyBaking) delete App._proxyBaking[merged.id]; }
         };
         drawStep();
       }).catch(err => console.warn('[proxy-bake] 图片加载异常', merged.id, String(err).slice(0, 200)));
@@ -3389,18 +2986,11 @@ App._bakeProxyAsync = function (merged) {
   };
   bboxStep();
 };
-/* 安装/更新代理 image（首次插入；后续只换 href）。
-   注意必须只匹配【直接子级】的代理图：嵌套合并后子分组的代理图也位于本 g 内，
-   误匹配会导致跳过隐藏步骤（子层全部裸渲染，大分组导入卡顿的根因） */
 App._installProxy = function (merged, cv, minx, miny, bw, bh, f, stat) {
   if (!merged.el) return;
-  /* 过期/失效的在途烘焙一律丢弃：令牌被新一轮烘焙或 unbakeProxy 顶掉、或该组已不在图层树里 */
   if (stat && stat.token !== undefined && stat.token !== merged.__proxyEpoch) return;
   if (!App.state || !App.state.layers || App.state.layers.indexOf(merged) < 0) return;
   const rec0 = App._proxyBake.get(merged.id);
-  /* PNG 编码走 toBlob（Chromium 离线线程）。换图采用【退休式原子提交】（Inkscape
-     drawing-item 同思路）：先在 DOM 外解码，新图就绪后在同一个任务里替换旧图并隐藏子层。
-     首次烘焙也不能先塞空 <image> 再隐藏矢量，否则编码/解码期间整组会消失。 */
   const tEnc = performance.now();
   cv.toBlob(blob => {
     let url = null;
@@ -3424,7 +3014,6 @@ App._installProxy = function (merged, cv, minx, miny, bw, bh, f, stat) {
       if (current && current.parentNode === merged.el) merged.el.insertBefore(fresh, current);
       else merged.el.appendChild(fresh);
       if (current) current.remove();
-      /* 新图已解码并落 DOM，才在同一任务中隐藏子层；不会出现空白过渡帧。 */
       merged.el.querySelectorAll('[data-layer]').forEach(el => el.setAttribute('visibility', 'hidden'));
       const prev = App._proxyBake.get(merged.id) || rec0;
       App._proxyBake.set(merged.id, Object.assign({}, prev || {}, {
@@ -3433,7 +3022,6 @@ App._installProxy = function (merged, cv, minx, miny, bw, bh, f, stat) {
       }));
       if (prev && prev.url && prev.url !== url) { try { URL.revokeObjectURL(prev.url); } catch (e) { /* ignore */ } }
       merged._localBB = undefined;
-      /* 日志：烘焙各阶段耗时与规模（诊断"突然卡好一会"） */
       try {
         const t0 = merged.__bakeT0 || 0;
         App.log('perf', '分组烘焙阶段', { merged: merged.id, totalMs: Math.round(performance.now() - t0),
@@ -3448,15 +3036,10 @@ App._installProxy = function (merged, cv, minx, miny, bw, bh, f, stat) {
     if (warm.decode) warm.decode().then(done, fail); else setTimeout(done, 400);
   }, 'image/png');
 };
-/* 安装/更新整幅低分辨率底图（data-proxy-base，垫在裁剪位图之下：DOM 在前 = 绘制在下层）。
-   与裁剪位图同一套令牌防过期规则；不参与子层可见性切换（子层 visibility 仍由裁剪位图管）。
-   换图同用【退休式原子提交】：新图解码完成前旧图保留显示，杜绝解码空窗；旧 url 解码后回收 */
 App._installProxyBase = function (merged, cv, minx, miny, bw, bh, fBase, token) {
   if (!merged || !merged.el) return;
-  if (token !== undefined && token !== merged.__proxyEpoch) return;   /* 过期：安装即弃 */
+  if (token !== undefined && token !== merged.__proxyEpoch) return;
   if (!App.state || !App.state.layers || App.state.layers.indexOf(merged) < 0) return;
-  /* 底图 alpha 顺手转成白色剪影。闪动覆盖层直接复用它，不再重走 2000 叶
-     剪影合成，也不再在交互路径调用同步 canvas.toDataURL()。 */
   const maskCanvas = document.createElement('canvas');
   maskCanvas.width = cv.width; maskCanvas.height = cv.height;
   const maskCtx = maskCanvas.getContext('2d');
@@ -3473,7 +3056,7 @@ App._installProxyBase = function (merged, cv, minx, miny, bw, bh, fBase, token) 
     if (token !== undefined && token !== merged.__proxyEpoch) {
       if (url) { try { URL.revokeObjectURL(url); } catch (e) { /* ignore */ } }
       if (maskUrl) { try { URL.revokeObjectURL(maskUrl); } catch (e) { /* ignore */ } }
-      return;   /* 编码期间被新一轮烘焙/unbake 顶掉：不安装 */
+      return;
     }
     if (!url || !maskUrl) {
       if (url) { try { URL.revokeObjectURL(url); } catch (e) { /* ignore */ } }
@@ -3489,7 +3072,6 @@ App._installProxyBase = function (merged, cv, minx, miny, bw, bh, fBase, token) 
         return;
       }
       const cur = App._proxyBake.get(merged.id);
-      /* 裁剪图与底图并行编码；底图偶尔先解码，等裁剪图完成原子提交后再挂底图。 */
       if (!cur) {
         if (++installAttempts < 100) { setTimeout(done, 20); return; }
         try { URL.revokeObjectURL(url); } catch (e) { /* ignore */ }
@@ -3524,12 +3106,6 @@ App._installProxyBase = function (merged, cv, minx, miny, bw, bh, fBase, token) 
     Promise.all([loadImage(url), loadImage(maskUrl)]).then(done, fail);
   }).catch(e => console.warn('[proxy-bake] 底图编码异常', merged.id, String(e && e.message || e).slice(0, 160)));
 };
-/* 分组烘焙分辨率自适应检查：缓存像素（bw*f）低于屏幕需求（bw*scale*dpr）的 80% 时
-   防抖重烘焙更高分辨率（旧图保留显示，烘焙完成才替换，无闪烁） */
-/* ---------- 方案A（2026-09-11）：合并分组代理位图「按视口裁剪 + 清晰度判定重烘」 ----------
-   原理：位图按【组本地坐标】烘焙、受 4096 像素上限约束；把烘焙范围从「整组包围盒」收窄到
-   「视口映射回组本地的矩形 ∩ 包围盒」，同样的上限就能给出更高的每单位分辨率 → 放大进分组
-   内部依然清晰（与 autoStatic 同一口径：位置与清晰度分开判定）。 */
 App.proxyLocalViewRect = function (merged, pad) {
   try {
     const r = App.wrap.getBoundingClientRect();
@@ -3538,7 +3114,7 @@ App.proxyLocalViewRect = function (merged, pad) {
     const pd = typeof pad === 'number' ? pad : 0;
     const vx = v.x - (r.width / sc) * pd, vy = v.y - (r.height / sc) * pd;
     const vw = (r.width / sc) * (1 + pd * 2), vh = (r.height / sc) * (1 + pd * 2);
-    const m = App.transformChainMat ? App.transformChainMat(merged) : null;   /* 本地 → 文档 */
+    const m = App.transformChainMat ? App.transformChainMat(merged) : null;
     if (!m) return null;
     const inv = m.inverse();
     let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
@@ -3551,7 +3127,6 @@ App.proxyLocalViewRect = function (merged, pad) {
     return { minx: minx, miny: miny, maxx: maxx, maxy: maxy };
   } catch (e) { return null; }
 };
-/* 分组自身缩放（本地 → 文档的线性放大倍数）：设备像素需求 = 视图缩放 × dpr × 它 */
 App.proxyGroupScale = function (merged) {
   try {
     const m = App.transformChainMat ? App.transformChainMat(merged) : null;
@@ -3564,12 +3139,9 @@ App.proxyNeedF = function (merged) {
   const dpr = window.devicePixelRatio || 1;
   return (App.state.view.scale || 1) * dpr * App.proxyGroupScale(merged);
 };
-/* 已烘 crop 是否仍完整覆盖当前视口（位置判定） */
-/* 当前视口内是否还有该组的内容（viewport ∩ 包围盒 非空）
-   没有任何内容可见时不需要重烘：既无意义，又会在 4096 上限下永远达不到需求分辨率 → 自激重烘 */
 App.proxyViewHasContent = function (merged) {
   const vr = App.proxyLocalViewRect(merged, 0);
-  if (!vr || !merged || !merged.el) return true;      /* 算不出：按有内容处理（保守） */
+  if (!vr || !merged || !merged.el) return true;
   const bb = App.getItemDocBBox ? null : null;
   const rec = App._proxyBake ? App._proxyBake.get(merged.id) : null;
   const full = (rec && rec.full) || null;
@@ -3580,20 +3152,18 @@ App.proxyViewHasContent = function (merged) {
 };
 App.proxyCropCoversView = function (merged, rec) {
   const vr = App.proxyLocalViewRect(merged, 0);
-  if (!vr || !rec || !rec.full) return true;        /* 算不出：不折腾 */
-  /* 只要求覆盖「视口 ∩ 该组包围盒」：视口伸出内容之外的部分本来就没有东西要画，
-     拿整块视口比会在内容边缘反复判不覆盖 → 反复重烘 */
+  if (!vr || !rec || !rec.full) return true;
   const fx0 = rec.full.minx, fy0 = rec.full.miny;
   const fx1 = fx0 + rec.full.bw, fy1 = fy0 + rec.full.bh;
   const ix0 = Math.max(vr.minx, fx0), iy0 = Math.max(vr.miny, fy0);
   const ix1 = Math.min(vr.maxx, fx1), iy1 = Math.min(vr.maxy, fy1);
-  if (ix1 <= ix0 || iy1 <= iy0) return true;         /* 视口内没有该组内容 */
+  if (ix1 <= ix0 || iy1 <= iy0) return true;
   const eps = 1;
   return rec.minx <= ix0 + eps && rec.miny <= iy0 + eps &&
     (rec.minx + rec.bw) >= ix1 - eps && (rec.miny + rec.bh) >= iy1 - eps;
 };
 App.maybeUpgradeProxyRes = function () {
-  if (!App.proxyEnabled) return;                              /* 取消分组渲染：不再升级重烘 */
+  if (!App.proxyEnabled) return;
   if (!App._proxyBake || !App._proxyBake.size) return;
   const scale = App.state.view.scale || 1;
   const dpr = window.devicePixelRatio || 1;
@@ -3602,25 +3172,18 @@ App.maybeUpgradeProxyRes = function () {
       if (!rec || !rec.f) return;
       const m = App.findLayer(id);
       if (!m || m.kind !== 'merged') return;
-      if (App._proxyQueue.has(id)) return;          /* 已在重烘队列里 */
-      if (App._proxyBaking && App._proxyBaking[id]) return;   /* 烘焙在途：等它落地再判（防自激重烘） */
-      if (!App.proxyViewHasContent(m)) return;                /* 视口里没有该组内容：不重烘（否则自激） */
-      /* 方案A 两条判定（与 autoStatic 同口径）：
-         ①清晰度：f 低于屏幕需求 ×0.85 → 重烘（裁剪会让下次 f 更高）
-         ②覆盖度：视口跑出已烘 crop（平移离开）→ 重烘
-         旧实现「到 4096 像素上限就不再折腾」正是放大进分组内部一直模糊的原因 */
+      if (App._proxyQueue.has(id)) return;
+      if (App._proxyBaking && App._proxyBaking[id]) return;
+      if (!App.proxyViewHasContent(m)) return;
       const needF = App.proxyNeedF(m);
-      const resShort = rec.f < needF * 0.85;                 /* 太糊：放大后需要更高分辨率 */
-      const resFat = rec.f > needF * 1.15 * 2.2;              /* 太肥：缩小视图后仍拿大位图逐帧降采样，
-                                                              实测 2449×1655 全览时 70.9ms/帧；重烘会自动裁小 */
+      const resShort = rec.f < needF * 0.85;
+      const resFat = rec.f > needF * 1.15 * 2.2;
       const cover = App.proxyCropCoversView(m, rec);
       if (resShort || resFat || !cover) App.markProxyDirty(m);
 
     } catch (e) { /* ignore */ }
   });
 };
-/* 代理分组取色：从烘焙位图像素取色（子层隐藏时取色器仍可用）。
-   位图是组本地坐标：文档点先经分组自身变换的逆变换折算到组本地再采样 */
 App.proxySampleColor = function (merged, clientX, clientY) {
   const rec = App._proxyBake.get(merged && merged.id);
   if (!rec || !rec.canvas) return null;

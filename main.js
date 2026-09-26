@@ -8,10 +8,8 @@ const { pathToFileURL } = require('url');
 const { resolveAutoSaveName } = require('./auto-name');
 const { WorkcopyStore, atomicWrite } = require('./workcopy-store');
 const workcopyStore = new WorkcopyStore();
-const DLG = require('./dlg-i18n');   /* 原生对话框文案（主进程侧 i18n） */
+const DLG = require('./dlg-i18n');
 
-/* 当前界面语言：读 userData/settings.json（渲染层改设置时由 settings-set 写入）。
-   原生对话框由 OS 渲染，标题/按钮/过滤器名只能由主进程按此语言传入。 */
 function uiLang() {
   try {
     const s = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'settings.json'), 'utf8'));
@@ -19,13 +17,13 @@ function uiLang() {
   } catch (e) { return 'zh-CN'; }
 }
 function dt(key, params) { return DLG.get(uiLang(), key, params); }
+const NAME_I18N = require('./js/name-i18n');
+function nt(key, params) { return NAME_I18N.get(uiLang(), key, params); }
 
-/* 单实例锁：重复启动时聚焦已有窗口，避免共享缓存冲突导致界面异常。
-   SVGBIANJI_ISOLATE=1（CDP 自动化验证用）：跳过单实例锁并用独立 userData，
-   可与用户已开的正式实例并存，避免缓存/锁冲突 */
 const ISOLATE = process.env.SVGBIANJI_ISOLATE === '1';
 if (ISOLATE) {
-  app.setPath('userData', path.join(os.tmpdir(), 'groupfh6-cdp-' + process.pid));
+  const isoDir = process.env.SVGBIANJI_ISOLATE_DIR || path.join(os.tmpdir(), 'groupfh6-cdp-' + process.pid);
+  app.setPath('userData', isoDir);
 } else {
   const gotLock = app.requestSingleInstanceLock();
   if (!gotLock) {
@@ -41,28 +39,16 @@ if (ISOLATE) {
   }
 }
 
-/* GPU 渲染优化：显式启用 GPU 光栅化与合成（大量 SVG 图层/大分组时渲染更流畅），
-   并忽略显卡黑名单（部分集显/驱动被 Chromium 默认列入软件渲染） */
-/* SVGBIANJI_NO_GPU=1（仅自动化验证用）：部分无显卡/沙箱环境里独立 GPU 进程会
-   FATAL 退出（"GPU process isn't usable. Goodbye."），把 GPU 收进浏览器进程即可正常启动。
-   默认行为一字不改，只有显式设了这个变量才走这条路。 */
-if (process.env.SVGBIANJI_NO_GPU === '1') {
-  app.commandLine.appendSwitch('in-process-gpu');
-} else {
-  app.commandLine.appendSwitch('enable-gpu-rasterization');
-  app.commandLine.appendSwitch('ignore-gpu-blocklist');
-  app.commandLine.appendSwitch('enable-zero-copy');
-}
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-zero-copy');
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }
 ]);
 
-/* 关闭确认：是否已决定退出（跳过二次确认） */
 let forceClose = false;
 
-/* 主页重型 SVG 缩略图在独立 renderer 中生成。复杂文件即使含数千图层，
-   也不会再占住编辑器 renderer 的事件循环。 */
 let thumbRendererWin = null;
 let thumbRendererReady = null;
 let thumbRenderSeq = 0;
@@ -109,8 +95,6 @@ function ensureThumbRenderer() {
       partition: 'sve-thumb-renderer',
       contextIsolation: true,
       nodeIntegration: false,
-      /* 仅加载本地只读渲染页。不要与主窗口同时启动第二个 sandbox preload：
-         Electron/Windows 偶发 startupData=null，会把主 renderer 一并销毁。 */
       sandbox: false,
       backgroundThrottling: false
     }
@@ -181,8 +165,6 @@ async function renderSvgThumbFile(name) {
   }
   if (thumbFileInflight.has(cacheKey)) return thumbFileInflight.get(cacheKey);
   const task = (async () => {
-    /* 重型源文件和 PNG 都不经过主界面。隐藏 renderer 直接读 SVG、异步编码并
-       写入缓存，主进程只传两个短路径，避免 base64 回传造成可见停顿。 */
     const rendered = await enqueueThumbRender({ sourcePath, cachePath });
     if (rendered && rendered.saved) return { url: thumbCachePublicUrl(cacheKey), cached: false };
     const url = String(rendered && rendered.url || '');
@@ -212,13 +194,9 @@ ipcMain.on('sve-thumb-result', (event, result) => {
   else job.reject(new Error(String(result.error || '缩略图生成失败')));
 });
 
-/* ---------- 日志（内存环形缓冲，最多 3000 条）：记录关键操作/错误/性能/鼠标点击事件。
-   不点「保存日志」不写磁盘——开源给别人用时不会在电脑上越积越多 ---------- */
 const LOG_MAX = 3000;
 const logBuf = [];
 let logSavedPath = null;
-/* 数据目录跟随 exe（便携式：整个文件夹拷走数据跟着走）。
-   目录只首次创建（不存在才建），路径缓存后直接复用——不重复创建 */
 const _dataDirs = {};
 function appDataDir() {
   const base = app.isPackaged ? path.dirname(app.getPath('exe')) : __dirname;
@@ -228,14 +206,12 @@ function appDataDir() {
   }
   return _dataDirs.__base;
 }
-/* 工作环境文件夹统一用英文名（2026-09-15 用户要求）。
-   旧中文名在首次访问时自动改名迁移（仅当新目录不存在、旧目录存在），既有文件不丢；
-   改名失败则退回继续使用旧目录，绝不主动删用户数据。 */
 const DATA_DIRS = {
   svg: 'SVGImages',
   workcopy: 'WorkCopies',
   history: 'WorkCopiesHistory',
-  logs: 'sve-logs'
+  logs: 'sve-logs',
+  injectundo: 'InjectUndo'
 };
 const DATA_DIR_LEGACY = {
   SVGImages: 'SVG图像',
@@ -252,7 +228,7 @@ function ensureDataDir(name) {
       try {
         fs.renameSync(old, dir);
         appendLog('info', '数据目录改用英文名', { from: legacy, to: name });
-      } catch (e) { /* 改名失败（占用/权限）：下面退回旧目录，数据照常可见 */ }
+      } catch (e) { }
     }
     if (!fs.existsSync(dir) && fs.existsSync(old)) dir = old;
   }
@@ -273,9 +249,8 @@ function appendLog(level, msg, data) {
     const line = '[' + fmtLogTime(new Date()) + '] [' + level + '] ' + msg + (data !== undefined ? ' | ' + JSON.stringify(data) : '');
     logBuf.push(line);
     if (logBuf.length > LOG_MAX) logBuf.splice(0, logBuf.length - LOG_MAX);
-  } catch (e) { /* 日志失败不影响主流程 */ }
+  } catch (e) { }
 }
-/* 把内存缓冲写入日志文件（用户点「保存日志」时调用），返回文件路径 */
 function saveLogFile() {
   try {
     const d = new Date();
@@ -294,7 +269,6 @@ process.on('uncaughtException', err => {
   try { appendLog('error', '主进程未捕获异常', { message: String(err && err.message), stack: String(err && err.stack).slice(0, 500) }); } catch (e) { /* ignore */ }
 });
 
-/* 软件名(对话框标题/文案用):优先 package.json(build.productName / productName;dev 下 app.getName() 会返回包名) */
 function appName() {
   try {
     const pkg = require('./package.json');
@@ -303,16 +277,12 @@ function appName() {
   } catch (e) { /* ignore */ }
   try { return app.getName() || 'FH6 Vinyl Group Editor'; } catch (e) { return 'FH6 Vinyl Group Editor'; }
 }
-/* 文件名上限(过长由后端截断加 …) */
 function clipDocName(name, max) {
-  const s = String(name == null || name === '' ? '未命名' : name);
+  const s = String(name == null || name === '' ? nt('name.untitled') : name);
   const m = max || 30;
   return s.length > m ? s.slice(0, m) + '…' : s;
 }
-/* 关闭确认窗:标题=软件名;正文=要在关闭之前存储对 <软件名> 文档"<文件名>"的更改吗？;按钮 是/否/取消
-   是=保存工作进程到软件内(不弹文件对话框) / 否=不保存 / 取消=不关闭 */
 async function askCloseDoc(win, docName) {
-  /* 测试桩:SVGBIANJI_DIALOG_STUB=save|dont|cancel —— 打印对话框参数并直接返回(供自动化验证) */
   const stub = process.env.SVGBIANJI_DIALOG_STUB;
   if (stub) {
     try {
@@ -336,8 +306,6 @@ async function askCloseDoc(win, docName) {
   });
   return r.response === 0 ? 'save' : (r.response === 1 ? 'dont' : 'cancel');
 }
-/* 覆盖已有文件前的确认。测试桩与关闭确认窗同一套约定：
-   SVGBIANJI_NO_CONFIRM=1 → 视为已确认；SVGBIANJI_DIALOG_STUB=save|dont|cancel → 按桩返回 */
 async function askOverwrite(name) {
   const stub = process.env.SVGBIANJI_DIALOG_STUB;
   if (stub) {
@@ -365,7 +333,6 @@ async function askOverwrite(name) {
   const r = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
   return r.response === 0;
 }
-/* 关闭软件:委托渲染层逐个标签确认(全部处理完才真正关闭) */
 async function confirmClose(win) {
   if (process.env.SVGBIANJI_NO_CONFIRM === '1') { forceClose = true; win.close(); return; }
   let ok = true;
@@ -374,15 +341,14 @@ async function confirmClose(win) {
       '(async () => (typeof App !== "undefined" && App.Tabs && App.Tabs.closeAllTabsGuard) ? await App.Tabs.closeAllTabsGuard() : true)()'
     );
   } catch (err) {
-    ok = true; /* 渲染进程不可用:直接关闭 */
+    ok = true;
   }
-  if (ok === false) return; /* 用户取消:留在软件内 */
+  if (ok === false) return;
   await saveHistAnchorBeforeClose(win);
   forceClose = true;
   win.close();
 }
 
-/* 关闭前保存一次工作锚点：画布有内容才保存（空画布不产生无用锚点） */
 async function saveHistAnchorBeforeClose(win) {
   try {
     await win.webContents.executeJavaScript(
@@ -394,18 +360,9 @@ async function saveHistAnchorBeforeClose(win) {
         catch (e) { return false; }
       })()`
     );
-  } catch (err) { /* 渲染进程不可用：忽略 */ }
+  } catch (err) { }
 }
 
-/* ---------- 自绘标题栏的窗口控制（UI 改良 C 项） ----------
-   安全口径：
-   · 动作是**白名单**（minimize / toggle-maximize / close），不是任意 IPC 通道转发；
-   · 目标窗口**只能来自发送方自身**（BrowserWindow.fromWebContents），
-     渲染层无法指定别的窗口，也无法调用 Electron 任意 API；
-   · 关闭**必须走 win.close()**，从而复用既有 close → confirmClose(win) 链，
-     不提供 destroy()/app.quit() 之类绕过未保存确认的捷径；
-   · 最大化/还原后回推真实状态，保证按钮图标与系统实际状态一致
-     （首次加载、系统快捷键改窗口状态也都覆盖）。 */
 const WIN_CTL_ACTIONS = { 'minimize': 1, 'toggle-maximize': 1, 'close': 1 };
 
 function windowCtlTarget(e) {
@@ -418,7 +375,7 @@ function sendWinState(win) {
   if (!win || win.isDestroyed()) return;
   try {
     win.webContents.send('window-state', { maximized: win.isMaximized(), focused: win.isFocused() });
-  } catch (err) { /* 渲染进程已销毁：忽略 */ }
+  } catch (err) { }
 }
 
 ipcMain.handle('window-control', (e, action) => {
@@ -429,14 +386,13 @@ ipcMain.handle('window-control', (e, action) => {
   try {
     if (act === 'minimize') win.minimize();
     else if (act === 'toggle-maximize') { win.isMaximized() ? win.unmaximize() : win.maximize(); }
-    else win.close();   /* ← 走既有关闭确认链，勿改成 destroy/quit */
+    else win.close();
     return { ok: true, maximized: win.isMaximized() };
   } catch (err) {
     return { ok: false, error: String(err && err.message || err) };
   }
 });
 
-/* 首次加载时渲染层主动问一次当前状态（避免开窗即最大化/还原态图标不同步） */
 ipcMain.handle('window-state-get', (e) => {
   const win = windowCtlTarget(e);
   if (!win) return { ok: false };
@@ -453,21 +409,13 @@ function createWindow() {
     backgroundColor: '#1e1f22',
     title: dt('app.title'),
     show: false,
-    /* ★ 2026-09-23 用户要求改用 **Windows 原生窗口**：frame:true 保留系统边框与原生标题栏
-       （最小化 / 最大化 / 关闭由系统提供，不再是页面内自绘的那三个）。
-       页面里那条自绘 #titleBar 已在 css/style.css 里 display:none 隐藏。
-       窗口标题走 title（dt('app.title')），图标走下面的 icon。 */
     frame: true,
     icon: path.join(__dirname, 'icons', 'app-icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      /* Electron 43/Windows 的 sandbox startupData 传输会偶发返回 null，导致整个
-         renderer 在 preload 前崩溃。页面仍保持 contextIsolation + 无 Node 权限。 */
       sandbox: false,
-      /* 测试模式下禁用后台节流：窗口被遮挡/最小化时 rAF 与定时器照常运行，
-         否则闪动动画（rAF 驱动）可能整段冻结，冒烟测试偶发失败 */
       backgroundThrottling: !testMode
     }
   });
@@ -481,12 +429,11 @@ function createWindow() {
     win.show();
   });
   win.on('close', e => {
-    if (forceClose) return; // 已决定退出
+    if (forceClose) return;
     e.preventDefault();
     confirmClose(win);
   });
   win.on('closed', () => destroyThumbRenderer());
-  /* 自绘标题栏：最大化/还原状态变化后回推给渲染层（含系统快捷键、双击标题栏、吸附拖动） */
   win.on('maximize', () => sendWinState(win));
   win.on('unmaximize', () => sendWinState(win));
   win.on('focus', () => sendWinState(win));
@@ -502,14 +449,10 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  /* 启动后异步检查 GitHub 有没有新版本（内部延迟 8s + 全程静默失败，绝不打扰用户；
-     package.json 没配 repository 就自动跳过）。见 update-check.js */
-  try { require('./update-check').check({ onLog: appendLog }); }
+  try { require('./update-check').check({ onLog: appendLog, t: dt }); }
   catch (e) { appendLog('warn', '更新检查模块加载失败（已忽略）', { message: String(e && e.message || e).slice(0, 160) }); }
 
-  /* 便携式：启动时确保 exe 目录下所需文件夹存在（仅首次创建，之后直接复用） */
   try {
-    /* 「已保存彩绘」已下线（无任何入口写入它），不再创建也不再引用 */
 [DATA_DIRS.history, DATA_DIRS.logs, DATA_DIRS.workcopy, DATA_DIRS.svg].forEach(n => ensureDataDir(n));
   } catch (e) { /* ignore */ }
   protocol.handle('app', (request) => {
@@ -557,7 +500,7 @@ app.whenReady().then(() => {
   ipcMain.handle('save-svg-dialog', async (e, payload) => {
     const r = await dialog.showSaveDialog({
       title: dt('dlg.exportSvg'),
-      defaultPath: payload.defaultName || '未命名.svg',
+      defaultPath: payload.defaultName || (nt('name.untitled') + '.svg'),
       filters: [{ name: dt('dlg.filterSvg'), extensions: ['svg'] }]
     });
     if (r.canceled || !r.filePath) return { canceled: true };
@@ -569,11 +512,10 @@ app.whenReady().then(() => {
     }
   });
 
-  /* 工作副本：图案 + 背景图片（含变换）+ 历史颜色等的无损保存/读取 */
   ipcMain.handle('work-save', async (e, payload) => {
     const r = await dialog.showSaveDialog({
       title: dt('dlg.saveWork'),
-      defaultPath: payload.defaultName || '工作进程.svework',
+      defaultPath: payload.defaultName || (nt('name.workcopy') + '.svework'),
       filters: [{ name: dt('dlg.filterWork'), extensions: ['svework'] }, { name: dt('dlg.filterAll'), extensions: ['*'] }]
     });
     if (r.canceled || !r.filePath) return { canceled: true };
@@ -603,11 +545,6 @@ app.whenReady().then(() => {
     }
   });
 
-  /* 「已保存彩绘」目录与其 6 个 IPC 已整块删除（2026-09-15）：
-     该功能早已被「SVGImages」目录取代，没有任何入口再写入它，留着的读取口只会造成悬空引用。 */
-
-  /* 历史工作锚点：exe 目录下的「历史工作副本」文件夹（便携式，仅首次创建）。
-     每 10 分钟自动保存一个锚点，最多保留 20 个，超出删除最早的 */
   function histAnchorDirPath() {
     return ensureDataDir(DATA_DIRS.history);
   }
@@ -616,11 +553,10 @@ app.whenReady().then(() => {
     return '锚点-' + d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + '-' +
       pad2(d.getHours()) + '-' + pad2(d.getMinutes()) + '-' + pad2(d.getSeconds()) + '.svework';
   }
-  /* 从锚点文件名解析系统显示时间：2026-08-21 18:30:05 */
   function histAnchorTime(name) {
     const m = /^锚点-(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})(?:-\d+)?\.svework$/.exec(name || '');
     if (!m) return name || '';
-    const p = m[1].split('-'); // [年, 月, 日, 时, 分, 秒]
+    const p = m[1].split('-');
     return p[0] + '-' + p[1] + '-' + p[2] + ' ' + p[3] + ':' + p[4] + ':' + p[5];
   }
   ipcMain.handle('hist-anchor-save', async (e, payload) => {
@@ -631,7 +567,6 @@ app.whenReady().then(() => {
       let i = 1;
       while (fs.existsSync(path.join(dir, name))) name = histAnchorName(d) + '-' + (++i) + '.svework';
       fs.writeFileSync(path.join(dir, name), payload.content, 'utf8');
-      /* 最多保留 20 个锚点：超出删除最早的 */
       const files = fs.readdirSync(dir).filter(f => /^锚点-.*\.svework$/.test(f)).sort();
       while (files.length > 20) {
         const oldest = files.shift();
@@ -663,7 +598,6 @@ app.whenReady().then(() => {
     }
   });
 
-  /* 标签页关闭确认(同一原生窗):渲染层传入文件名 → 返回 save/dont/cancel */
   ipcMain.handle('confirm-close-doc', async (e, payload) => {
     try {
       const win = BrowserWindow.fromWebContents(e.sender);
@@ -675,12 +609,10 @@ app.whenReady().then(() => {
       return { action: 'dont', error: String(err && err.message || err) };
     }
   });
-  /* 日志：渲染器写入内存缓冲 / 查询保存路径 / 读取缓冲 / 保存到文件 / 打开文件夹 */
   ipcMain.handle('app-flags', async () => ({
     testMode: !!process.env.SVGBIANJI_TEST,
     exeDir: appDataDir()
   }));
-  /* 用户设置（语言/主题）：userData/settings.json；自动命名前缀随界面语言 */
   ipcMain.handle('settings-get', async () => {
     try {
       const p = path.join(app.getPath('userData'), 'settings.json');
@@ -698,7 +630,6 @@ app.whenReady().then(() => {
       return { ok: false, error: String(err && err.message || err) };
     }
   });
-  /* 工作进程使用打开时签发的来源句柄回写；没有来源时才创建新文件。 */
   ipcMain.handle('file-save-work', async (e, payload) => {
     try {
       return workcopyStore.save(payload && payload.content, payload && payload.source,
@@ -707,16 +638,14 @@ app.whenReady().then(() => {
       return { ok: false, error: String(err && err.message || err) };
     }
   });
-  /* 首页自动目录：工作副本 / SVG图像（exe 同目录专门文件夹） */
   ipcMain.handle('file-auto-save', async (e, payload) => {
     try {
       const kind = String(payload && payload.kind || '');
       const dirName = kind === 'svg' ? DATA_DIRS.svg : DATA_DIRS.workcopy;
       const dir = ensureDataDir(dirName);
 
-      /* 命名解析抽到 auto-name.js（纯函数，可被 node 直接判据）：显式 fileName 走官方名 <安全标题>.<层数>.svg；未传则维持既有默认（前缀随界面语言） */
       let uiLang = null;
-      try { uiLang = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'settings.json'), 'utf8')).lang || null; } catch (err3) { /* 未设置过 */ }
+      try { uiLang = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'settings.json'), 'utf8')).lang || null; } catch (err3) { }
       const name = resolveAutoSaveName(kind, payload && payload.fileName, n => fs.existsSync(path.join(dir, n)), undefined, uiLang);
       const fp = path.join(dir, name);
       fs.writeFileSync(fp, String(payload && payload.content || ''), 'utf8');
@@ -725,8 +654,6 @@ app.whenReady().then(() => {
       return { ok: false, error: String(err && err.message || err) };
     }
   });
-  /* 主页「导入」：选本地文件（可多选）→ 复制进 SVGImages 目录（重名自动加 -1/-2…），
-     选完即可在主页列表看到；不打开文件、不改当前画布 */
   ipcMain.handle('home-import-dialog', async () => {
     try {
       const r = await dialog.showOpenDialog({
@@ -765,7 +692,7 @@ app.whenReady().then(() => {
           try {
             const st = fs.statSync(path.join(dir, name));
             out.push({ type: kind === DATA_DIRS.svg ? 'svg' : 'workcopy', name, path: path.join(dir, name), mtime: st.mtimeMs, size: st.size });
-          } catch (err3) { /* 忽略 */ }
+          } catch (err3) { }
         });
       }
       out.sort((a, b) => b.mtime - a.mtime);
@@ -831,7 +758,6 @@ app.whenReady().then(() => {
       const p = path.join(dir, name);
       const exists = fs.existsSync(p);
       const previous = exists ? fs.readFileSync(p, 'utf8') : null;
-      /* 覆写「本文件自己的源文件」是既定行为(不打扰)；只有要盖掉【另一份】已有文件时才确认。 */
       if (exists && name !== String(payload && payload.sourceName || '')) {
         if (!(await askOverwrite(name))) return { ok: false, canceled: true };
       }
@@ -844,7 +770,6 @@ app.whenReady().then(() => {
       return { ok: false, error: String(err && err.message || err) };
     }
   });
-  /* 首页重命名:仅限自动目录内的 svg / svework 文件(安全文件名,防目录穿越) */
   ipcMain.handle('file-rename', async (e, payload) => {
     try {
       const kind = String(payload && payload.kind || '');
@@ -867,7 +792,6 @@ app.whenReady().then(() => {
       return { ok: false, error: String(err && err.message || err) };
     }
   });
-  /* 首页删除：仅限自动目录内的 svg / svework 文件（安全文件名，防目录穿越） */
   ipcMain.handle('file-delete', async (e, payload) => {
     try {
       const kind = String(payload && payload.kind || '');
@@ -878,8 +802,7 @@ app.whenReady().then(() => {
       const fp = path.join(dir, name);
       if (!fs.existsSync(fp)) return { ok: false, error: '文件不存在' };
       fs.unlinkSync(fp);
-      /* 覆盖保存会留一份同名 .bak（上一版），删文件时一并清掉，避免残留悬空备份 */
-      try { fs.unlinkSync(fp + '.bak'); } catch (e) { /* 没有备份 */ }
+      try { fs.unlinkSync(fp + '.bak'); } catch (e) { }
       return { ok: true, name };
     } catch (err) {
       return { ok: false, error: String(err && err.message || err) };

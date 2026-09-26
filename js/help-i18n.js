@@ -1,20 +1,3 @@
-/* ---------- 「帮助模式」帮助文本（5 语言） ----------
-   为什么单独一份：帮助文本量大（**111 个词条** × 5 语言 = 555 句），塞进 js/i18n.js 会把那份词典撑得没法看。
-   这里沿用 dlg-i18n.js / toast-i18n.js / libcat-i18n.js 的既有约定：加载后并入 App.i18n.dicts。
-
-   词条构成（111 = 94 + 12 + 5）：
-     94 条正文 help.<标识>        —— 对应 js/help.js 的 MAP（97 条登记、94 个不同标识，dlgOk/dlgCancel/speedReset 各复用 2 次）
-     12 条 help.n.<标识>          —— 只有图标没有文字的按钮 / 画布 / 图层行的标题
-      5 条帮助模式自身 UI          —— help.title / help.hint / help.armed / help.unknown / help.close
-
-   词条命名：
-     help.<按钮标识>    —— 正文（必填）
-     help.n.<按钮标识>  —— **只有图标没有文字**的按钮（× / ▶ / ? / 滑条）的标题；
-                           缺省时由按钮自身的文字或 aria-label 兜底（见 js/help.js 的 labelOf）
-     help.title / help.hint / help.armed / help.unknown / help.close —— 帮助模式自身的 UI 文案
-
-   新增按钮时的流程：① 在 js/help.js 的 MAP 里加一条 [选择器, 标识]；
-                     ② 在这里给 5 种语言各补一条 help.<标识>（判据 run-help.js 会扫出漏网）。 */
 (function () {
   var DICT = {
     'zh-CN': {
@@ -23,7 +6,6 @@
       'help.armed': '帮助模式已开启',
       'help.unknown': '「{name}」还没有帮助说明。',
       'help.close': '关闭',
-      /* 图标按钮的标题（无文字可用） */
       'help.n.btnShortcuts': '快捷键 / 帮助',
       'help.n.helpFab': '帮助（弹窗里也能用）',
       'help.n.tabClose': '关闭文档',
@@ -36,8 +18,6 @@
       'help.n.lpClose': '关闭窗口',
       'help.n.lpRow': '图层列表行',
       'help.n.btnShortcutClose': '关闭',
-      /* --- 标题栏 --- */
-      /* --- 顶部工具栏 --- */
       'help.btnOpen': '从磁盘里选一个 SVG 打开。当前文档有没保存的改动时，会先提示你。',
       'help.btnSave': '把整份文档导出成一个 SVG，存到「SVGImages」目录。',
       'help.btnSaveWork': '把当前文档存成「工作进程」，以后可以再打开继续编辑。会一并保存下背景图片设置、历史颜色等信息。',
@@ -49,13 +29,11 @@
       'help.helpFab': '弹窗（比如设置页）开着时，顶部那个 ? 被盖住了，这里补一个。左键或右键都能进入帮助模式。',
       'help.btnOpenImage': '选一张图片垫在画布底下，用来描图。图片只作参考，不会导出到 SVG 里。',
       'help.btnBgImage': '点它进入背景编辑：可以拖动、缩放、旋转这张底图；再点一次退出编辑。',
-      /* --- 标签栏 --- */
       'help.tabHome': '回到主页（最近文件列表）。',
       'help.tabPill': '点击切换到这个文档。拖动可以调整顺序。鼠标悬停可显示缩略图。',
       'help.tabClose': '关闭这个文档。有没保存的改动会先询问。',
       'help.tabNewDoc': '新建一个空白文档，在新标签里打开。',
       'help.btnSettings': '打开设置：语言、主题颜色、编辑速率、快捷键、查看日志。',
-      /* --- 左侧功能栏（17 键） --- */
       'help.selEditPos': '进入编辑模式，直接拖动、缩放选中的图层。也可以双击画布上的图案，或双击 Enter 进入编辑。',
       'help.selEditColor': '把选中图层换成右侧「颜色」面板当前的颜色。',
       'help.selReplace': '给选中图层换一个图案，位置和大小保持不变。',
@@ -73,7 +51,6 @@
       'help.selSavePalette': '只把白框内那一层导出成一个 SVG。',
       'help.selDeleteAll': '清空画布上的全部图层。',
       'help.selLocateLayer': '把画布视图移到该图层位置。',
-      /* --- 编辑模式工具栏 --- */
       'help.editModeMove': 'WASD / 方向键均可操作，鼠标拖动可移动图层位置',
       'help.editModeSize': 'WASD / 方向键均可操作，鼠标拖动可移动图层位置，Shift + 拖动角手柄可旋转图层，Shift + 拖动上下手柄可倾斜图层',
       'help.editModeRotate': 'WASD / 方向键 / 鼠标拖拽均可操作',
@@ -85,19 +62,15 @@
       'help.btnPlaceAnchor': '指定缩放的固定点。设了锚点后，缩放会绕这个点进行，而不是绕图层中心。再点一次取消锚点。 默认快捷键：f。',
       'help.btnPropMode': '「大小」模式下是否保持长宽比。等比：拖角时宽高一起变；自由：可以只拉一个方向。',
       'help.btnRemoveBg': '删掉这张背景图片。只在编辑背景时出现。',
-      /* --- 画布右上角 --- */
-      'help.canvas': '左键选中图层；右键显示该位置存在的所有图层；按住 tab + 鼠标左键点击高亮 / 取消高亮该图层；按住 tab + 鼠标左键拖动框选内的图层高亮；按住 tab + ctrl + 鼠标左键拖动框选内的图层取消高亮。鼠标双击图层进入编辑',
+      'help.canvas': '左键选中图层；右键显示该位置存在的所有图层，左键双击图层进入编辑状态；按住 tab + 鼠标左键点击高亮 / 取消高亮该图层；按住 tab + 鼠标左键拖动框选内的图层高亮；按住 tab + ctrl + 鼠标左键拖动框选内的图层取消高亮。ctrl+z撤销，ctrl+shift+z重做',
       'help.btnHideLayers': '临时把全部图层藏起来，方便单独看背景图。只是不显示，不会删掉内容。',
       'help.btnHideBg': '临时隐藏背景图片。',
       'help.bgOpacityRange': '调整所有图层的显示透明度。不影响原图层。',
       'help.bgOpacityBgRange': '调整背景图片的显示透明度，同样只影响显示。',
-      /* --- 图层栏「+」栏 --- */
       'help.layerPlusRow': '可导入软件目录内 / 游戏存档内彩绘纹饰分组，可导入 SVG 文件。',
       'help.layerItem': '鼠标左键点击选中图层；左键拖动调整图层位置；tab 高亮 / 取消高亮图层。按住 tab 可维持高亮 / 取消高亮状态，使用鼠标滚轮可扫选；鼠标双击进入编辑，enter 双击进入编辑。按 x 键可剪切目标图层，按 y 键可将其粘贴到目标图层下方。',
-      /* --- 右键图层选择窗 --- */
       'help.lpClose': '关掉这个窗口。',
       'help.lpRow': '左键点一行 = 选中那一层并关窗。右键 = 按这个位置重新挑一次。',
-      /* --- 右侧面板 --- */
       'help.panelMinBtn': '收起右侧面板，把画布变宽；再点一次展开。收起时鼠标移动到右侧边缘会自动弹出，离开时自动收起。',
       'help.ptabLib': '图案库页签。把一个图案拖到画布上就能添加；也可以用图层栏的「+」栏选 SVG。',
       'help.libItem': '将目标图层拖入画布位置即可放置。',
@@ -106,11 +79,10 @@
       'help.btnEyeBg': '进入取色模式：点击画布上任意位置，取那个像素点的颜色作为当前颜色。',
       'help.btnApplyColor': '把当前颜色应用到选中的图层。没选图层时不会生效。',
       'help.btnFav': '把当前颜色存进收藏。',
-      /* --- 主页 --- */
       'help.homeNew': '新建一个空白文档。',
       'help.homeOpen': '从磁盘上任意位置选一个 SVG 打开。',
       'help.btnFzaGeo': '从 Geometrize（forza-painter）导出的 JSON 生成彩绘。',
-      'help.btnFzaVinyl': '用 Vinylizer 导出的 JSON 生成彩绘。',
+      'help.btnFzaVinyl': '用 Vinylizer 导出的 JSON 生成彩绘。从 Vinylizer JSON 生成 SVG 时提供了一个不透明度阈值设置项：导入时会忽略不透明度小于等于此阈值的图层。',
       'help.btnFzaBackup': '把当前账户的存档整个备份一份，改坏了可以还原。动存档之前建议先备份。',
       'help.btnFzaInject': '把 SVG 变成彩绘纹饰，注入到游戏存档里。',
       'help.btnFzaExport': '把存档里已有的彩绘导出成 SVG，拿回来编辑。',
@@ -124,22 +96,17 @@
       'help.btnHomeRefresh': '重新扫描目录，刷新文件列表。外部新增或删除了文件时用。',
       'help.homeTabs': '切换列表显示哪一类文件。',
       'help.homeCard': '单击：选中（高亮，下方出现操作按钮）。双击：在新标签里打开。',
-      /* --- 速率窗 / 快捷键窗自己的按钮（弹窗里的通用「确定 / 取消 / ×」按批注不单独配说明） --- */
       'help.dlgOk': '保存这次改动并关窗。',
       'help.dlgCancel': '放弃这次改动并关窗。',
       'help.speedReset': '恢复成默认值（还没保存，要点「确定」才生效）。',
-      /* --- Forza 选择窗口 --- */
       'help.fzaCancel': '关闭选择窗口，不做任何改动。',
       'help.fzaImportFile': '从磁盘上选一个 SVG，加进候选列表。',
-      'help.fzaMulti': '允许一次选多个图案或分组。再点一次退出多选。',
+      'help.fzaMulti': '允许一次选多个图案或分组。再点一次退出多选。', 'help.fzaUndo': '撤销注入：列出最近三次注入操作。确认即可把它们恢复成注入前的内容。',
       'help.fzaSource': '候选列表的来源：软件自己保存的彩绘 / 从游戏存档里读出来的彩绘。',
-      /* --- 日志窗 --- */
       'help.btnLogCopy': '把最近的运行日志复制到剪贴板。软件出问题时把它发给我。',
       'help.btnLogOpen': '把日志写成文件保存下来。',
       'help.btnLogClose': '关掉日志窗口。',
-      /* --- 快捷键窗 --- */
       'help.btnShortcutClose': '关闭快捷键一览表。',
-      /* --- 设置窗 --- */
       'help.btnEditSpeed': '调整用 WASD 连续调整时的快慢。',
       'help.btnNudgeSpeed': '调整用方向键单步微调时的步长。',
       'help.btnKeymap': '自定义快捷键。和已有按键冲突时会自动交换，不会出现某个功能没键可用。',
@@ -209,7 +176,7 @@
       'help.btnPlaceAnchor': '指定縮放的固定點。設了錨點後，縮放會繞這個點進行，而不是繞圖層中心。再點一次取消錨點。 預設快速鍵：f。',
       'help.btnPropMode': '「大小」模式下是否保持長寬比。等比例：拖角時寬高一起變；自由：可以只拉一個方向。',
       'help.btnRemoveBg': '刪掉這張背景圖片。只在編輯背景時出現。',
-      'help.canvas': '左鍵選取圖層；右鍵顯示該位置存在的所有圖層；按住 tab + 滑鼠左鍵點擊反白 / 取消反白該圖層；按住 tab + 滑鼠左鍵拖曳框選內的圖層反白；按住 tab + ctrl + 滑鼠左鍵拖曳框選內的圖層取消反白。滑鼠雙擊圖層進入編輯',
+      'help.canvas': '左鍵選取圖層；右鍵顯示該位置存在的所有圖層，左鍵雙擊圖層進入編輯狀態；按住 tab + 滑鼠左鍵點擊反白 / 取消反白該圖層；按住 tab + 滑鼠左鍵拖曳框選內的圖層反白；按住 tab + ctrl + 滑鼠左鍵拖曳框選內的圖層取消反白。ctrl+z復原，ctrl+shift+z重做',
       'help.btnHideLayers': '臨時把全部圖層藏起來，方便單獨看背景圖。只是不顯示，不會刪掉內容。',
       'help.btnHideBg': '臨時隱藏背景圖片。',
       'help.bgOpacityRange': '調整所有圖層的顯示透明度。不影響原圖層。',
@@ -229,7 +196,7 @@
       'help.homeNew': '新建一個空白文件。',
       'help.homeOpen': '從磁碟上任意位置選一個 SVG 開啟。',
       'help.btnFzaGeo': '從 Geometrize（forza-painter）匯出的 JSON 產生彩繪。',
-      'help.btnFzaVinyl': '用 Vinylizer 匯出的 JSON 產生彩繪。',
+      'help.btnFzaVinyl': '用 Vinylizer 匯出的 JSON 產生彩繪。從 Vinylizer JSON 產生 SVG 時提供了一個不透明度閾值設定項：匯入時會忽略不透明度小於等於此閾值的圖層。',
       'help.btnFzaBackup': '把目前帳戶的存檔整個備份一份，改壞了可以還原。動存檔之前建議先備份。',
       'help.btnFzaInject': '把 SVG 變成彩繪紋飾，注入到遊戲存檔裡。',
       'help.btnFzaExport': '把存檔裡已有的彩繪匯出成 SVG，拿回來編輯。',
@@ -248,7 +215,7 @@
       'help.speedReset': '還原成預設值（還沒儲存，要點「確定」才生效）。',
       'help.fzaCancel': '關閉選擇視窗，不做任何變更。',
       'help.fzaImportFile': '從磁碟上選一個 SVG，加進候選清單。',
-      'help.fzaMulti': '允許一次選多個圖案或群組。再點一次離開多選。',
+      'help.fzaMulti': '允許一次選多個圖案或群組。再點一次離開多選。', 'help.fzaUndo': '撤銷注入：列出最近三次注入操作。確認即可把它們還原成注入前的內容。',
       'help.fzaSource': '候選清單的來源：程式自己儲存的彩繪 / 從遊戲存檔裡讀出來的彩繪。',
       'help.btnLogCopy': '把最近的執行日誌複製到剪貼簿。程式出問題時把它發給我。',
       'help.btnLogOpen': '把日誌寫成檔案儲存下來。',
@@ -323,7 +290,7 @@
       'help.btnPlaceAnchor': 'Set the fixed point for scaling. With an anchor set, the layer scales around that point instead of its centre. Click again to clear it. Default shortcut: f.',
       'help.btnPropMode': 'Whether "Size" mode keeps the aspect ratio. Ratio: width and height change together. Free: you can pull one direction only.',
       'help.btnRemoveBg': 'Delete this background image. Only shown while editing the background.',
-      'help.canvas': 'Left click selects a layer; right click lists every layer at that spot; hold tab + left click highlights / un-highlights that layer; hold tab + left drag highlights the layers inside the box; hold tab + ctrl + left drag un-highlights the layers inside the box. Double click a layer to enter edit mode',
+      'help.canvas': 'Left click selects a layer; right click lists every layer at that spot, double-click a layer to enter its editing state; hold tab + left click highlights / un-highlights that layer; hold tab + left drag highlights the layers inside the box; hold tab + ctrl + left drag un-highlights the layers inside the box. Ctrl+Z to undo, Ctrl+Shift+Z to redo',
       'help.btnHideLayers': 'Temporarily hide every layer so you can look at the background image alone. Nothing is deleted.',
       'help.btnHideBg': 'Temporarily hide the background image.',
       'help.bgOpacityRange': 'Adjust the display opacity of all layers. The layers themselves are not changed.',
@@ -343,7 +310,7 @@
       'help.homeNew': 'Create a new blank document.',
       'help.homeOpen': 'Pick an SVG from anywhere on disk and open it.',
       'help.btnFzaGeo': 'Generate artwork from JSON exported by Geometrize (forza-painter).',
-      'help.btnFzaVinyl': 'Generate artwork from a JSON exported by Vinylizer.',
+      'help.btnFzaVinyl': 'Generate artwork from a JSON exported by Vinylizer. When generating an SVG from Vinylizer JSON, there is an opacity threshold option: layers whose opacity is less than or equal to the threshold are ignored on import.',
       'help.btnFzaBackup': 'Back up the whole save of the current account so you can restore it if something goes wrong. Do this before touching a save.',
       'help.btnFzaInject': 'Turn an SVG into vinyl shapes and inject them into the game save.',
       'help.btnFzaExport': 'Export vinyl already in the save as an SVG so you can edit it.',
@@ -362,7 +329,7 @@
       'help.speedReset': 'Restore the defaults (not saved yet - click OK to apply).',
       'help.fzaCancel': 'Close the picker without changing anything.',
       'help.fzaImportFile': 'Choose an SVG from disk and add it to the list.',
-      'help.fzaMulti': 'Allow selecting several shapes or groups at once. Click again to leave multi-select.',
+      'help.fzaMulti': 'Allow selecting several shapes or groups at once. Click again to leave multi-select.', 'help.fzaUndo': 'Undo injection: lists the last three injections. Confirm to restore them to their pre-injection content.',
       'help.fzaSource': 'Where the list comes from: artwork saved inside the app / vinyl read from the game save.',
       'help.btnLogCopy': 'Copy the recent log to the clipboard. Send it to me when something goes wrong.',
       'help.btnLogOpen': 'Save the log to a file.',
@@ -437,7 +404,7 @@
       'help.btnPlaceAnchor': '拡大縮小の基準点を指定します。アンカーを置くと、レイヤーの中心ではなくその点を軸に拡大縮小します。もう一度押すと解除します。 既定のショートカット：f。',
       'help.btnPropMode': '「サイズ」モードで縦横比を保つかどうか。比率固定：角をドラッグすると縦横が一緒に変わります。自由：片方向だけ伸ばせます。',
       'help.btnRemoveBg': 'この背景画像を削除します。背景の編集中だけ表示されます。',
-      'help.canvas': '左クリックでレイヤーを選択、右クリックでその位置にあるすべてのレイヤーを表示、tab を押しながら左クリックでそのレイヤーの強調／解除、tab を押しながら左ドラッグで枠内のレイヤーを強調、tab + ctrl を押しながら左ドラッグで枠内のレイヤーの強調を解除します。レイヤーをダブルクリックすると編集に入ります',
+      'help.canvas': '左クリックでレイヤーを選択、右クリックでその位置にあるすべてのレイヤーを表示、レイヤーをダブルクリックすると編集状態に入ります、tab を押しながら左クリックでそのレイヤーの強調／解除、tab を押しながら左ドラッグで枠内のレイヤーを強調、tab + ctrl を押しながら左ドラッグで枠内のレイヤーの強調を解除します。ctrl+z で元に戻す、ctrl+shift+z でやり直し',
       'help.btnHideLayers': 'すべてのレイヤーを一時的に隠し、背景画像だけを見やすくします。内容は消えません。',
       'help.btnHideBg': '背景画像を一時的に隠します。',
       'help.bgOpacityRange': 'すべてのレイヤーの表示上の透明度を調整します。レイヤー自体は変わりません。',
@@ -457,7 +424,7 @@
       'help.homeNew': '新しい空白ドキュメントを作ります。',
       'help.homeOpen': 'ディスク上の任意の場所から SVG を選んで開きます。',
       'help.btnFzaGeo': 'Geometrize（forza-painter）が書き出した JSON からペイントを生成します。',
-      'help.btnFzaVinyl': 'Vinylizer が書き出した JSON から図案を生成します。',
+      'help.btnFzaVinyl': 'Vinylizer が書き出した JSON から図案を生成します。Vinylizer JSON から SVG を生成する際、不透明度しきい値の設定項目があります。インポート時、不透明度がこのしきい値以下のレイヤーは無視されます。',
       'help.btnFzaBackup': '現在のアカウントのセーブをまるごとバックアップします。壊れたときに戻せます。セーブを触る前に実行しておくのがおすすめです。',
       'help.btnFzaInject': 'SVG をビニール図形にしてゲームのセーブに注入します。',
       'help.btnFzaExport': 'セーブにある図案を SVG として書き出し、編集できるようにします。',
@@ -476,7 +443,7 @@
       'help.speedReset': '既定値に戻します（まだ保存されません。「OK」で反映されます）。',
       'help.fzaCancel': '選択ウィンドウを閉じます。何も変更しません。',
       'help.fzaImportFile': 'ディスクから SVG を選んで候補に追加します。',
-      'help.fzaMulti': '図案やグループを一度に複数選べるようにします。もう一度押すと解除します。',
+      'help.fzaMulti': '図案やグループを一度に複数選べるようにします。もう一度押すと解除します。', 'help.fzaUndo': '注入の取り消し：直近3回の注入を一覧表示します。確定すると注入前の内容に戻せます。',
       'help.fzaSource': '候補一覧の出どころ：アプリ内に保存した図案 / ゲームのセーブから読み出した図案。',
       'help.btnLogCopy': '最近のログをクリップボードにコピーします。不具合のときはこれを送ってください。',
       'help.btnLogOpen': 'ログをファイルとして保存します。',
@@ -551,7 +518,7 @@
       'help.btnPlaceAnchor': '확대/축소의 기준점을 지정합니다. 앵커를 두면 레이어 중심이 아니라 그 점을 기준으로 확대/축소됩니다. 한 번 더 누르면 해제됩니다. 기본 단축키: f.',
       'help.btnPropMode': '「크기」모드에서 가로세로 비율을 유지할지 여부. 비율 고정: 모서리를 끌면 가로세로가 함께 변합니다. 자유: 한 방향만 늘릴 수 있습니다.',
       'help.btnRemoveBg': '이 배경 이미지를 삭제합니다. 배경을 편집할 때만 나옵니다.',
-      'help.canvas': '왼쪽 클릭으로 레이어를 선택하고, 오른쪽 클릭으로 그 위치에 있는 모든 레이어를 봅니다. tab 을 누른 채 왼쪽 클릭하면 그 레이어가 강조/해제되고, tab 을 누른 채 왼쪽으로 끌면 상자 안 레이어가 강조되며, tab+ctrl 을 누른 채 왼쪽으로 끌면 상자 안 레이어의 강조가 해제됩니다. 레이어를 더블클릭하면 편집에 들어갑니다',
+      'help.canvas': '왼쪽 클릭으로 레이어를 선택하고, 오른쪽 클릭으로 그 위치에 있는 모든 레이어를 봅니다. 레이어를 더블클릭하면 편집 상태로 들어갑니다. tab 을 누른 채 왼쪽 클릭하면 그 레이어가 강조/해제되고, tab 을 누른 채 왼쪽으로 끌면 상자 안 레이어가 강조되며, tab+ctrl 을 누른 채 왼쪽으로 끌면 상자 안 레이어의 강조가 해제됩니다. ctrl+z 실행 취소, ctrl+shift+z 다시 실행',
       'help.btnHideLayers': '모든 레이어를 잠시 숨겨 배경 이미지만 보기 쉽게 합니다. 내용은 지워지지 않습니다.',
       'help.btnHideBg': '배경 이미지를 잠시 숨깁니다.',
       'help.bgOpacityRange': '모든 레이어의 표시 불투명도를 조절합니다. 레이어 자체는 바뀌지 않습니다.',
@@ -571,7 +538,7 @@
       'help.homeNew': '새 빈 문서를 만듭니다.',
       'help.homeOpen': '디스크 어디에서든 SVG 를 골라 엽니다.',
       'help.btnFzaGeo': 'Geometrize(forza-painter)가 내보낸 JSON 으로 페인팅을 생성합니다.',
-      'help.btnFzaVinyl': 'Vinylizer 가 내보낸 JSON 으로 그림을 만듭니다.',
+      'help.btnFzaVinyl': 'Vinylizer 가 내보낸 JSON 으로 그림을 만듭니다. Vinylizer JSON 에서 SVG 를 생성할 때 불투명도 임계값 설정 항목이 있습니다. 가져올 때 불투명도가 이 임계값 이하인 레이어는 무시됩니다.',
       'help.btnFzaBackup': '현재 계정의 세이브를 통째로 백업합니다. 잘못되면 되돌릴 수 있습니다. 세이브를 건드리기 전에 해 두세요.',
       'help.btnFzaInject': 'SVG 를 비닐 도형으로 바꿔 게임 세이브에 주입합니다.',
       'help.btnFzaExport': '세이브에 있는 그림을 SVG 로 내보내 편집할 수 있게 합니다.',
@@ -590,7 +557,7 @@
       'help.speedReset': '기본값으로 되돌립니다(아직 저장되지 않으며 「확인」을 눌러야 적용됩니다).',
       'help.fzaCancel': '선택 창을 닫습니다. 아무것도 바꾸지 않습니다.',
       'help.fzaImportFile': '디스크에서 SVG 를 골라 후보 목록에 추가합니다.',
-      'help.fzaMulti': '그림이나 그룹을 한 번에 여러 개 고를 수 있게 합니다. 한 번 더 누르면 해제됩니다.',
+      'help.fzaMulti': '그림이나 그룹을 한 번에 여러 개 고를 수 있게 합니다. 한 번 더 누르면 해제됩니다.', 'help.fzaUndo': '주입 실행 취소: 최근 3회 주입을 나열합니다. 확인하면 주입 전 내용으로 되돌립니다.',
       'help.fzaSource': '후보 목록의 출처: 프로그램 안에 저장한 그림 / 게임 세이브에서 읽어 온 그림.',
       'help.btnLogCopy': '최근 로그를 클립보드에 복사합니다. 문제가 생기면 이것을 보내 주세요.',
       'help.btnLogOpen': '로그를 파일로 저장합니다.',

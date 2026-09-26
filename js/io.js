@@ -1,20 +1,14 @@
 'use strict';
-/* 导出 / 打开 / 导入 SVG（保存=Forza 兼容格式，另存备份=编辑器自有格式） */
-/* 对话框关闭后让触发按钮失焦：否则按钮保留焦点，用户按 Enter 会再次触发
-   （"打开 SVG 文件"对话框关闭后按 Enter 又弹出 = 焦点残留 bug） */
 function blurActiveButton() {
   const el = document.activeElement;
   if (el && el.blur && (el.tagName === 'BUTTON' || el.tagName === 'INPUT')) el.blur();
 }
 App.initIO = function () {
   $('#btnOpen').addEventListener('click', App.openSVG);
-  /* 按钮鼠标点击后失焦:消除残留蓝框(:focus-visible)与 Enter 误触发;
-     键盘 Tab 聚焦不受影响(仅鼠标点击路径 blur) */
   document.addEventListener('click', e => {
     const b = e.target && e.target.closest && e.target.closest('button');
     if (b) setTimeout(() => b.blur(), 0);
   });
-  /* 拖入 .svg 文件:读取文本 → 导入当前标签(保留原文件名) */
   window.addEventListener('dragover', e => {
     if (e.dataTransfer && Array.from(e.dataTransfer.types || []).indexOf('Files') >= 0) e.preventDefault();
   });
@@ -25,7 +19,7 @@ App.initIO = function () {
     e.preventDefault();
     const rd = new FileReader();
     rd.onload = () => {
-      App.importSvgIntoCurrent(String(rd.result || ''), f.name.replace(/\.svg$/i, '') || '未命名');
+      App.importSvgIntoCurrent(String(rd.result || ''), f.name.replace(/\.svg$/i, '') || App.i18n.t('name.untitled'));
       App.recordSvgSource(f.name);
       if (App.Tabs && App.Tabs.clearDirty) App.Tabs.clearDirty();
     };
@@ -34,12 +28,9 @@ App.initIO = function () {
   });
   $('#btnSave').addEventListener('click', function () { App.exportForzaSVG(); });
   $('#btnSaveWork').addEventListener('click', function () { App.saveWorkCopy(); });
-  /* 「打开工作副本」按键已移至首页（主页最近工作副本列表打开） */
   const btnOpenWorkEl = document.getElementById('btnOpenWork');
   if (btnOpenWorkEl) btnOpenWorkEl.addEventListener('click', App.openWorkCopy);
   $('#btnHistAnchor').addEventListener('click', App.openHistAnchor);
-  /* 日志面板：查看保存状态 / 复制最近日志 / 保存日志到文件并打开文件夹 */
-  /* 日志入口已整合进「设置」面板（顶栏的日志键已移除）：点它先收起设置再展开日志窗 */
   const logBtnInSettings = document.getElementById('btnLogInSettings');
   if (logBtnInSettings) logBtnInSettings.addEventListener('click', function () {
     if (App.settings) App.settings.toggle();
@@ -47,7 +38,6 @@ App.initIO = function () {
   });
   $('#btnLogCopy').addEventListener('click', App.copyLog);
   $('#btnLogOpen').addEventListener('click', async () => {
-    /* 日志默认只存内存（不点保存不写磁盘）：点保存 = 写文件 + 打开所在文件夹 */
     const r = await window.sveApi.logSave();
     if (!r || !r.ok) { showToast(App.i18n.tf('toast.io.logSaveFail', { v: ((r && r.error) || App.i18n.t('toast.unknownError')) })); return; }
     showToast(App.i18n.tf('toast.io.logSaved', { n: r.lines, v: r.path }));
@@ -55,21 +45,14 @@ App.initIO = function () {
     if (!o || !o.ok) showToast(App.i18n.t('toast.io.logOpenFail'));
   });
   $('#btnLogClose').addEventListener('click', () => $('#logPanel').classList.add('hidden'));
-  /* 打开背景图片文件（顶栏右侧，与背景图片编辑按钮同组） */
   $('#btnOpenImage').addEventListener('click', App.openBgImageDialog);
-  /* 2026-09-12 用户要求：「保存」按钮不再存进「已保存的彩绘」，改走正常保存 SVG 流程
-     （弹重命名输入框 → 写入软件「SVG图像」目录，与顶栏「保存 SVG」同一条路径） */
   $('#btnSavePalette').addEventListener('click', function () {
-    /* 用户要求（2026-09-12）：图层栏的「保存」= 只导出【白框内那一层】；
-       白框停在「+」栏（没有对应图层）时退化为整份导出，不让按钮变成死的 */
     const wb = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
     App.exportForzaSVG(wb ? [wb] : undefined);
   });
-  /* 历史工作锚点：每 10 分钟自动保存（画布上有内容时才保存） */
   App.startHistAnchors();
 };
 
-/* 日志面板：显示路径并展开/收起 */
 App.toggleLogPanel = async function () {
   const panel = $('#logPanel');
   const showing = !panel.classList.contains('hidden');
@@ -77,7 +60,6 @@ App.toggleLogPanel = async function () {
   await App.refreshLogPath();
   panel.classList.remove('hidden');
 };
-/* 日志面板的路径文案（单独抽出：切语言时由重刷器再调一次） */
 App.refreshLogPath = async function () {
   const el = $('#logPathText');
   if (!el) return;
@@ -89,7 +71,6 @@ App.refreshLogPath = async function () {
     el.textContent = App.i18n.t('log.pathUnavailable');
   }
 };
-/* 复制最近日志到剪贴板（直接粘贴发送即可排查） */
 App.copyLog = async function () {
   try {
     const r = await window.sveApi.logRead(200000);
@@ -103,7 +84,6 @@ App.copyLog = async function () {
   }
 };
 
-/* 打开图片文件作为背景（按钮专用，拖拽失败时的替代路径） */
 App.openBgImageDialog = async function () {
   const r = await window.sveApi.openImageDialog();
   blurActiveButton();
@@ -114,18 +94,13 @@ App.openBgImageDialog = async function () {
   App.setBackgroundImage(r.dataUrl);
 };
 
-/* 记录当前文档的 SVG 源文件名(打开/拖入的文件;保存时作为默认名,覆写同名文件) */
 App.recordSvgSource = function (name) {
   const nm = String(name || '');
   if (App.Tabs && App.Tabs.current) App.Tabs.current.svgSource = nm || null;
   else App.currentSvgSource = nm || null;
 };
 
-/* 导出 Forza 兼容 SVG（可被 Inkscape2Forza 识别并注入 FH6 存档）。
-   保存流程:弹重命名输入框(预填默认名=源文件名或 Forza图案-时间戳)
-   → 确定:存入 <exe目录>\SVG图像\ (同名=覆写);取消:不保存 */
 App.exportForzaSVG = async function (layersOverride) {
-  /* layersOverride：可选，只导出这些图层（图层栏「保存」= 只导白框那一层）；不传 = 整份文档 */
   const __t0 = performance.now();
   const sourceDoc = App.Tabs && App.Tabs.current ? App.Tabs.current : null;
   const sourceDocId = sourceDoc ? sourceDoc.id : null;
@@ -135,7 +110,8 @@ App.exportForzaSVG = async function (layersOverride) {
   blurActiveButton();
   if (!built) return;
   const srcName = sourceDoc ? (sourceDoc.svgSource || null) : (App.currentSvgSource || null);
-  const defName = (srcName ? srcName : (built.name || 'Forza图案')).replace(/\.svg$/i, '') || 'Forza图案';
+  const autoName = App.autoNamePrefix() + (Number(built.layers) || 0);
+  const defName = String(srcName || autoName).replace(/\.svg$/i, '') || autoName;
   const inp = await App.fzaTextPrompt(App.i18n.t('dlg.saveSvgTitle'),
     App.i18n.t('dlg.saveSvgMsg'), defName);
   if (inp === null) { showToast(App.i18n.t('toast.io.saveCancelled')); return; }
@@ -151,13 +127,11 @@ App.exportForzaSVG = async function (layersOverride) {
   try { App.log('info', '保存SVG(命名)', { ms: Math.round(performance.now() - __t0), kb: Math.round(built.str.length / 1024), name: final, exists: !!(r && r.exists) }); } catch (e) { /* ignore */ }
   if (!r || !r.ok) { showToast(App.i18n.tf('toast.io.saveFail', { v: ((r && r.error) || '') })); return; }
   showToast(App.i18n.tf('toast.io.saved', { ov: (r.exists ? App.i18n.t('toast.io.overwrite') : ''), v: r.name }));
-  /* 单层导出只是生成一个独立文件，不能改整份文档的来源、标签或脏状态。
-     整文档保存也只归属发起保存的标签；等待期间切换标签不会误改新标签。 */
   if (fullDocumentSave) {
     if (sourceDoc && App.Tabs && App.Tabs.docs && App.Tabs.docs.includes(sourceDoc)) {
       sourceDoc.svgSource = final;
-      if (App.Tabs.setDocLabel) App.Tabs.setDocLabel(sourceDocId, nm || '未命名');
-      else { sourceDoc.label = nm || '未命名'; if (App.Tabs.renderBar) App.Tabs.renderBar(); }
+      if (App.Tabs.setDocLabel) App.Tabs.setDocLabel(sourceDocId, nm || App.i18n.t('name.untitled'));
+      else { sourceDoc.label = nm || App.i18n.t('name.untitled'); if (App.Tabs.renderBar) App.Tabs.renderBar(); }
       if ((sourceDoc.contentRevision || 0) === sourceRevision) sourceDoc.dirty = false;
     } else if (!sourceDoc) {
       App.currentSvgSource = final;
@@ -169,7 +143,8 @@ App.exportForzaSVG = async function (layersOverride) {
 App.exportSVG = async function () {
   const built = App.buildExportString();
   if (!built) return;
-  const r = await window.sveApi.saveSvgDialog(built.name, built.str);
+  const autoName = App.autoNamePrefix() + App.state.layers.length + '.svg';
+  const r = await window.sveApi.saveSvgDialog(autoName, built.str);
   blurActiveButton();
   if (r.canceled) {
     if (r.error) showToast(App.i18n.tf('toast.io.saveFail', { v: r.error }));
@@ -178,7 +153,6 @@ App.exportSVG = async function () {
   showToast(App.i18n.tf('toast.io.backupExported', { v: r.path }));
 };
 
-/* 生成导出 SVG 字符串（与保存分离，便于测试） */
 App.buildExportString = function () {
   if (!App.state.layers.length) { showToast(App.i18n.t('toast.io.noPatterns')); return null; }
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
@@ -201,20 +175,13 @@ App.buildExportString = function () {
   if (bgG) bgG.remove();
   const gridP = c.querySelector('#sveGridP');
   if (gridP) gridP.remove();
-  /* 导出剔除渲染代理：代理位图是显示优化，不写入文件；
-     恢复被代理隐藏的子层 visibility，子层数据照常导出 */
   $$('[data-proxy]', c).forEach(el => el.remove());
   $$('[data-layer]', c).forEach(el => el.removeAttribute('visibility'));
-  /* 剔除编辑静态化背景位图（layersRoot 首子元素，旧快照不能进导出文件） */
   $$('.sve-edit-static', c).forEach(el => el.remove());
-  /* import 位图化：矢量组被 display:none 隐藏，恢复显示再导出（否则内容空白）；
-     位图元素剔除（blob 引用跨会话失效） */
   $$('[style]', c).forEach(el => { if (el.style && el.style.display === 'none') el.style.display = ''; });
   const layersRoot = c.querySelector('#layersRoot');
   if (layersRoot) {
     layersRoot.removeAttribute('id');
-    /* 剔除显示样式（隐藏图层 display:none / 图案显示透明度 opacity）：
-       导出 SVG 只保留每个图层自身的透明度，显示设置不影响导出 */
     layersRoot.removeAttribute('style');
   }
   c.removeAttribute('id');
@@ -222,7 +189,6 @@ App.buildExportString = function () {
   c.setAttribute('viewBox', bx + ' ' + by + ' ' + bw + ' ' + bh);
   c.setAttribute('width', bw);
   c.setAttribute('height', bh);
-  /* 为每个图层写入模型信息 */
   $$('[data-layer]', c).forEach(el => {
     const id = parseInt(el.getAttribute('data-layer'), 10);
     const layer = App.findLayer(id);
@@ -231,7 +197,7 @@ App.buildExportString = function () {
   });
   const str = '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(c);
   const d = new Date();
-  const name = '图案拼贴-' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '-' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0') + '.svg';
+  const name = App.i18n.t('name.collageFile') + '-' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '-' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0') + '.svg';
   return { str, name };
 };
 
@@ -242,15 +208,13 @@ App.openSVG = async function () {
     if (r.error) showToast(App.i18n.tf('toast.io.openFail', { v: r.error }));
     return;
   }
-  App.importSvgIntoCurrent(r.content, (r.name || '').replace(/\.svg$/i, '') || '未命名');
-  App.recordSvgSource(r.name); // 记住源文件名:保存时默认名=原名,同名覆写
-  if (App.Tabs && App.Tabs.clearDirty) App.Tabs.clearDirty(); // 打开文件=干净状态(不算改动)
+  App.importSvgIntoCurrent(r.content, (r.name || '').replace(/\.svg$/i, '') || App.i18n.t('name.untitled'));
+  App.recordSvgSource(r.name);
+  if (App.Tabs && App.Tabs.clearDirty) App.Tabs.clearDirty();
 };
 
-/* 生产模式：SVG 导入当前标签（无标签时先创建一个）；测试模式保持旧行为（直接导入当前文档） */
 App.importSvgIntoCurrent = function (text, label) {
-      /* 2026-09-12 用户要求：主页显示中点打开=新建标签页；画布中=注入当前标签 */
-      if (App.Tabs && !App.Tabs.testMode && App.Home && App.Home.shown) { App.Tabs.prodNewSvg(text, label || '未命名', null); return; }
+      if (App.Tabs && !App.Tabs.testMode && App.Home && App.Home.shown) { App.Tabs.prodNewSvg(text, label || App.i18n.t('name.untitled'), null); return; }
   if (App.Tabs && !App.Tabs.testMode) {
     if (!App.Tabs.docs.length) App.Tabs.addDoc({ silent: true, label: label || null });
     if (App.Home) App.Home.hide();
@@ -260,10 +224,9 @@ App.importSvgIntoCurrent = function (text, label) {
 
 App.importSVGContent = function (text) {
   if (App.cancelColorPreview) App.cancelColorPreview();
-  /* 取色器激活中导入：先退出（否则恢复/重建后 eyeMode 残留，图层被强制隐藏且按钮被禁） */
   if (App.state.eyeMode && App.setEyedropper) App.setEyedropper(null);
   if (App.invalidateEditStatic) App.invalidateEditStatic();
-  App.perfCtx.lastOp = '导入SVG';
+  App.perfCtx.lastOp = App.i18n.t('name.importPrefix') + 'SVG';
   const __t0 = performance.now();
   const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
   if (doc.querySelector('parsererror')) { showToast(App.i18n.t('toast.io.badSvgFile')); return; }
@@ -273,7 +236,6 @@ App.importSVGContent = function (text) {
   const n0 = App.state.layers.length;
   const hasForzaUse = $$('use', root).some(u =>
     App.FZA.useRe.test(u.getAttribute('href') || u.getAttributeNS(XLINK, 'href') || ''));
-  /* 版本号优先：备份格式按版本走 importOwn，避免其内部 <use> 被误判为 Forza 文件 */
   let __importKind = 'generic';
   const prevImporting = !!App._importingSvg;
   App._importingSvg = true;
@@ -285,7 +247,6 @@ App.importSVGContent = function (text) {
     App._importingSvg = prevImporting;
   }
   App.log('perf', '导入SVG', { kind: __importKind, ms: Math.round(performance.now() - __t0), layers: App.state.layers.length - n0, total: App.state.layers.length, kb: Math.round(text.length / 1024) });
-  /* 每次导入：把本次导入的全部图层整体平移到【当前显示画布的中心】（当前视野中心） */
   const news = App.state.layers.slice(n0);
   if (news.length) {
     const v = App.state.view;
@@ -303,24 +264,16 @@ App.importSVGContent = function (text) {
       news.forEach(l => { l.x += dx; l.y += dy; App.applyLayerTransform(l); });
     }
   }
-  /* 每次导入：把本次导入的全部图层默认合并为 1 个分组（可随时拆分） */
   if (news.length > 1) {
     const merged = App.mergeLayers(news.map(l => l.id));
     if (merged) showToast(App.i18n.tf('toast.io.importedMerged', { n: news.length }));
   }
-  /* 导入器内部在批量结束时先恢复显示；平移到视口中心/自动合并完成后，再以最终模型作废旧底图。 */
   if (news.length && App.contentChanged) App.contentChanged();
-  /* 后台预解码符号位图：点击选中时的合成构建不再等待解码（大量图层不卡顿） */
   if (App.warmupSymbols) App.warmupSymbols();
-  /* import 位图化：大量 import 图层时排队后台烘焙（显示为位图，渲染不卡） */
   if (App.refreshImpBitmaps) App.refreshImpBitmaps();
-  /* 大分组渲染代理：导入产生的超大分组烘焙单图（全图显示不卡顿） */
   if (App.maybeBakeProxy) {
     App.state.layers.forEach(l => { if (l.kind === 'merged') App.maybeBakeProxy(l); });
-      /* 初始渲染未完成先不显示（用户 2026-09-12 要求） */
       if (App.holdUntilRendered) App.holdUntilRendered();
-    /* 兜底：嵌套分组先烘焙（子代理干扰/异步竞争）可能导致首次触发失败，
-       延迟重试确保超大门组最终烘焙（否则数千子层裸渲染会卡顿） */
     setTimeout(() => {
       App.state.layers.forEach(l => {
         if (l.kind === 'merged' && App.countInLayer && App.countInLayer(l) > App.proxyThreshold &&
@@ -330,10 +283,8 @@ App.importSVGContent = function (text) {
   }
 };
 
-/* 导入本编辑器导出的文件（备份格式） */
 App.importOwn = function (root) {
   let count = 0;
-  /* 蒙版指示定义：优先采用文件内定义，其次本地素材 */
   const fileInd = root.querySelector('#sveMaskInd');
   if (fileInd) {
     const local = $('#sveMaskInd', App.defs);
@@ -353,12 +304,10 @@ App.importOwn = function (root) {
     l.el = el;
     el.setAttribute('data-layer', l.id);
     el.setAttribute('data-kind', l.kind);
-    /* 修正 mask/pattern 引用 id */
     if (l.kind === 'symbol') {
       const mask = el.querySelector('mask');
       let img = el.querySelector('image');
       if (!img) {
-        /* 新版备份：mask 内是 <use> 引用共享符号图片定义 */
         const useEl = el.querySelector('use');
         const href = useEl ? (useEl.getAttribute('href') || '').replace(/^#/, '') : '';
         if (href) {
@@ -374,13 +323,12 @@ App.importOwn = function (root) {
         if (rect) { rect.setAttribute('mask', 'url(#sveM' + l.id + ')'); l.rectEl = rect; }
       }
       if (img) l.dataUri = img.getAttribute('href') || img.getAttributeNS(XLINK, 'href') || '';
-      /* 优先按 symbolKey 从素材库取原始 JPEG（画布内存的是彩色剪影 PNG，直接复用会二次染色） */
       if (l.symbolKey && App.symbolMap.get(l.symbolKey)) {
         const sym = App.symbolMap.get(l.symbolKey);
         l.dataUri = App.symbolUri(sym);
         l.w = sym.w; l.h = sym.h;
       }
-      if (l.dataUri) App.ensureSymbolImageDef(l); // 补建共享定义，供 mask 内 <use> 解析
+      if (l.dataUri) App.ensureSymbolImageDef(l);
     } else if (l.kind === 'pattern') {
       const rect = el.querySelector('rect');
       const fillM = rect ? /url\(#(svePat\d+)\)/.exec(rect.getAttribute('fill') || '') : null;
@@ -430,7 +378,6 @@ App.importOwn = function (root) {
   showToast(App.i18n.tf('toast.imported', { n: count }));
 };
 
-/* 导入任意标准 SVG：每个顶层图形转为一个图层 */
 App.importGeneric = function (root) {
   const host = svgEl('svg');
   const vb = root.viewBox && root.viewBox.baseVal;
@@ -477,12 +424,6 @@ App.importGeneric = function (root) {
           });
         });
       }
-      /* 归一化：把该形状在【文件坐标】里的自身原点挪到 (0,0)。
-         buildLayerElement 对 import 层用的是 translate(-w/2 -h/2) —— 它假定 markup 从原点开始，
-         而这里序列化的是文件坐标原样 markup，于是每个形状都会多带一个自己的文件原点：
-         实测 4 方块夹具里圆的模型盒与画面差 225、蓝块差 150、黄块差 200（文件原点各是多少就差多少），
-         连带缩略图裁错、选中高亮/几何判定错位。把偏移烘焙进 markup 后，模型中心 == 绘制中心，
-         且相对排布与源文件一致（保存/快照走 innerEl.innerHTML，会自动带上这段归一化，不会二次偏移）。 */
       const _ox = r.left - hostRect.left, _oy = r.top - hostRect.top;
       if (_ox || _oy) {
         const _t = ch.getAttribute("transform");
@@ -491,7 +432,7 @@ App.importGeneric = function (root) {
       const markup = ch.outerHTML;
       ch.remove();
       const l = App.newLayer({
-        kind: 'import', name: '导入·' + ch.nodeName.toLowerCase() + '-' + (count + 1),
+        kind: 'import', name: App.i18n.t('name.importPrefix') + '·' + ch.nodeName.toLowerCase() + '-' + (count + 1),
         x: cx, y: cy, w: r.width, h: r.height, color: '#ffffff', importMarkup: markup
       });
       App.addLayer(l);
@@ -508,12 +449,9 @@ App.importGeneric = function (root) {
   else showToast(App.i18n.tf('toast.imported', { n: count }));
 };
 
-/* 从图案库拖入画布创建图层 */
 App.placePatternAt = function (spec, x, y) {
   if (App.cancelColorPreview) App.cancelColorPreview();
   App.history.markDiscrete();
-  /* 初始大小按当前画布缩放调整：拖入时屏幕视觉大小恒定，
-     画布放大多少倍、初始缩放就缩小多少倍（缩放 100% 时与原来完全一致） */
   const inv = clamp(1 / (App.state.view.scale || 1), 0.02, 50);
   let l = null;
   if (spec.kind === 'symbol') {
@@ -536,16 +474,12 @@ App.placePatternAt = function (spec, x, y) {
     l.patternKey = spec.key;
     App.addLayer(l);
   }
-  /* 白框自动聚焦并选中新图层（需求：拖入新图案后自动选中）。
-     批量创建（batching）时跳过逐层全量刷新（setSelection → 面板/闪动遍历 = O(n²)，
-     2000 层循环调用卡 8 秒），只更新状态，结束时由调用方统一刷新。
-     多选（含 Tab 遗留单选）状态下拖入：保持多选不被清空（白框移到新图层即可） */
   if (App.state.batching) {
     App.state.selected = new Set([l.id]);
     App.state.selectedByTab = false;
     App.lastWheelIdx = 0;
   } else if (App.state.selected.size > 1 || (App.state.selectedByTab && App.state.selected.size >= 1)) {
-    App.lastWheelIdx = 0; // 面板最上层 = 刚拖入的图层
+    App.lastWheelIdx = 0;
     App.scrollItemToTop(l);
     App.syncPanelSelectionClasses();
     App.updateSelToolbar();
@@ -553,19 +487,13 @@ App.placePatternAt = function (spec, x, y) {
   } else {
     App.state.selBarDismissed = false;
     App.state.selectedByTab = false;
-    App.lastWheelIdx = 0; // 面板最上层 = 刚拖入的图层
+    App.lastWheelIdx = 0;
     App.setSelection([l.id], { scrollPanel: true });
-    /* 白框已随面板对齐到新图层：闪动覆盖层必须同步跟随白框，
-       否则白框在新图层、闪烁动画还停留/残留在上一个图层 */
     if (App.requestFlashRefresh) App.requestFlashRefresh();
   }
   return l;
 };
 
-/* ---------- 已保存的彩绘：保存 / 应用 ---------- */
-
-/* 把图层（单个/合并分组，或多个图层=多选保存）序列化为独立 SVG 文件内容：
-   自包含视觉图形 + 每个图层的 data-sve 模型数据（文件可直接用「打开 SVG 文件」重新导入） */
 App.buildPaletteExportString = function (layers) {
   const list = Array.isArray(layers) ? layers.filter(Boolean) : (layers ? [layers] : []);
   if (!list.length) return null;
@@ -573,15 +501,10 @@ App.buildPaletteExportString = function (layers) {
   let seq = 0;
   const processOne = layer => {
     const g = layer.el.cloneNode(true);
-    /* 剔除渲染代理并恢复被隐藏的子层（与整图导出一致） */
     $$('[data-proxy]', g).forEach(el => el.remove());
     $$('[data-layer]', g).forEach(el => el.removeAttribute('visibility'));
-    /* 剔除编辑静态化背景位图（克隆自 layersRoot 首子元素） */
     $$('.sve-edit-static', g).forEach(el => el.remove());
-    /* import 位图化：矢量组被 display:none 隐藏，恢复显示再导出（否则内容空白）；
-       位图元素一并剔除（blob 引用跨会话失效） */
     $$('[style]', g).forEach(el => { if (el.style && el.style.display === 'none') el.style.display = ''; });
-    /* 符号共享图片定义内联（蒙版图层的 <use> 引用 App.defs 里的 #sveImg…） */
     $$('use', g).forEach(u => {
       const href = u.getAttribute('href') || u.getAttributeNS(XLINK, 'href') || '';
       if (href && href.indexOf('#sveImg') === 0) {
@@ -589,7 +512,6 @@ App.buildPaletteExportString = function (layers) {
         if (src && !$('#' + href.slice(1), defs)) defs.appendChild(src.cloneNode(true));
       }
     });
-    /* 填充图案定义内联（引用 #svePatN 的 defs 在 App.defs 里，不内联则独立文件缺定义） */
     $$('[fill]', g).forEach(el => {
       const m = /url\(#(svePat\d+)\)/.exec(el.getAttribute('fill') || '');
       if (!m) return;
@@ -608,7 +530,6 @@ App.buildPaletteExportString = function (layers) {
         }
       });
     });
-    /* 每个图层写入模型数据（子层一并写，供拖回画布时按保存的样子恢复） */
     const attach = (el, l) => {
       el.setAttribute('data-sve', JSON.stringify(App.serializeLayer(l, true)));
       if (l.kind === 'merged' && l.children) {
@@ -619,7 +540,6 @@ App.buildPaletteExportString = function (layers) {
     attach(g, layer);
     return g;
   };
-  /* 视口 = 全部图层文档包围盒的并集（对称留白：viewBox 中心即整体中心） */
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
   list.forEach(l => {
     const b = App.getItemDocBBox(l);
@@ -640,13 +560,9 @@ App.buildPaletteExportString = function (layers) {
   if (defs.childNodes.length) svg.appendChild(defs);
   list.forEach(l => svg.appendChild(processOne(l)));
   const str = '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(svg);
-  return { str, name: '彩绘.svg' };
+  return { str, name: App.i18n.t('name.paletteFile') + '.svg' };
 };
 
-/* 2026-09-12 用户要求删除：savePaletteLayer（保存到「已保存彩绘」）已移除 */
-
-/* 把已保存的彩绘按保存时的样子（大小/旋转/颜色/分组结构）放到画布 (x,y)（=新中心）；
-   多图层彩绘整体平移，全部恢复并选中 */
 App.applySavedPalette = function (name, content, x, y) {
   if (App.cancelColorPreview) App.cancelColorPreview();
   if (App.invalidateEditStatic) App.invalidateEditStatic();
@@ -656,8 +572,6 @@ App.applySavedPalette = function (name, content, x, y) {
   if (doc.querySelector('parsererror')) { showToast(App.i18n.tf('toast.io.paletteBroken', { v: name })); return; }
   const tops = Array.from(doc.documentElement.children).filter(el => el.getAttribute && el.getAttribute('data-sve'));
   if (!tops.length) { showToast(App.i18n.tf('toast.io.paletteNoLayers', { v: name })); return; }
-  /* 保存时 viewBox 对称留白：viewBox 中心 = 整体原中心；
-     拖放点作为新中心（大小/旋转/颜色/分组结构不变，整体平移） */
   const vb = (doc.documentElement.getAttribute('viewBox') || '').split(/[\s,]+/).map(parseFloat);
   let cx = 0, cy = 0;
   if (vb.length >= 4) { cx = vb[0] + vb[2] / 2; cy = vb[1] + vb[3] / 2; }
@@ -674,19 +588,15 @@ App.applySavedPalette = function (name, content, x, y) {
     layers.push(l);
   }
   App.history.markDiscrete();
-  /* 批量放置：隐藏容器避免逐层布局 + 跳过逐层面板刷新（2000 层时 O(n²) 卡 8 秒） */
   App.state.batching = true;
   try {
     layers.forEach(l => App.addLayer(l));
   } finally {
     App.state.batching = false;
   }
-  /* 恢复容器显示；"隐藏图层"开关 / 背景取色器 激活时保持隐藏 */
   if (!App.state.layersHidden && App.state.eyeMode !== 'bg') App.layersRoot.style.display = '';
   App.refreshPanel();
   App.refreshCount();
-  /* 拖回后不自动选中：仅白框定位到最上层（避免选中被后续 Tab 多选意外带上）；
-     多选（含 Tab 遗留单选）状态下放置：保持多选不被清空 */
   if (App.state.selected.size > 1 || (App.state.selectedByTab && App.state.selected.size >= 1)) {
     App.state.selBarDismissed = false;
     App.lastWheelIdx = 0;
@@ -702,13 +612,11 @@ App.applySavedPalette = function (name, content, x, y) {
     App.setSelection([]);
     App.syncPanelSelectionClasses();
   }
-  /* import 位图化：大量 import 图层时排队后台烘焙 */
   if (App.refreshImpBitmaps) App.refreshImpBitmaps();
   if (layers.length && App.contentChanged) App.contentChanged();
   showToast(App.i18n.tf('toast.io.placed', { v: name }));
 };
 
-/* 拖入的本地文件：SVG=导入当前标签（无标签先建），图片=背景 */
 App.handleFiles = function (files) {
   Array.from(files).forEach(f => {
     const ext = (f.name.split('.').pop() || '').toLowerCase();
@@ -717,11 +625,10 @@ App.handleFiles = function (files) {
       const reader = new FileReader();
       reader.onload = () => {
         const text = String(reader.result);
-        App.importSvgIntoCurrent(text, f.name.replace(/\.svg$/i, '') || '未命名');
+        App.importSvgIntoCurrent(text, f.name.replace(/\.svg$/i, '') || App.i18n.t('name.untitled'));
       };
       reader.readAsText(f);
     } else if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif', 'jfif', 'ico', 'tif', 'tiff'].includes(ext)) {
-      /* 无文档时拖背景图：先建一个空文档承载 */
       if (prod && !App.Tabs.docs.length) App.Tabs.addDoc({ silent: true, label: null });
       const reader = new FileReader();
       reader.onload = () => App.setBackgroundImage(String(reader.result));
@@ -732,9 +639,6 @@ App.handleFiles = function (files) {
   });
 };
 
-/* ---------- 工作副本：图案 + 背景图片（含全部变换）+ 历史颜色等，无损保存/读取 ---------- */
-/* 把标签快照里的瘦图层补成可独立保存的工作副本图层。只克隆数据，不切换标签、
-   不重建画布；symbol 的 dataUri 按 symbolKey 从素材库补回。 */
 App.workCopyLayerFromSlim = function (slim) {
   slim = slim || {};
   const out = Object.assign({}, slim);
@@ -771,7 +675,6 @@ App.buildWorkCopyData = function (layers, b, stateData, histColors) {
   };
 };
 
-/* 序列化当前全部工作状态为 JSON 字符串（背景图片以 data URL 内嵌，不丢失任何信息） */
 App.buildWorkCopyString = function () {
   const s = App.state;
   const stateData = {
@@ -791,8 +694,6 @@ App.buildWorkCopyString = function () {
   return JSON.stringify(data);
 };
 
-/* 为指定标签生成工作副本。当前标签从实时模型读取；非当前标签只读 captureDoc 留下的
-   数据快照。整个过程不临时切换活动画布，因此不会播放动画、改变选择或污染其他标签。 */
 App.buildWorkCopyStringForDoc = function (doc) {
   if (!doc) return null;
   if (App.Tabs && App.Tabs.current === doc) return App.buildWorkCopyString();
@@ -801,15 +702,11 @@ App.buildWorkCopyStringForDoc = function (doc) {
   return JSON.stringify(App.buildWorkCopyData(layers, doc.bg || null, d, d.histColors));
 };
 
-/* 记录当前文档的工作进程源文件句柄（由主进程在打开/保存时签发；保存时据此回写原文件）。
-   与 recordSvgSource 对称：有当前文档就记在文档上，否则记在 App 级兜底上。 */
 App.recordWorkSource = function (source) {
   if (App.Tabs && App.Tabs.current) App.Tabs.current.workSource = source || null;
   else App.currentWorkSource = source || null;
 };
 
-/* 保存工作进程：有源文件就【覆盖原文件】，没有（新建的空白文档）才按时间戳新建一个。
-   源文件句柄只由主进程签发，渲染层不传路径/文件名，避免 IPC 越权写盘。 */
 App.saveWorkCopy = async function () {
   if (App.cancelColorPreview) App.cancelColorPreview();
   const __t0 = performance.now();
@@ -822,11 +719,10 @@ App.saveWorkCopy = async function () {
   blurActiveButton();
   try { App.log('info', '保存工作进程', { ms: Math.round(performance.now() - __t0), kb: Math.round(str.length / 1024), path: r && r.path, overwrite: !!(source && r && r.ok) }); } catch (e) { /* ignore */ }
   if (!r || !r.ok) { showToast(App.i18n.tf('toast.io.saveFail', { v: ((r && r.error) || '') })); return null; }
-  /* 保存成功才认领新句柄：源文件被外部改动导致失败时，句柄保持原样，用户可以另存新文件。 */
   if (sourceDoc && App.Tabs && App.Tabs.docs && App.Tabs.docs.includes(sourceDoc)) {
     if ((sourceDoc.contentRevision || 0) === sourceRevision) sourceDoc.dirty = false;
     if (r.source) sourceDoc.workSource = r.source;
-    const label = (r.name || '').replace(/\.svework$/i, '') || '工作进程';
+    const label = (r.name || '').replace(/\.svework$/i, '') || App.i18n.t('name.workcopy');
     if (App.Tabs.setDocLabel) App.Tabs.setDocLabel(sourceDocId, label);
     else { sourceDoc.label = label; if (App.Tabs.renderBar) App.Tabs.renderBar(); }
   } else if (r.source) {
@@ -837,7 +733,6 @@ App.saveWorkCopy = async function () {
   return r;
 };
 
-/* 打开工作副本：选择文件并整体恢复（覆盖当前画布，打开前的状态可撤销） */
 App.openWorkCopy = async function () {
   const r = await window.sveApi.workOpen();
   blurActiveButton();
@@ -848,15 +743,12 @@ App.openWorkCopy = async function () {
   App.openWorkCopyContent(r.content, r.name, r.source);
 };
 
-/* 按名称从自动目录打开工作副本（首页「最近工作副本」条目点击） */
 App.openWorkCopyByName = async function (name) {
   const r = await window.sveApi.fileRead('workcopy', name);
   if (!r.ok) { showToast(App.i18n.tf('toast.home.openWorkFail', { v: (r.error || '') })); return; }
   App.openWorkCopyContent(r.content, r.name, r.source);
 };
 
-/* 恢复指定内容为当前文档（编辑中先退出；打开前状态可撤销）
-   source：主进程签发的源文件句柄；带上它，之后保存才会回写这个文件 */
 App.openWorkCopyContent = function (content, name, source) {
   let data;
   try { data = JSON.parse(content); }
@@ -868,11 +760,9 @@ App.openWorkCopyContent = function (content, name, source) {
   showToast(App.i18n.tf('toast.io.workOpened', { v: name }));
 };
 
-/* 恢复工作副本：清空当前画布，按保存的数据重建图层/背景/历史颜色/显示状态/视口 */
 App.restoreWorkCopy = function (data) {
-  App.history.markDiscrete(); // 打开前的状态作为一个撤回点
+  App.history.markDiscrete();
   if (App.cancelColorPreview) App.cancelColorPreview();
-  /* 取色器激活中恢复：先退出（否则恢复后 eyeMode 残留，图层被强制隐藏且按钮被禁） */
   if (App.state.eyeMode && App.setEyedropper) App.setEyedropper(null);
   if (App.invalidateEditStatic) App.invalidateEditStatic();
   App.state.batching = true;
@@ -886,7 +776,6 @@ App.restoreWorkCopy = function (data) {
     App.state.layersDisplayOpacity = 1;
     App.state.selected = new Set();
     App.state.selectedByTab = false;
-    /* 恢复全部图层（合并分组/蒙版/图案等结构完整重建） */
     (data.layers || []).forEach(slim => {
       const l = App.deserializeLayer(slim);
       App.relinkSymbolData(l);
@@ -895,12 +784,11 @@ App.restoreWorkCopy = function (data) {
   } finally {
     App.state.batching = false;
   }
-  /* 恢复背景图片（异步解码后重建元素，位置/大小/旋转/倾斜/缩放/翻转/透明度原样恢复） */
   if (data.bg && data.bg.dataUrl) {
     const m = data.bg;
     const token = ++App.bgSeq;
     loadImage(m.dataUrl).then(img => {
-      if (token !== App.bgSeq) return; // 期间已被移除/替换
+      if (token !== App.bgSeq) return;
       const model = {
         kind: 'bg',
         x: m.x, y: m.y, w: m.w, h: m.h,
@@ -925,7 +813,6 @@ App.restoreWorkCopy = function (data) {
       App.updateBgOpacitySlider();
     }).catch(() => showToast(App.i18n.t('toast.bg.readFail2')));
   }
-  /* 恢复历史颜色（仅内存，最多两行）、上次使用颜色、显示状态、视口 */
   App.histColors = Array.isArray(data.histColors) ? data.histColors.slice(0, 16) : [];
   App.renderHistGrid();
   if (data.lastColor) App.state.lastColor = data.lastColor;
@@ -934,7 +821,6 @@ App.restoreWorkCopy = function (data) {
   App.updateHideLayersButton();
   App.updateLayersDisplaySlider();
   App.applyLayersDisplayOpacity();
-  /* 无背景时重置背景透明度滑条与隐藏背景按钮（有背景时在异步恢复完成后刷新） */
   if (!(data.bg && data.bg.dataUrl)) {
     App.updateBgOpacitySlider();
     if (App.updateHideBgButton) App.updateHideBgButton();
@@ -945,18 +831,15 @@ App.restoreWorkCopy = function (data) {
     App.state.view.scale = clamp(data.view.scale || 1, 0.02, 32);
   }
   App.updateView();
-  if (App.Tabs && App.Tabs.clearDirty) App.Tabs.clearDirty(); // 打开工作进程=干净状态
+  if (App.Tabs && App.Tabs.clearDirty) App.Tabs.clearDirty();
   App.ensureMaskIndDef();
   App.refreshPanel();
   App.refreshCount();
   App.refreshLayerThumbs();
-  /* 大分组渲染代理 + 符号预解码预热 */
   if (App.maybeBakeProxy) App.state.layers.forEach(l => { if (l.kind === 'merged') App.maybeBakeProxy(l); });
   if (App.warmupSymbols) App.warmupSymbols();
   if (App.contentChanged) App.contentChanged({ preserveAutoStatic: false });
   if (App.requestFlashRefresh) App.requestFlashRefresh(false);
-  /* 代理首次烘焙失败的延迟重试（与导入路径一致）：嵌套子代理干扰/异步竞争
-     可能导致首次触发失败，恢复后超大门组长期裸渲染卡顿 */
   if (App._proxyBake && App.countInLayer && App.proxyThreshold !== undefined) {
     setTimeout(() => {
       App.state.layers.forEach(l => {
@@ -968,18 +851,15 @@ App.restoreWorkCopy = function (data) {
   }
 };
 
-/* ---------- 历史工作锚点：每 10 分钟自动保存一次（最多 20 个，超出自动删最早） ---------- */
 App.startHistAnchors = function () {
   if (App._histAnchorTimer) return;
   App._histAnchorTimer = setInterval(() => {
-    /* 画布上有工作内容（图案或背景图片）才创建锚点 */
     if (App.state.layers.length > 0 || (App.state.bg.image && App.state.bg.image.el)) {
       App.saveHistAnchor();
     }
-  }, 600000); // 10 分钟
+  }, 600000);
 };
 
-/* 保存一个历史锚点（文件名带系统显示时间，由主进程生成） */
 App.saveHistAnchor = async function () {
   const __t0 = performance.now();
   const str = App.buildWorkCopyString();
@@ -989,7 +869,6 @@ App.saveHistAnchor = async function () {
   return r.name;
 };
 
-/* 恢复工作进程按钮：列出锚点供选择 */
 App.openHistAnchor = async function () {
   const list = await window.sveApi.histAnchorList();
   blurActiveButton();
@@ -998,19 +877,15 @@ App.openHistAnchor = async function () {
   App.showHistAnchorPicker(list.files);
 };
 
-/* 锚点选择器：每个锚点显示保存时的系统时间与文件名 */
 App.showHistAnchorPicker = function (files) {
   let ov = $('#histAnchorOv');
   if (!ov) {
     ov = document.createElement('div');
     ov.id = 'histAnchorOv';
     ov.className = 'confirm-overlay hidden';
-    /* 文案走 data-i18n；这个浮层是**按需创建**的，创建后要立刻 apply 一次，
-       否则首开会停在 HTML 里的中文默认值（要等下一次切语言才更新） */
     ov.innerHTML = '<div class="confirm-box anchor-box"><div class="anchor-title" data-i18n="toolbar.histAnchor">恢复工作进程</div><div class="anchor-list"></div><div class="anchor-btns"><button class="anchor-cancel" data-i18n="dlg.cancel">取消</button></div></div>';
     document.body.appendChild(ov);
     if (App.i18n) App.i18n.apply(ov);
-    /* 遮罩点击 / 右上角 × / 「取消」三者同一条收尾路径：纯隐藏即可（这个窗没有临时状态） */
     ov.addEventListener('click', e => { if (e.target === ov) App.hideOverlay(ov); });
     ov.querySelector('.anchor-cancel').addEventListener('click', () => App.hideOverlay(ov));
     if (App.attachDlgClose) App.attachDlgClose(ov.querySelector('.confirm-box'), () => { App.hideOverlay(ov); return true; });
@@ -1020,19 +895,14 @@ App.showHistAnchorPicker = function (files) {
   files.slice().reverse().forEach(f => {
     const item = document.createElement('div');
     item.className = 'anchor-item';
-    /* 左侧缩略图（用户 2026-09-23 要求，与主页一致）：先占位，异步填图 */
     item.innerHTML = '<img class="anchor-thumb" alt="" aria-hidden="true">' +
       '<span class="anchor-time"></span><span class="anchor-name"></span>';
     item.querySelector('.anchor-time').textContent = f.time;
     item.querySelector('.anchor-name').textContent = f.name;
-    /* 缩略图链路与主页完全相同：离屏导出 SVG → App.fzaSvgThumb（带缓存）。
-       失败就保持占位（不显示图），绝不影响列表可用性。 */
     const thumbImg = item.querySelector('.anchor-thumb');
     if (thumbImg && App.buildSvgFromAnchor && App.fzaSvgThumb) {
       (async () => {
         try {
-          /* ⚠ buildSvgFromAnchor 返回的是 { str, ... } 对象（与 buildSvgFromWorkCopy 一致），
-             不是字符串 —— 直接当字符串用会得到 "[object Object]"（2026-09-23 踩过）。 */
           const built = await App.buildSvgFromAnchor(f.name);
           const svg = built && built.str ? built.str : null;
           if (!svg) return;
@@ -1055,7 +925,6 @@ App.showHistAnchorPicker = function (files) {
   App.showOverlay(ov);
 };
 
-/* 回退到指定锚点：当前若有工作内容，先自动保存一次回退前状态为锚点（不丢失当前工作） */
 App.pickHistAnchor = async function (name, time) {
   const hasWork = App.state.layers.length > 0 || (App.state.bg.image && App.state.bg.image.el);
   let savedBefore = null;
@@ -1071,11 +940,6 @@ App.pickHistAnchor = async function (name, time) {
   showToast(App.i18n.tf('toast.io.rewound', { v: time, extra: (savedBefore ? App.i18n.t('toast.io.rewoundExtra') : '') }));
 };
 
-/* 导入后的「初始渲染未完成先不显示」（2026-09-12 用户要求）：
-   导入大文件时分组代理/位图化都是异步烘的，先显示矢量、随后被位图替换，用户会看到图案换一次。
-   做法：把图层容器显示透明度压到 0 等烘焙落地（opacity 不影响布局与 getBBox），
-   等没有在途烘焙（_proxyBaking 空 且 代理队列空）再恢复；兜底 4s，绝不把画布留在不可见状态。
-   只有确实有待渲染的活时才介入，小文件（无代理）行为完全不变。 */
 App.holdUntilRendered = function () {
   const root = App.layersRoot;
   if (!root) return;

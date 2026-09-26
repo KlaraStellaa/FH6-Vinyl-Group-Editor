@@ -1,6 +1,4 @@
 'use strict';
-/* 主页/选择窗 SVG 缩略图的独立渲染核心。
-   只依赖浏览器 DOM 与 canvas，可同时加载在主界面和隐藏缩略图进程中。 */
 (function (global) {
   const NS = 'http://www.w3.org/2000/svg';
   const NON_DRAW = /^(defs|title|desc|metadata|style|script|namedview)$/;
@@ -12,8 +10,6 @@
   function isMaskElement(el) {
     if (!el || !el.getAttribute) return false;
     const tag = tagOf(el);
-    /* <defs> 内每个 FH6 symbol 都有一个内部 <mask>，那只是素材剪影，不能被
-       当成编辑器蒙版层。真正的蒙版只会落在绘制节点上。 */
     if (tag === 'mask' || tag === 'pattern' || tag === 'symbol') return false;
     const id = String(el.getAttribute('id') || '').toLowerCase();
     const fillAttr = String(el.getAttribute('fill') || '').toLowerCase();
@@ -25,7 +21,6 @@
   function hasMasks(svgText) {
     const text = String(svgText || '');
     if (!text || text.indexOf('mask') < 0) return false;
-    /* 限定到绘制标签，避免命中 symbol 定义里的 mask_fh6_*。 */
     return /<(?:g|use|path|rect|image|polygon|ellipse|circle)\b[^>]*(?:data-forza-mask-group\s*=\s*["']1["']|\bid\s*=\s*["']mask_|mask_indicator)/i.test(text);
   }
 
@@ -74,9 +69,6 @@
     Array.prototype.slice.call(el.children || []).forEach(makeOpaqueShape);
   }
 
-  /* 把按层序出现的蒙版改成真正的“擦除下面内容”。关键是全局累计绘制顺序：
-     每遇到一个蒙版，就用一个 alpha-out 掩膜包住此前累计的全部内容；蒙版后的
-     图层继续画在包裹外面。一个文档最终仍只需解析/光栅化一次。 */
   function knockoutMasks(svgText) {
     const text = String(svgText || '');
     if (!hasMasks(text)) return text;
@@ -252,8 +244,6 @@
     const img = await loadSvg(processed);
     processed = '';
     svgText = '';
-    /* 960px 是 480px 成品的 2 倍抗锯齿采样。旧实现先画 1600px 再同步读回
-       大画布；这里既保住缩略图清晰度，也显著减少像素读回与内存压力。 */
     const ANALYSIS_SIDE = 960;
     let fullScale = Math.min(ANALYSIS_SIDE / img.naturalWidth, ANALYSIS_SIDE / img.naturalHeight, 1);
     if (!(fullScale > 0)) fullScale = 0.2;
@@ -284,8 +274,6 @@
     full.width = 1; full.height = 1;
     const blob = await canvasToBlob(canvas);
     canvas.width = 1; canvas.height = 1;
-    /* 数千图层 SVG 的解码资源先在隐藏进程内释放，再通知主界面完成。
-       否则 Chromium 会把清理推迟到缩略图出现后，抢占随后一次卡片交互。 */
     await nextFrame();
     await nextFrame();
     return blob;
