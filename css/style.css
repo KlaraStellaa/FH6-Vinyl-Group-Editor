@@ -1,0 +1,1437 @@
+:root {
+  --bg: #1b1d21;
+  --panel: #232529;
+  --panel2: #282b30;
+  --border: #33363c;
+  --switch-off: #4a4e55;   /* 开关「关」时的滑轨底色 */
+  --text: #e6e8eb;
+  --dim: #9aa0a8;
+  --accent: #4ea1ff;
+  --btn-bg: #2c2f34;
+  --btn-border: #3a3e45;
+  --btn-hover-bg: #363a41;
+  --btn-active-bg: #3d4249;
+  --input-bg: #2c2f34;
+  --tabbar-bg: #1f2125;
+  --tab-pill-bg: #2a2d33;
+  --tab-pill-hover-bg: #32363d;
+  --tab-pill-active-bg: #33383f;
+  --card-bg: #2c2f34;
+  --card-hover-bg: #32363d;
+  --overlay-bg: #26282d;
+  --accent-sel-bg: #2e4057;
+  --thumb-bg: #1c1e21;
+  --swatch-bg: #c8cbd2;
+  --scrollbar-thumb: #5c626b;   /* 深色主题的滚动条：低对比灰，原来纯白太扎眼 */
+  --btn-shadow: 0 1px 3px rgba(0, 0, 0, .3);
+  --btn-radius: 10px;
+  --ease-pop: cubic-bezier(.34,1.35,.4,1);
+  --ease-glide: cubic-bezier(.4,.1,.3,1);
+  --ease-spring: cubic-bezier(.34,1.56,.64,1);
+  /* 原生控件（number 步进箭头、select 弹层、未自绘的滚动条）跟随主题；
+     自绘的 ::-webkit-scrollbar 优先级更高，不受影响 */
+  color-scheme: dark;
+}
+/* P4 浅色主题：只覆盖 UI 变量（面板/标签栏/按钮/文字/底色）；
+   #canvasWrap 画布背景与 class 一律不动（判据咬死） */
+html[data-theme="light"] {
+  --bg: #F8FAFD;
+  --panel: #FFFFFF;
+  --panel2: #c8cbd2;
+  --border: #cccccc;
+  --switch-off: #c9cdd2;   /* 开关「关」时的滑轨底色 */
+  --text: #000000;
+  --dim: #666666;
+  --accent: #00A89A;
+  --btn-bg: #F8FAFD;
+  --btn-border: #cccccc;
+  --btn-hover-bg: #e8ecf0;
+  --btn-active-bg: #dce0e6;
+  --input-bg: #ffffff;
+  --tabbar-bg: #eef1f5;
+  --tab-pill-bg: #F8FAFD;
+  --tab-pill-hover-bg: #e8ecf0;
+  --tab-pill-active-bg: #ffffff;
+  --card-bg: #c8cbd2;
+  --card-hover-bg: #b8bbc2;
+  --overlay-bg: #e0e2e6;
+  --accent-sel-bg: #d0f0ed;
+  --thumb-bg: #eceef1;
+  --swatch-bg: #5f6570;   /* 浅色主题下也要让白色图案读得出来 */
+  --scrollbar-thumb: #9aa0a8;
+  --btn-shadow: 0 1px 3px rgba(0, 0, 0, .1);
+  color-scheme: light;
+}
+/* 浅色模式弹窗底部按键区浅色 */
+html[data-theme="light"] .confirm-box, html[data-theme="light"] .settings-box, html[data-theme="light"] .help-box { background: rgba(255,255,255,.88) !important; }
+html[data-theme="light"] .confirm-box .anchor-btns { background: transparent; }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--text); font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; font-size: 13px; user-select: none; }
+
+button { background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text); padding: 5px 10px; border-radius: var(--btn-radius, 10px); cursor: pointer; font-size: 12px; font-family: inherit; box-shadow: var(--btn-shadow, 0 1px 3px rgba(0,0,0,.3)); transition: background-color .15s ease-out, transform .1s ease-out, box-shadow .15s ease-out; }
+button:hover { background: var(--accent); color: #fff; box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 35%, transparent); }
+button:active { background: var(--btn-active-bg); transform: scale(.96); box-shadow: none; }
+button.active { border-color: var(--accent); background: var(--accent-sel-bg); }
+button:disabled { opacity: .4; cursor: default; }
+kbd { background: var(--btn-border); border-radius: 3px; padding: 1px 5px; font-size: 11px; font-family: inherit; }
+input, select { background: var(--input-bg); border: 1px solid var(--btn-border); color: var(--text); padding: 4px 6px; border-radius: var(--btn-radius, 10px); font-family: inherit; font-size: 12px; transition: border-color .15s ease-out; }
+input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+.hidden { display: none !important; }
+
+/* ===== 自绘标题栏（UI 改良 C 项）=====
+   main.js 里 frame:false，系统标题栏没了，鼠标拖动窗口只能靠这里的
+   -webkit-app-region: drag。三个按钮必须显式 no-drag，否则点击被拖动区吞掉。
+   高度用变量 --titlebar-h 收口：下面 #main / #homeOverlay 的顶部偏移都读它，
+   不要散着写 32px（HANDOFF 里记过「加了一个数值忘了改另一处」的坑）。 */
+/* ★ 2026-09-23：改用 Windows 原生窗口后（main.js 的 frame:true），页面内那条自绘
+   #titleBar 已 display:none 不再占位，所以这里把高度基准改成 0 ——
+   下面 #main / #homeOverlay / #logPanel / #selToolbar 的 calc 都读这个变量，
+   改这一处就全部生效（这正是当初把它收口成变量的用意）。
+   若以后要切回自绘标题栏，把这里改回 32px、并把 #titleBar 的 display:none 去掉即可。 */
+:root { --titlebar-h: 0px; }
+#titleBar {
+  /* ★ 2026-09-23：改用 Windows 原生窗口（main.js 的 frame:true）后，这条自绘标题栏
+     整体隐藏 —— 最小化 / 最大化 / 关闭由系统提供。
+     原本 frame:false 时它是唯一的标题栏（应用图标 + 标题 + 三个自绘按钮）。 */
+  display: none !important;
+  height: var(--titlebar-h); flex: none;
+  align-items: stretch;
+  background: var(--tabbar-bg, #1f2125);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+#titleBar .titlebar-drag {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 8px; padding: 0 10px;
+  -webkit-app-region: drag;
+}
+#titleBar .titlebar-appicon { display: flex; align-items: center; flex: none; opacity: .85; }
+#titleBar .titlebar-appicon svg { width: 15px; height: 15px; display: block; }
+#titleBar #titleBarTitle {
+  font-size: 12px; color: var(--dim); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+#titleBar .titlebar-btns { display: flex; align-items: stretch; flex: none; }
+#titleBar .titlebar-btn {
+  -webkit-app-region: no-drag;
+  width: 46px; min-width: 46px; height: 100%;
+  padding: 0; margin: 0; border: 0; border-radius: 0;
+  background: transparent; box-shadow: none;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--dim); cursor: default;
+}
+#titleBar .titlebar-btn svg { width: 15px; height: 15px; display: block; }
+#titleBar .titlebar-btn:hover { background: var(--btn-hover-bg); color: var(--text); box-shadow: none; }
+#titleBar .titlebar-btn:active { background: var(--btn-active-bg); transform: none; box-shadow: none; }
+#titleBar .titlebar-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* 关闭键沿用系统观感：悬停红底白字 */
+#titleBar .titlebar-btn-close:hover { background: #c42b1c; color: #fff; }
+#titleBar .titlebar-btn-close:active { background: #b0241a; }
+
+/* ===== 顶部工具栏：按钮一行 + 操作介绍一行 ===== */
+#toolbar { height: 56px; display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 0 10px; background: var(--panel); border-bottom: 1px solid var(--border); flex: none; }
+#toolbarBtns { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+#toolbarBtns button { white-space: nowrap; flex: none; }
+.bg-tools { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
+.tb-sep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; flex: none; }
+
+/* ===== 主布局 =====
+   ⚠ 高度链：body 是普通流（html,body 高度 100%），依次排
+   #titleBar(--titlebar-h) → #tabBar(34) → #toolbar(56) → #main。
+   #main 用 calc 减掉前两者（原来只减了 #toolbar 的 56 —— 因为那时
+   #tabBar 是 #toolbar 之外的兄弟且 #main 的 100% 基准……见下方 2026-09-12 注释）。
+   加了标题栏后必须把 --titlebar-h 与 34 一起减掉，否则画布区比窗口高出 66px，
+   所有「贴画布底部」的浮层会被顶到窗口外。 */
+#main { display: flex; height: calc(100% - var(--titlebar-h) - 34px - 56px); position: relative; }
+
+/* ===== 主页显示时「停靠」画布区（性能）=====
+   问题（用户 2026-09-20 报障）：切到主页后标签页内容仍在主页下方渲染，图层多时主页明显卡。
+   实测（300 图层 + 300 个 SVG 子节点）：主页静置 800ms 只出 14 帧（avg 58.8ms、p95 354ms，≈17fps）。
+   三个开销来源，必须一起掐掉：
+     ① #main 整棵子树（画布 SVG + 图层栏）仍在渲染与合成；
+     ② #homeOverlay 自己有 backdrop-filter: blur(24px) —— 模糊的正是下面那层活着的画布，图层越多越贵；
+     ③ #leftPanel / #rightPanel 等面板自带亚克力模糊，而它们在 #main 里仍然可见。
+
+   ★★ 只能用 visibility:hidden，**绝不能用 content-visibility:hidden**（2026-09-21 踩过）：
+      `#homeOverlay` 的 DOM 父链是 `#canvasWrap` → `#main`（见 index.html），
+      在 `#main` 上挂 content-visibility:hidden 会把**主页自己**一起跳渲染 ——
+      用户看到的就是「主页打不开，只剩画布上面的工具栏」（各分支同时中招）。
+      而 content-visibility 不影响布局，`getBoundingClientRect()` 照样有值，
+      所以只查尺寸/class 的判据发现不了 —— 判据必须断言
+      「`elementFromPoint(主页中心)` 落在 #homeOverlay 内」才算真的显示了。
+
+   visibility 是**可继承且可覆盖**的：祖先隐藏后，`#homeOverlay` 用 visible 把自己显回来。 */
+#main.sve-home-parked { visibility: hidden; }
+/* 主页遮罩的祖先被藏了，必须显式显回来（否则主页自己也不见了） */
+#main.sve-home-parked #homeOverlay { visibility: visible; }
+#main.sve-home-parked #leftPanel,
+#main.sve-home-parked #rightPanel,
+#main.sve-home-parked #selToolbar,
+#main.sve-home-parked #editBar,
+#main.sve-home-parked #clipboardPanel {
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+}
+
+/* ===== 左侧图层面板 ===== */
+#leftPanel { width: 96px; min-width: 96px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+.panel-title { padding: 10px 4px; font-weight: 600; border-bottom: 1px solid var(--border); flex: none; font-size: 12px; text-align: center; }
+#layerWrap { flex: 1; position: relative; min-height: 0; display: flex; flex-direction: column; }
+/* 「+」功能栏在滚动容器之外：永远钉在列表最上方，不随图层滚动、也不受列表 padding 影响 */
+#layerList { position: relative; flex: 1; min-height: 0; overflow-y: auto; padding: 0 4px; scrollbar-gutter: stable; }
+/* 白框固定在从上往下第 4 行：列表滚动、白框不动（top/height 由 JS 按行高设置；
+   right 留出滚动条宽度，白框不压到滚动条上） */
+#wheelBox { position: absolute; left: 4px; right: 16px; top: 228px; height: 72px; border-radius: 5px; outline: 2px solid #ffffff; outline-offset: -2px; box-shadow: 0 0 6px rgba(255, 255, 255, .7); pointer-events: none; z-index: 2; }
+#wheelBox.hidden { display: none; }
+.layer-item { position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; height: 72px; padding: 4px 2px; border-radius: 5px; border: 1px solid transparent; cursor: pointer; margin-bottom: 4px; }
+.layer-item:hover { background: #45484e; }
+.layer-select-bg { position: absolute; inset: 0; border-radius: 5px; background: var(--accent-sel-bg); opacity: 0; pointer-events: none; will-change: opacity; z-index: 0; }
+.tri { position: absolute; top: 0; right: 0; width: 0; height: 0; border-top: 28px solid #ff4444; border-left: 28px solid transparent; pointer-events: none; z-index: 1; }
+/* 蒙版图层：图标右下角白色小三角 */
+/* 蒙版角标：原为 28px 白色 border 三角，按要求改为图层功能栏「切换为蒙版」
+   （js/fluent-icons.js 的 btnToMask = SiliconUI ic_fluent_position_backward_filled）同款图标：
+   黑色圆角底 + 白色图标（用户 2026-09-15 定：先白底后改黑底），14px、仍在右下角，只改外观；
+   1px 浅色描边让它在深色行底与白色选中描边上都读得出；
+   创建与判定逻辑仍在 js/panels.js，未改。
+   ⚠ 图标路径在此内联（为不动相关代码，不从 JS 取）——_forza-src/run-maskbadge-icon.js
+   会断言它与 App.FLUENT_ICONS.btnToMask 的 path 逐字一致，防止两处漂移。 */
+.mask-badge { position: absolute; right: 2px; bottom: 2px; width: 14px; height: 14px; border: none; border-radius: 4px; background: #000000 url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Cpath%20fill='%23ffffff'%20d='M16.5%206.5L10.75%206.5C8.40279%206.5%206.5%208.40279%206.5%2010.75L6.5%2016.5H5.25C3.45508%2016.5%202%2015.0449%202%2013.25V5.25C2%203.45507%203.45508%202%205.25%202H13.25C15.0449%202%2016.5%203.45507%2016.5%205.25V6.5ZM22%2018.75C22%2020.5449%2020.5449%2022%2018.75%2022L10.75%2022C8.95508%2022%207.5%2020.5449%207.5%2018.75L7.5%2010.75C7.5%208.95507%208.95508%207.5%2010.75%207.5L18.75%207.5C20.5449%207.5%2022%208.95507%2022%2010.75L22%2018.75ZM18.75%2020.5C19.7165%2020.5%2020.5%2019.7165%2020.5%2018.75L20.5%2010.75C20.5%209.7835%2019.7165%209%2018.75%209L10.75%209C9.7835%209%209%209.7835%209%2010.75L9%2018.75C9%2019.7165%209.7835%2020.5%2010.75%2020.5L18.75%2020.5Z'/%3E%3C/svg%3E") center / 10px 10px no-repeat; box-shadow: 0 0 0 1px rgba(255,255,255,.35); pointer-events: none; z-index: 1; }
+.layer-thumb { position: relative; z-index: 1; width: 64px; height: 64px; flex: none; border: 1px solid #3a3e45; border-radius: 3px; background: repeating-conic-gradient(#ffffff 0 25%, #d5d9de 0 50%) 0 0 / 10px 10px; }
+.layer-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+/* 蒙版图层：图层栏内该层图案显示为纯黑（回到图层态自动恢复原色）。
+   纯显示实现——不改图层 fill/stroke、不重烘焙缩略图；判定挂在 .mask-badge 上
+   （它只由 js/panels.js 在 layer.isMask 时创建），故 js 侧无需改动。
+   brightness(0) 把所有非透明像素压黑并保留 alpha → 底下棋盘格照常透出。 */
+.layer-item:has(.mask-badge) .layer-thumb img { filter: brightness(0); }
+.layer-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.layer-badge { position: relative; z-index: 1; flex: none; background: var(--btn-border); border-radius: 3px; padding: 1px 5px; font-size: 11px; color: var(--dim); }
+#totalCount { padding: 8px 4px; border-top: 1px solid var(--border); font-size: 11px; color: var(--dim); flex: none; text-align: center; line-height: 1.6; }
+
+/* ===== 中间画布 ===== */
+#canvasWrap { flex: 1; position: relative; overflow: hidden; background: #e9e9ea; }
+#canvasWrap.dark { background: #15161a; }
+#canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.sve-outline { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.sve-outline.flash { animation: sveflash .18s linear 2; }
+@keyframes sveflash { 0% { stroke: #ffffff; } 100% { stroke: var(--accent); } }
+.sve-handle { fill: #ffffff; stroke: #2f7fd4; stroke-width: 1.5; vector-effect: non-scaling-stroke; opacity: 0.4; }
+.sve-handle-hit { fill: transparent; }
+/* 闪动覆盖层颜色：CSS 变量一次切换（大量图层时不逐元素改色）
+   兜底值＝动画起始色 #FFFA01（黄）。旧值 #ff3b30（红）是更早那版三色动画的残留，
+   在「不带动画的刷新路径」下会露出来 → 2026-09-11 用户要求删掉：多余且容易出 bug。 */
+.sve-flash-fill { fill: var(--sve-flash-color, #FFFA01); }
+
+/* ===== 选中工具栏（图层面板右侧的竖列浮层，不占布局空间、不推动画布） ===== */
+#selToolbar { position: absolute; left: 108px; top: 2px; display: flex; flex-direction: column; gap: 6px; max-height: calc(100vh - var(--titlebar-h) - 100px); overflow-y: auto; overflow-x: hidden; align-items: stretch; background: var(--overlay-bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 6px; z-index: 6; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+#selToolbar button { white-space: nowrap; }
+/* 窗口偏矮时自动收紧键间距：17 键整条 703px 在 <803px 高的窗口里会溢出屏幕底；
+   间距 6->4 省 32px（按钮尺寸仍 34px 不变）。阈值取 812 而非 803：媒体查询在视口高度
+   边界有 ~6px 评估余量（实测 innerH=802 时 max-height:802px 仍为 false），留出余量可避免
+   796~803 这段既没收紧、又被 max-height 夹出一条滚动条 */
+@media (max-height: 812px) { #selToolbar { gap: 4px; } }
+#selToolbar::-webkit-scrollbar { width: 6px; }
+#selToolbar .st-sep { width: auto; height: 1px; margin: 2px 0; }
+#selToolbar .btn-group { display: flex; flex-direction: column; gap: 6px; }
+/* ★ 蒙版/图层、分组/取消分组：各自合并成一个按钮，按状态只露一个（用户 2026-09-21 要求）。
+   这里**完全由 CSS 驱动**，用的是按钮本来就有的 disabled 状态，JS 一行都不写。
+   为什么不用 JS 写 style.display：2026-09-21 实测，在 js/selection.js 的 updateSelToolbar 里
+   写 style.display 时，run-masktoggle 从 6/6 掉到 5/6 —— D 帧（点「切换为图层」后 1400ms）
+   与矢量真值差 11.497%，把等待加到 3600ms 才对上（0%）；去掉这几行写入即恢复 6/6。
+   改用 CSS 后该退化消失（run-masktoggle 复测 6/6）。 */
+#selToolbar #btnToMask:disabled { display: none; }   /* 全部已是蒙版 → 藏起「切换为蒙版」 */
+#selToolbar #btnToLayer:disabled { display: none; }  /* 没有蒙版     → 藏起「切换为图层」 */
+#selToolbar #btnSplit:disabled { display: none; }    /* 没有可拆分组 → 藏起「取消分组」 */
+/* 有可拆分组时藏起「创建新图层分组」（CSS 没法表达「另一个元素可用时隐藏我」，用 :has） */
+#selToolbar:has(#btnSplit:not(:disabled)) #btnMerge { display: none; }
+
+/* ===== 编辑模式工具栏 ===== */
+/* 两行布局：第 1 行模式键+方向指示，右端「完成」；第 2 行随模式切换
+   （大小：手柄显示 + 等比/自由；旋转/倾斜/透明度：编辑条+滑条；背景编辑：移除背景） */
+#editBar { position: absolute; top: 10px; left: 10px; display: flex; flex-direction: column; align-items: stretch; gap: 8px; background: var(--overlay-bg); border: 1px solid var(--border); padding: 8px 10px; border-radius: 8px; z-index: 5; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+.edit-modes { display: flex; gap: 6px; }
+.edit-modes button { display: flex; align-items: center; gap: 5px; }
+/* 完成与左侧按键群用编辑栏深色底的空隙隔开（推至行尾） */
+#btnFinish { margin-left: auto; }
+#editRow2 { display: flex; align-items: center; gap: 8px; }
+/* 等比/自由、移除背景：与同行左侧控件隔开（推至第 2 行行尾） */
+#btnPropMode { margin-left: auto; }
+#btnRemoveBg { margin-left: auto; }
+#editValueBox { display: flex; align-items: center; gap: 6px; }
+#editValueBox label { color: var(--dim); font-size: 12px; white-space: nowrap; }
+#editValueInput { width: 74px; }
+#editValueUnit { color: var(--dim); }
+#editValueRange { width: 110px; accent-color: var(--accent); }
+/* 编辑透明度滑条：自定义轨道，圆钮可贴到两端（去掉原生长出的一段） */
+#editValueRange { -webkit-appearance: none; appearance: none; height: 20px; background: transparent; cursor: pointer; }
+#editValueRange::-webkit-slider-runnable-track { height: 6px; background: #3a3e45; border-radius: 3px; }
+#editValueRange::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #ffffff; border: 2px solid var(--accent); margin-top: -4px; }
+/* 编辑模式调整速度滑条行 */
+#speedRow { display: flex; gap: 12px; align-items: center; }
+#speedRow label { display: flex; align-items: center; gap: 4px; color: var(--dim); font-size: 11px; white-space: nowrap; }
+#speedRow input[type="range"] { width: 70px; accent-color: var(--accent); padding: 0; height: 16px; }
+.sp-val { color: var(--text); font-size: 11px; min-width: 30px; }
+
+#loadingOverlay { position: absolute; inset: 0; background: rgba(18,19,22,.92); display: flex; align-items: center; justify-content: center; z-index: 20; }
+.loader-box { text-align: center; color: var(--text); font-size: 15px; line-height: 2; }
+
+#toast { position: absolute; bottom: 46px; left: 50%; transform: translateX(-50%); background: var(--card-bg); border: 1px solid var(--btn-border); padding: 8px 16px; border-radius: 16px; z-index: 30; box-shadow: 0 4px 12px rgba(0,0,0,.5); font-size: 12px; white-space: nowrap; }
+
+/* ===== 右侧面板 ===== */
+#rightPanel { width: 312px; min-width: 312px; background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; }
+/* ===== EvolveUI 页签切换（glider 滑块式） ===== */
+.ev-tabs-track {
+  display: flex; position: relative;
+  background-color: var(--panel2);
+  box-shadow: 0 0 1px 0 rgba(24,94,224,.1), 0 4px 12px 0 rgba(24,94,224,.08);
+  padding: 0.25rem;
+  border-radius: 99px;
+}
+.ev-tabs-track * { z-index: 2; }
+.ev-tabs-track input[type="radio"] { display: none; }
+.ev-tabs-track label {
+  display: flex; align-items: center; justify-content: center;
+  height: 30px; padding: 0 14px;
+  font-size: 12px; color: var(--dim); font-weight: 500;
+  border-radius: 99px; cursor: pointer;
+  transition: color .15s ease-in;
+  position: relative; z-index: 2;
+  white-space: nowrap;
+}
+.ev-tabs-track input:checked + label { color: var(--accent); font-weight: 600; }
+.ev-glider {
+  position: absolute;
+  height: 30px;
+  background: var(--card-bg);
+  z-index: 1;
+  border-radius: 99px;
+  transition: transform .25s cubic-bezier(.25,.9,.35,1), width .25s cubic-bezier(.25,.9,.35,1);
+  box-shadow: 0 1px 4px rgba(0,0,0,.12);
+}
+/* panelTabs 内的 ev-tabs 适配（去掉 border-bottom、填满宽度） */
+#panelTabs { border-bottom: none; }
+#panelTabs .ev-tabs { flex: 1; }
+#panelTabs .ev-tabs-track { width: 100%; }
+#panelTabs .ev-tabs-track label { flex: 1; }
+/* 旧 .tab 样式废弃（radio 替代） */
+
+#libTab { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+#libScroll { flex: 1; overflow-y: auto; padding: 4px 8px 14px; }
+
+/* ===== 图案库分组筛选下拉 ===== */
+.lib-filter-bar { position: sticky; top: 0; z-index: 5; padding: 6px 8px; background: var(--panel); }
+.lib-filter-btn { width: 100%; box-sizing: border-box; padding: 6px 12px; border-radius: 8px; background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text); font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: border-color .15s ease-out; }
+.lib-filter-btn:hover { border-color: var(--accent); }
+.lib-filter-panel { position: absolute; left: 8px; right: 8px; z-index: 10; background: var(--overlay-bg); border: 1px solid var(--btn-border); border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.3); max-height: 300px; overflow-y: auto; display: none; }
+.lib-filter-panel.open { display: block; animation: evDdIn .18s cubic-bezier(.25,.9,.35,1); }   /* 与软件其他下拉（.ev-dd-panel.ev-dd-open）同款：原写的 sveDropdownIn 全站未定义 → 动画静默失效 */
+.lib-filter-item { padding: 8px 14px; cursor: pointer; font-size: 12px; color: var(--text); transition: background-color .1s; }
+.lib-filter-item:hover { background: var(--btn-hover-bg); }
+.lib-filter-item.active { color: var(--accent); font-weight: 600; }
+
+.lib-cat { font-size: 12px; color: var(--dim); font-weight: 600; padding: 10px 2px 6px; position: sticky; top: 0; background: var(--panel); border-bottom: 1px solid var(--border); margin-bottom: 6px; z-index: 2; }
+.lib-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+/* 缩略图底：图案本体是**白色剪影**，底必须够深才看得清。
+   原先硬编码 #c8cbd2（浅色主题下白图案几乎看不见），改为主题变量。 */
+.lib-item { border: 1px solid var(--border); border-radius: 8px; padding: 5px; cursor: grab; text-align: center; background: var(--swatch-bg); }
+.lib-item:hover { border-color: var(--accent); }
+.lib-item img { width: 64px; height: 64px; object-fit: contain; pointer-events: none; display: block; margin: 0 auto; }
+.lib-item .lib-name { display: none; }
+#libScroll.replace-mode .lib-item { cursor: pointer; }
+#libScroll.replace-mode .lib-item:hover { background: var(--accent-sel-bg); }
+
+/* 子页签：彩绘纹饰形状 / 已保存的彩绘 */
+#libSubTabs { display: flex; border-bottom: 1px solid var(--border); flex: none; }
+.subtab { flex: 1; padding: 7px 0; background: none; border: none; color: var(--dim); cursor: pointer; font-size: 12px; border-bottom: 2px solid transparent; border-radius: 0; }
+.subtab:hover { background: none; }
+.subtab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+/* 已保存的彩绘面板 */
+#savedTab { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.saved-tools { display: flex; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); flex: none; }
+.saved-tools button { flex: 1; padding: 6px 4px; font-size: 12px; }
+#savedScroll { flex: 1; overflow-y: auto; padding: 8px; }
+.saved-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 7px; }
+.saved-item { border: 1px solid var(--border); border-radius: 8px; padding: 4px; cursor: grab; text-align: center; background: #c8cbd2; }
+.saved-item:hover { border-color: var(--accent); }
+.saved-item.selected { border-color: var(--accent); background: var(--accent-sel-bg); box-shadow: 0 0 0 1px var(--accent); }
+.saved-item img { width: 72px; height: 72px; object-fit: contain; pointer-events: none; display: block; margin: 0 auto; }
+.saved-item .saved-name { font-size: 10px; color: var(--dim); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-empty { color: var(--dim); font-size: 12px; padding: 20px 6px; text-align: center; line-height: 1.8; }
+
+/* 二次确认遮罩 */
+.confirm-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, .45); display: flex; align-items: center; justify-content: center; z-index: 120; }
+.confirm-overlay.hidden { display: none; }
+.confirm-box { background: var(--overlay-bg); border: 1px solid var(--btn-border); border-radius: 16px; padding: 20px 22px; max-width: 440px; box-shadow: 0 8px 32px rgba(0,0,0,.4) rgba(0, 0, 0, .5); }
+.confirm-msg { font-size: 13px; color: var(--text); margin-bottom: 14px; line-height: 1.6; word-break: break-all; }
+.confirm-btns { display: flex; justify-content: flex-end; gap: 8px; }
+.confirm-btns button { padding: 7px 18px; }
+.confirm-ok { background: #c0392b; }
+
+/* 历史工作锚点选择器 */
+.anchor-box { width: 380px; max-height: 70vh; display: flex; flex-direction: column; }
+.anchor-title { font-size: 13px; color: var(--text); margin-bottom: 10px; }
+.anchor-list { overflow-y: auto; flex: 1; max-height: 52vh; border: 1px solid #3a3e45; border-radius: 6px; }
+.anchor-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px; cursor: pointer; border-bottom: 1px solid var(--btn-border); font-size: 13px; }
+.anchor-item:hover { background: var(--accent-sel-bg); }
+.anchor-item .anchor-time { color: var(--text); }
+.anchor-item .anchor-name { color: var(--dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 恢复工作进程列表：每项左侧的图案缩略图（用户 2026-09-23 要求，与主页卡片同一套呈现）。
+   图片由 App.buildSvgFromAnchor → App.fzaSvgThumb 异步生成；生成好之前保持隐藏（.ready 才显示），
+   失败就一直不显示，不影响列表可用性。 */
+.anchor-item .anchor-thumb {
+  width: 44px; height: 44px; flex: none; border-radius: 4px;
+  background: var(--input-bg); border: 1px solid var(--btn-border);
+  object-fit: contain; display: none;
+}
+.anchor-item .anchor-thumb.ready { display: block; }
+.anchor-empty { color: var(--dim); font-size: 12px; padding: 16px; text-align: center; }
+.anchor-note { color: var(--dim); font-size: 11px; margin-top: 8px; }
+.anchor-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.anchor-btns button { padding: 7px 18px; }
+
+/* ===== 颜色面板 ===== */
+#colorTab { flex: 1; overflow-y: auto; padding: 10px; }
+.color-swatch-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+#colorSwatch { width: 44px; height: 44px; border: 1px solid var(--border); border-radius: 5px; flex: none; }
+#hexInput { width: 92px; font-family: Consolas, monospace; text-transform: uppercase; }
+#btnEye { padding: 6px 10px; }
+#colorWheel { display: block; margin: 0 auto 8px; border-radius: 50%; cursor: crosshair; border: 1px solid var(--border); }
+.slider-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.slider-label { width: 14px; color: var(--dim); flex: none; }
+.slider-row input[type="range"] { flex: 1; accent-color: var(--accent); padding: 0; height: 18px; }
+.slider-row input[type="number"] { width: 58px; flex: none; }
+.slider-row input[type="number"] { width: 58px; flex: none; }
+.fav-header { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 6px; font-size: 12px; color: var(--dim); }
+#favGrid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px; }
+.fav-swatch { aspect-ratio: 1; border: 1px solid #3a3e45; border-radius: 4px; cursor: pointer; position: relative; }
+.fav-swatch:hover { border-color: var(--accent); transform: scale(1.1); }
+.fav-del { position: absolute; top: -6px; right: -6px; width: 14px; height: 14px; background: #c0392b; color: #fff; border-radius: 50%; font-size: 10px; line-height: 14px; text-align: center; display: none; cursor: pointer; z-index: 1; }
+.fav-swatch:hover .fav-del, .hist-swatch:hover .fav-del { display: block; }
+.fav-empty { color: var(--dim); font-size: 11px; grid-column: 1 / -1; padding: 6px 0; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #3a3e45; border-radius: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ===== 图层栏 / 图案库滚动条：纯白加粗更显眼 ===== */
+#layerList::-webkit-scrollbar, #libScroll::-webkit-scrollbar { width: 12px; height: 12px; }
+#layerList::-webkit-scrollbar-thumb, #libScroll::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 6px; }
+#layerList::-webkit-scrollbar-thumb:hover, #libScroll::-webkit-scrollbar-thumb:hover { background: #7b828b; }
+#layerList::-webkit-scrollbar-track, #libScroll::-webkit-scrollbar-track { background: var(--panel); }
+
+/* ===== 选中工具栏分组 ===== */
+.st-sep { width: 1px; height: 16px; background: var(--border); margin: 0 2px; flex: none; }
+.btn-group { display: inline-flex; gap: 6px; flex-wrap: nowrap; }
+
+/* ===== 图层面板：无名字、图标居中、徽标覆盖 ===== */
+.layer-item { position: relative; justify-content: center; }
+
+/* ===== 图层栏首位「+」功能栏：不算图层、不参与多选与拖动排序 =====
+   独立类名 .layer-plus（不走 .layer-item）；作为 #layerList 的**第一个行**，
+   随图层栏一起上下滚动（不做 sticky/fixed —— 用户要求它就是一个可滚动的图层行） */
+.layer-plus { height: 72px; margin-bottom: 4px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 5px; border: 1px dashed var(--btn-border); background: var(--panel); cursor: pointer;
+  font-size: 30px; font-weight: 700; line-height: 1; color: var(--dim); user-select: none; }
+.layer-plus:hover { color: var(--text); background: var(--card-hover-bg); border-color: var(--accent); }
+.layer-plus.anchor { border-style: solid; border-color: #ffffff; box-shadow: 0 0 6px rgba(255,255,255,.7); color: var(--text); }
+.layer-item.drag-ghost { opacity: .35; }
+.layer-item.drop-before { box-shadow: 0 -2px 0 0 var(--accent); }
+.layer-item.drop-after { box-shadow: 0 2px 0 0 var(--accent); }
+.layer-badge { position: absolute; top: 0; right: 1px; }
+#dropIndicator { position: absolute; left: 4px; right: 4px; height: 2px; background: #ffffff; box-shadow: 0 0 4px rgba(255, 255, 255, .9); pointer-events: none; display: none; z-index: 6; }
+#dropIndicator.visible { display: block; }
+
+/* ===== 右侧面板：自适应 / 拖宽 / 最小化 ===== */
+#rightPanel { position: relative; min-width: 0; }
+#panelResizer { position: absolute; left: -5px; top: 0; bottom: 0; width: 9px; cursor: col-resize; z-index: 7; }
+#panelResizer:hover { background: rgba(78, 161, 255, .3); }
+#panelMinBtn { flex: 0 0 auto; width: 26px; padding: 4px 0; background: transparent; border: none; color: var(--dim); cursor: pointer; font-size: 12px; border-radius: 0; }
+#panelMinBtn:hover { background: #363a41; }
+#rightPanel.minimized { width: 30px !important; min-width: 30px !important; }
+#rightPanel.minimized .tab { display: none; }
+#rightPanel.minimized #libTab,
+#rightPanel.minimized #colorTab,
+#rightPanel.minimized #libSubTabs,
+#rightPanel.minimized #savedTab,
+#rightPanel.minimized #panelResizer { display: none; }
+
+/* ===== 图案库自适应网格（图标固定 64px） ===== */
+.lib-grid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+.lib-item img { height: 64px; aspect-ratio: 1 / 1; }
+
+/* ===== 颜色面板：应用按钮 / 历史颜色 ===== */
+.fav-header button { padding: 5px 10px; font-size: 12px; }
+.hist-header { margin: 6px 0; font-size: 12px; color: var(--dim); }
+#histGrid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px; margin-bottom: 4px; }
+.hist-swatch { aspect-ratio: 1; border: 1px solid #3a3e45; border-radius: 4px; cursor: pointer; position: relative; }
+.hist-swatch:hover { border-color: var(--accent); transform: scale(1.1); }
+
+/* ===== 右下角粘贴板 ===== */
+#clipboardPanel { position: absolute; right: 10px; bottom: 10px; width: 200px; background: var(--overlay-bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px; z-index: 6; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); }
+#cpThumbBox { height: 104px; display: flex; align-items: center; justify-content: center; border: 1px solid #3a3e45; border-radius: 4px; background: repeating-conic-gradient(#ffffff 0 25%, #d5d9de 0 50%) 0 0 / 12px 12px; overflow: hidden; }
+#cpThumbImg { max-width: 100%; max-height: 100%; object-fit: contain; }
+#cpCount { position: absolute; top: 6px; right: 10px; font-size: 11px; color: var(--dim); }
+
+/* ===== 背景按钮组（沿画布右上角边缘放置，两种模式都显示） ===== */
+#bgButtons { position: absolute; top: 0; right: 0; z-index: 5; display: flex; gap: 6px; align-items: flex-start; padding: 6px 8px; }
+#btnHideBg.disabled { opacity: .45; }
+#btnHideLayers.disabled { opacity: .45; }
+/* 竖向滑条列（图案显示透明度 / 背景图片显示透明度，同一套样式复用），下方小字标注 */
+.bg-opacity-col { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.bg-opacity-label { font-size: 10px; color: var(--dim); line-height: 1; }
+#bgOpacityRange, #bgOpacityBgRange { -webkit-appearance: none; appearance: none; writing-mode: vertical-lr; direction: rtl; height: 110px; width: 16px; background: transparent; cursor: pointer; margin: 0; padding: 0; }
+#bgOpacityRange::-webkit-slider-runnable-track, #bgOpacityBgRange::-webkit-slider-runnable-track { width: 6px; background: #3a3e45; border-radius: 3px; }
+#bgOpacityRange::-webkit-slider-thumb, #bgOpacityBgRange::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #ffffff; border: 2px solid var(--accent); margin-top: -4px; margin-left: -4px; }
+#bgOpacityRange:disabled, #bgOpacityBgRange:disabled { opacity: .4; cursor: default; }
+
+/* ===== 拖拽浮影 ===== */
+.drag-ghost-float { position: fixed; z-index: 200; pointer-events: none; width: 44px; height: 44px; background: var(--panel2); border: 1px solid var(--accent); border-radius: 4px; display: flex; align-items: center; justify-content: center; opacity: .9; box-shadow: 0 4px 12px rgba(0, 0, 0, .5); }
+.drag-ghost-float img { width: 40px; height: 40px; object-fit: contain; }
+
+/* ---------- 日志面板 ---------- */
+/* ⚠ 顶部是 fixed 到视口的，必须再加上标题栏高度，否则被 #titleBar 压住（UI 改良 C 项） */
+#logPanel { position: fixed; right: 12px; top: calc(var(--titlebar-h) + 44px); z-index: 60; width: 380px; background: var(--overlay-bg); border: 1px solid var(--btn-border); border-radius: 8px; padding: 10px 12px; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+#logPanel .lp-title { font-size: 13px; color: var(--text); margin-bottom: 8px; }
+#logPanel .lp-path { font-size: 11px; color: var(--dim); word-break: break-all; margin-bottom: 10px; user-select: text; }
+#logPanel .lp-btns { display: flex; gap: 8px; }
+#logPanel .lp-btns button { font-size: 12px; padding: 4px 10px; }
+
+/* ===== Forza 游戏菜单与弹层 ===== */
+#forzaMenuWrap { position: relative; flex: none; }
+#forzaMenu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 12; display: flex; flex-direction: column; gap: 2px; padding: 6px; min-width: 250px; background: var(--overlay-bg); border: 1px solid var(--btn-border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+#forzaMenu.hidden { display: none; }
+#forzaMenu button { text-align: left; white-space: nowrap; }
+.fza-box { max-width: 560px; max-height: 74vh; display: flex; flex-direction: column; }
+.fza-body { overflow-y: auto; margin: 8px 0; display: flex; flex-direction: column; gap: 4px; min-height: 60px; }
+/* 弹层按钮栏吸底：长列表（如分组选择）滚动时 确定/取消 始终固定在弹层底部可见，
+   不滚动到列表末尾也能点到（修复按钮被长列表顶出视野的问题） */
+.fza-body > .anchor-btns {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin-top: 4px;
+  padding-top: 10px;
+  background: #26282d;
+  box-shadow: 0 -10px 10px -8px rgba(0, 0, 0, .45);
+}
+.fza-row { align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fza-thumb { width: 48px; height: 48px; object-fit: contain; border-radius: 4px; border: 1px solid #3a3e45; background: #1c1e21; flex: none; }
+.fza-msg { white-space: pre-line; color: var(--text); font-size: 13px; margin-bottom: 10px; max-height: 40vh; overflow-y: auto; }
+.fza-body input { width: 340px; margin-top: 6px; }
+.anchor-item:hover { background: var(--card-hover-bg); }
+
+/* ===== 选择窗「多选」键 + 多选勾选标记 ===== */
+.anchor-title { display: flex; align-items: center; gap: 10px; }
+.fza-multi { margin-left: auto; flex: none; padding: 4px 12px; font-size: 12px; font-weight: 400;
+  border: 1px solid var(--btn-border); border-radius: 5px; background: var(--input-bg); color: var(--text); cursor: pointer; }
+.fza-multi:hover { background: #3a3e45; }
+.fza-multi.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.fza-check { flex: none; margin-left: 8px; color: #7fe08a; font-weight: 700; }
+
+/* ===== 首页（PS 风格最近使用项）：位于顶部标签栏下方，不遮挡标签栏 ===== */
+#homeOverlay { position: fixed; left: 0; right: 0; top: calc(var(--titlebar-h) + 34px); bottom: 0; z-index: 80; background: var(--overlay-bg); display: flex; flex-direction: column; color: var(--text); }
+#homeOverlay.hidden { display: none; }
+#homeMain { display: flex; flex: 1; overflow: hidden; }
+#homeRail { width: 190px; flex: none; display: flex; flex-direction: column; gap: 4px; padding: 14px 10px; background: var(--tabbar-bg); }
+#homeRail button { text-align: left; padding: 9px 14px; border: 1px solid transparent; border-radius: 6px; font-size: 14px; }
+#homeRail button.active { background: var(--accent-sel-bg); border-color: var(--accent); color: var(--text); }
+#homeRail button:hover { background: var(--card-hover-bg); }
+#homeContent { flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 18px 26px; min-width: 0; }
+#homeHead { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+#homeHead h2 { margin: 0; font-size: 24px; font-weight: 400; white-space: nowrap; }
+#homeTools { display: flex; gap: 8px; align-items: center; }
+#homeSearch { width: 240px; padding: 7px 10px; border: 1px solid var(--btn-border); border-radius: 6px; background: var(--input-bg); color: var(--text); font-size: 13px; }
+#homeSort { padding: 7px 8px; border: 1px solid var(--btn-border); border-radius: 6px; background: var(--input-bg); color: var(--text); }
+#homeTabs { display: flex; gap: 2px; margin: 14px 0 4px; border-bottom: 1px solid #3a3e45; }
+#homeTabs button { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 14px; color: var(--dim); font-size: 13px; }
+#homeTabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+#homeGrid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 14px; align-content: start; grid-auto-rows: max-content; padding: 12px 0 24px; }
+#homeGrid.hidden { display: none; }
+.home-card { background: var(--card-bg); border: 1px solid var(--btn-border); border-radius: 8px; overflow: hidden; cursor: pointer; transition: border-color .12s, background .12s; }
+.home-card:hover { border-color: var(--accent); background: var(--card-hover-bg); }
+.home-card-cover { aspect-ratio: 1 / 1; height: auto; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 700; color: rgba(255,255,255,.85); }
+.home-card-cover.cv-work { background: linear-gradient(135deg, #3a6ea5, #2c3e50); }
+.home-card-cover.cv-svg { background: linear-gradient(135deg, #b05c3a, #5c2c1e); }
+.home-card-name { padding: 8px 10px 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-card-meta { padding: 2px 10px 9px; font-size: 11px; color: var(--dim); }
+#homeEmpty { margin: 30px auto; color: var(--dim); }
+
+/* ===== 顶部多标签栏 ===== */
+/* 标签栏（浏览器式）：pill 与 ＋/设置键一起参与宽度预算，超出即等宽压缩，绝不横向溢出 */
+#tabBar { position: relative; z-index: 100; display: flex; align-items: stretch; gap: 4px; height: 34px; padding: 4px 10px; box-sizing: border-box; background: var(--tabbar-bg, #1f2125); border-bottom: 1px solid var(--border); overflow: hidden; flex: none; }
+.tab-pill { display: inline-flex; align-items: center; gap: 6px; background: var(--tab-pill-bg, #2a2d33); border: 1px solid var(--border); color: var(--text); border-radius: 6px 6px 0 0; padding: 3px 18px 3px 8px; font-size: 13px; cursor: pointer; white-space: nowrap; flex: 1 1 auto; min-width: 0; max-width: 220px; overflow: hidden; position: relative; }
+/* 主页保持原宽（不参与拉伸）；其余标签自然宽、上限 220px */
+#tabHome { flex: 0 0 auto; max-width: none; }
+/* 注：曾试过给 #tabHome 加房子图标 + 分隔线（更易与文档标签区分），但判据 P1-pills-equal-width
+   要求所有标签等宽，图标会让它宽出 8px —— 不为了美观去放宽既有质量线，维持纯文字。 */
+/* 宽度必须与其它标签一致（判据 P1-pills-equal-width 咬死）：图标 13px + gap 5px = 18px，
+   正好把 .tab-pill 原有的右内边距 18px 抵掉 —— 靠 padding-right:0 对齐，别再调别的间距。 */
+/* 压缩态：全部标签（含主页）等宽分摊剩余空间 */
+#tabBar[data-compressed="1"] .tab-pill { flex: 1 1 0; min-width: 0; max-width: none; }
+.tab-pill:hover { background: var(--tab-pill-hover-bg, #32363d); color: var(--text); }
+#tabBar .tab-pill:hover, #tabBar .tab-pill:active { transform: none !important; box-shadow: none !important; color: var(--text); }
+/* 标签 pill 不受全局按钮 hover 影响（不加 accent/ring/scale） */
+.tab-pill.active { background: var(--tab-pill-active-bg, #33383f); border-color: var(--accent); }
+.tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* 关闭 ×：绝对定位悬浮在标签右缘（不参与布局——出现/消失零回流，
+   不会把整栏标签挤一下）；右侧常驻预留区由 pill 的 padding-right 保证 */
+.tab-close { display: none; position: absolute; right: 3px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; line-height: 18px; text-align: center; border-radius: 4px; background: var(--tab-pill-active-bg, #33383f); color: var(--dim); }
+.tab-pill.active:hover .tab-close { display: block; }
+.tab-close:hover { background: var(--btn-hover-bg); color: var(--text); }
+/* 新建标签入场：淡入 + 轻微下落（addDoc 后 JS 给新 pill 加 tab-enter 类） */
+.tab-pill.tab-enter { animation: sveTabIn .18s ease-out; }
+@keyframes sveTabIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+/* 压缩到名称会与 × 重叠时：隐藏名称（tabs.js 加 hide-label 类） */
+.tab-pill.hide-label .tab-label { display: none; }
+#tabNewDoc, #btnSettings { flex: none; width: 28px; background: none; border: 1px dashed var(--border); color: var(--dim); border-radius: 6px; font-size: 16px; cursor: pointer; padding: 0; line-height: 1; }
+#btnSettings { margin-left: auto; }   /* 设置键始终固定在标签栏最右 */
+#tabNewDoc:hover, #btnSettings:hover { color: var(--text); border-color: var(--accent); }
+/* P2 悬停缩略图：盖住画布、与标签栏同层之上；空文档显示白色网格占位。
+   2026-09-12 用户两次报障：「鼠标停留在标签页时缩略图小」+「缩略图框的比例也要一比一啊」——
+   实测标签悬停框 180×120 比主页卡片封面 200×200 小一圈；现改为 **200×200 正方（1:1，与主页卡片一致）**，
+   并让图撑满框（同 .home-card-thumb 的 inset:0 口径，不再用"只缩不放"的 max-width/max-height）。 */
+#tabThumb { position: fixed; z-index: 110; width: 200px; height: 200px; box-sizing: border-box; background: repeating-conic-gradient(#ffffff 0 25%, #d5d9de 0 50%) 0 0 / 12px 12px; border: 1px solid #5a5e66; border-radius: 6px; padding: 4px; pointer-events: none; box-shadow: 0 4px 14px rgba(0, 0, 0, .4); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+#tabThumb img { position: absolute; inset: 4px; width: calc(100% - 8px); height: calc(100% - 8px); object-fit: contain; }
+#tabThumb .tab-thumb-grid { position: absolute; inset: 4px; background: repeating-conic-gradient(#ffffff 0 25%, #d5d9de 0 50%) 0 0 / 12px 12px; border: 1px solid #cfd3d8; }
+/* P3 设置面板 */
+.settings-box { min-width: 300px; }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 2px; }
+.settings-row label { color: var(--text); font-size: 13px; }
+.settings-row .settings-change { min-width: 72px; }
+
+/* ===== 编辑速率 / 微调速率窗口（画布上方中间；只在画布页面显示） ===== */
+#speedPanel { position: absolute; left: 0; right: 0; top: 16px; display: flex; justify-content: center; z-index: 40; pointer-events: none; }
+#speedPanel .speed-box {
+  pointer-events: auto; background: var(--overlay-bg); border: 1px solid var(--btn-border);
+  border-radius: 16px; padding: 14px 18px 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, .4);
+  backdrop-filter: var(--acrylic-blur); -webkit-backdrop-filter: var(--acrylic-blur);
+}
+#speedPanel:not(.hidden) { animation: sveFadeIn .14s ease-out; }
+.speed-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+.speed-row { display: flex; align-items: flex-end; gap: 12px; }
+.speed-cell { display: flex; flex-direction: column; gap: 5px; }
+.speed-label { font-size: 12px; color: var(--dim); }
+.speed-input { width: 78px; box-sizing: border-box; text-align: center; }
+.speed-input.speed-bad { border-color: #ff5b5b; }
+.speed-reset-row { display: flex; justify-content: flex-start; margin-top: 10px; }
+#speedPanel .anchor-btns { margin-top: 12px; }
+
+/* ===== 缩放锚点图标（原生 SVG；屏幕尺寸恒定，由 1/scale 反向缩放保证） ===== */
+.sve-anchor-icon { filter: drop-shadow(0 0 2px rgba(0, 0, 0, .85)); }
+.sve-anchor-icon path { stroke: #4ea1ff; stroke-width: 2; }
+.sve-anchor-icon .sve-anchor-dot { fill: #4ea1ff; stroke: #ffffff; stroke-width: 1; }
+.sve-anchor-arcs { transform-box: fill-box; transform-origin: center; }
+html[data-theme="light"] .sve-anchor-icon path { stroke: #1d6fd0; }
+html[data-theme="light"] .sve-anchor-icon .sve-anchor-dot { fill: #1d6fd0; stroke: #ffffff; }
+#btnPlaceAnchor.active { border-color: #4ea1ff; box-shadow: 0 0 6px rgba(78, 161, 255, .85); }
+#btnPlaceAnchor:disabled { opacity: .45; cursor: default; }
+
+/* ===== 焦点策略：鼠标点击不残留蓝框/焦点（杜绝 Enter 再次触发）；键盘 Tab 导航仍显示焦点环 ===== */
+button:focus, a:focus, select:focus, input:focus { outline: none; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ===== 主页左栏底部 Forza 功能坞（随主页显隐；rail 列内 push 到底部） ===== */
+#fzaDock { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; }
+#fzaDock button { text-align: left; white-space: nowrap; font-size: 12px; padding: 5px 10px; background: var(--overlay-bg); }
+#fzaDock button:hover { background: var(--card-hover-bg); }
+
+/* ===== 主页：选中卡片与操作条 ===== */
+.home-card.sel { border-color: var(--accent); background: var(--accent-sel-bg); box-shadow: 0 0 0 1px var(--accent) inset; }
+#homeSelBar { display: flex; align-items: center; gap: 10px; margin: 8px 0 0; min-height: 30px; transition: opacity .2s ease-out; }
+#homeSelBar.hidden { visibility: hidden; }
+#homeSelBar span { color: var(--dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+#homeSelBar button { flex: none; }
+/* 操作条分隔符（导入/刷新 与文件操作之间） */
+#homeSelBar .hs-sep { flex: none; width: 1px; height: 16px; max-width: none; background: var(--btn-border); margin: 0 2px; }
+.fza-svg-list { display: flex; flex-direction: column; gap: 4px; max-height: 46vh; overflow-y: auto; }
+.fza-empty { color: var(--dim); font-size: 12px; padding: 8px 2px; }
+
+/* 主页卡片封面：svg 内容缩略图铺满（棋盘底由 fzaSvgThumb 生成），占位字形垫底 */
+.home-card-cover { position: relative; overflow: hidden; width: 100%;
+  background: #1c1e21 repeating-conic-gradient(#ffffff 0 25%, #d5d9de 0 50%) 0 0 / 10px 10px; }
+.home-card-glyph { position: relative; z-index: 0; }
+.home-card-thumb { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; z-index: 1;
+  background-position: 0 0; }
+
+/* svg 缩略图加载成功后：只显示缩略图（透明底，棋盘格由 CSS 提供，不再烘焙进图里） */
+.home-card-cover.has-thumb { background: repeating-conic-gradient(#ffffff 0 25%, #d5d9de 0 50%) 0 0 / 10px 10px; }
+.home-card-cover.has-thumb .home-card-glyph { display: none; }
+
+/* 主页左栏：当前账户常驻下拉（同官方顶部选择器语义，纯文本标签） */
+.home-account-box { display: flex; flex-direction: column; gap: 3px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.home-account-box label { color: var(--dim); font-size: 11px; }
+#forzaAccountSel { width: 100%; padding: 5px 6px; border: 1px solid var(--btn-border); border-radius: 6px; background: var(--input-bg); color: var(--text); font-size: 12px; }
+
+/* 占位组列表行（对齐官方 72px 图 / 行高 82） */
+.fza-row { display: flex; align-items: center; gap: 10px; min-height: 82px; }
+.fza-thumb-box { position: relative; width: 72px; height: 72px; flex: none; }
+.fza-thumb { width: 72px; height: 72px; object-fit: contain; border-radius: 4px; border: 1px solid #3a3e45; background: #1c1e21; display: none; }
+.fza-thumb.loaded { display: block; background: repeating-conic-gradient(#ffffff 0 25%, #d5d9de 0 50%) 0 0 / 10px 10px; }
+.fza-thumb-fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 26px; color: var(--dim); background: #1c1e21; border: 1px solid #3a3e45; border-radius: 4px; }
+
+/* 官方 ChoiceDialog 同款：选中行高亮（蓝）+ 默认第一项 */
+.anchor-item.sel { background: #2e638f; color: #fff; }
+.anchor-item.sel:hover { background: #356ea1; }
+.anchor-item.sel .anchor-name { color: #fff; }
+
+/* 「+」栏打开窗：来源切换条（放在窗口上方） */
+.fza-src-bar { display: flex; gap: 6px; margin: 0 0 8px 0; }
+.fza-src-btn { padding: 4px 10px; border: 1px solid var(--btn-border); background: var(--input-bg); color: var(--text); border-radius: 4px; cursor: pointer; font-size: 12px; }
+
+/* ---------- 观赏性过渡动效 ----------
+   硬约束：#wheelBox 是屏幕位置恒定参照物，禁止加 transition/animation/transform；
+   弹窗入场用 @keyframes（display none→非 none 自动播放），不把初始态写成 opacity:0；
+   图层栏内不放滑动动效（用户 2026-09-11 要求：「取消图层栏内滑动的动画效果」）——「+」栏的 margin-top 瞬时到位。
+   弹窗关闭用 @keyframes 出场动画：JS 挂 .sve-closing → 动画播完 App.hideOverlay 再加 .hidden。 */
+/* 弹窗/覆盖层入场：淡入 + 轻微上浮缩放（#fzaOv 与各确认框都是 .confirm-overlay） */
+.confirm-overlay:not(.hidden) { animation: svePopIn .15s ease-out; }
+#homeOverlay:not(.hidden) { animation: sveFadeIn .16s ease-out; }
+@keyframes svePopIn {
+  from { opacity: 0; transform: translateY(6px) scale(.98); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes sveFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+/* 弹窗/覆盖层出场（关闭）：App.hideOverlay 挂 .sve-closing 播动画，动画结束后再加 .hidden。
+   放在入场规则之后（同特异性时后者生效），关闭期间屏蔽指针事件避免连点。 */
+.confirm-overlay.sve-closing { animation: svePopOut .13s ease-in forwards; pointer-events: none; }
+#homeOverlay.sve-closing { animation: sveFadeOut .14s ease-in forwards; pointer-events: none; }
+@keyframes svePopOut {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(4px) scale(.985); }
+}
+@keyframes sveFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+/* 「+」栏停靠/空态下移：位移保留（margin-top = plusRowH），但【不加 transition】——
+   用户 2026-09-11 要求取消图层栏内的滑动动效，故这里是瞬时到位 */
+
+/* 图层行 hover/选中反馈 */
+.layer-item { transition: background-color .1s ease-out, border-color .1s ease-out; }
+/* 库缩略图加载完成淡入 */
+.fza-thumb.loaded { animation: sveFadeIn .18s ease-out; }
+/* 主页卡片 hover 轻微上浮 + 阴影（既有 border/background 过渡保留并扩展） */
+.home-card { transition: border-color .12s, background .12s, transform .12s ease-out, box-shadow .12s ease-out; }
+.home-card:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0, 0, 0, .25); }
+/* toast 淡入 + 轻微上移（显示时长不变；keyframes 内保留水平居中位移） */
+#toast { animation: sveToastIn .16s ease-out; }
+@keyframes sveToastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to   { opacity: 1; transform: translateX(-50%); }
+}
+/* toast 出场（消失）：与弹窗同一套机制 —— App.hideOverlay 挂 .sve-closing 播动画，播完再加 .hidden。
+   放在入场规则之后（选择器多一个类名、特异性更高），关闭期间以出场动画为准。
+   keyframes 内保留 translateX(-50%) 的水平居中位移（与 sveToastIn 对称：自下淡入 / 向下淡出）。 */
+#toast.sve-closing { animation: sveToastOut .13s ease-in forwards; pointer-events: none; }
+@keyframes sveToastOut {
+  from { opacity: 1; transform: translateX(-50%); }
+  to   { opacity: 0; transform: translateX(-50%) translateY(6px); }
+}
+/* 切标签：画布区域淡入（与主页切换同款 sveFadeIn —— 用户 2026-09-12 要求
+   「给各个标签切换时也加上与主页切换时的动画吧」）。
+   只动 #canvasWrap 自身的 opacity：#wheelBox 在左侧图层栏内（屏幕位置恒定参照物），
+   图层栏、画布内容与视图都不碰。类名由 App.Tabs.flashCanvasIn() 挂上并在 400ms 后清掉。 */
+#canvasWrap.sve-tab-in { animation: sveFadeIn .16s ease-out; }
+
+/* ---------- P5 缩略图白网格占位 ----------
+   没有缩略图/没有图案时用白色网格（白底+浅灰格线），不再渲染「SVG」「作」大字；
+   已有真实缩略图时（has-thumb）网格隐藏，正常显示图。 */
+.home-card-cover .thumb-grid { position: absolute; inset: 0; background: repeating-conic-gradient(#ffffff 0 25%, #d5d9de 0 50%) 0 0 / 14px 14px; }
+.home-card-cover.has-thumb .thumb-grid { display: none; }
+.home-card-cover { position: relative; }
+.fza-thumb-fallback { background: repeating-conic-gradient(#ffffff 0 25%, #d5d9de 0 50%) 0 0 / 10px 10px; }
+.fza-src-btn.active { border-color: #4a8cff; background: var(--accent-sel-bg); color: var(--text); }
+
+/* ===== 2026-09-12 用户报障修复 =====
+   ①画布区比窗口高 34px（量到 #main 90+723=813 > 窗口 779），导致所有「贴画布底部」的浮层
+     （右下角粘贴板等贴底浮层）有一部分落在窗口外 → 用 flex 子项的 min-height:0 收紧；
+   ②粘贴板缩略图框 182×104 不是一比一 → 改成正方向居中的一比一框。 */
+#main { min-height: 0; overflow: hidden; }
+#canvasWrap { min-height: 0; height: 100%; }
+#cpThumbBox { width: 104px; height: 104px; margin: 0 auto; flex: none; }
+/* 2026-09-12 用户报障：粘贴板（剪切栏）的框比里面的预览图大出很多 → 收紧到贴合内容（不改内容与按钮） */
+#clipboardPanel { width: fit-content; min-width: 120px; max-width: 200px; }
+#clipboardPanel > * { max-width: 100%; }
+#cpThumbBox { width: 104px; height: 104px; margin: 0 auto; }
+/* ---------- 交互过渡动效（第二批复任务）：编辑进出/功能栏/子页签/右侧栏折叠 ---------- */
+:root { --ease-pop: cubic-bezier(.34,1.35,.4,1); --ease-glide: cubic-bezier(.4,.1,.3,1); }
+/* 左侧图层栏：收回只是视觉动画（transform 滑出+淡出，画布布局零变化不拉伸），
+   动画结束才按原逻辑 hidden 让位 */
+
+/* 编辑条：进入编辑从画布上方冒出；退出编辑缩回（sve-editbar-out 由 JS 延时后 hidden） */
+#editBar:not(.hidden) { animation: sveEditBarIn .24s var(--ease-pop); }
+#editBar.sve-editbar-out { animation: sveEditBarOut .2s ease-in forwards; }
+@keyframes sveEditBarIn { from { opacity: 0; transform: translateY(-18px); } to { opacity: 1; transform: none; } }
+@keyframes sveEditBarOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-14px); } }
+/* 选中功能栏：从图层栏方向滑入/滑回（JS 类驱动，高频调用安全） */
+#selToolbar.sve-bar-in { animation: sveBarIn .2s var(--ease-pop); }
+#selToolbar.sve-bar-out { animation: sveBarOut .18s ease-in forwards; }
+@keyframes sveBarIn { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+@keyframes sveBarOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(-12px); } }
+/* 右侧子页签切换（彩绘纹饰形状 ↔ 颜色）与编辑进出自动切换时的过渡 */
+#libTab:not(.hidden), #colorTab:not(.hidden), #savedTab:not(.hidden) { animation: sveTabSwap .2s var(--ease-pop); }
+@keyframes sveTabSwap { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+/* 右侧栏折叠/展开：宽度过渡——隐藏图层/隐藏背景按键与两个滑条由布局连续跟随画布边缘 */
+#rightPanel { transition: width .24s var(--ease-glide); }
+#rightPanel.sve-panel-anim { overflow: hidden; }
+
+/* 浅色模式：白框改黑框（浅背景上白框不可见） */
+html[data-theme="light"] #wheelBox { outline-color: #333; box-shadow: 0 0 6px rgba(0,0,0,.3); }
+/* ---------- SiUI 风格悬停提示（备用组件，App.siTipBind 绑定后生效） ---------- */
+#siTip { position: fixed; z-index: 300; pointer-events: none; background: var(--overlay-bg, #26282d); color: var(--text); border-radius: 6px; padding: 8px; font-size: 12px; box-shadow: 0 0 12px rgba(0, 0, 0, .5); opacity: 0; transition: opacity .15s ease-out; max-width: 320px; white-space: nowrap; }
+#siTip.si-tip-show { opacity: 1; }
+.si-tip-hl { position: absolute; inset: 0; border-radius: 6px; background: #ffffff; opacity: 0; pointer-events: none; }
+.si-tip-hl.si-tip-flash { animation: siTipFlash .35s ease-out; }
+@keyframes siTipFlash { from { opacity: .5; } to { opacity: 0; } }
+/* ============================================================
+   EvolveUI 设计语言覆盖层（独立文件夹专用，不影响主仓）
+   设计来源：EvolveUI-main/components/*.qml（MIT 许可证）
+   覆盖范围：按钮 / 输入框 / 滑条 / 弹窗 / 窗口背景 / toast /
+             页签 / 卡片 / 滚动条 / 覆盖层 / 工具栏 — 全组件
+   ============================================================ */
+
+/* ===== 全局过渡：所有交互元素 150ms 色彩过渡 ===== */
+button, input, select, .tab-pill, .lib-item, .saved-item, .home-card,
+.confirm-box, .settings-box, .layer-item, .tab-label, .anchor-item {
+  transition: background-color .15s ease-out,
+              border-color .15s ease-out,
+              color .15s ease-out,
+              box-shadow .15s ease-out,
+              transform .12s cubic-bezier(.34,1.35,.4,1);
+}
+
+/* ===== 按钮（EButton.qml：radius 20、按压缩放 0.96、弹簧回弹、阴影、粗体） ===== */
+button {
+  border-radius: 12px;
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0,0,0,.25), 0 0 0 1px rgba(255,255,255,.04) inset;
+}
+button:active {
+  transform: scale(.96);
+  opacity: .85;
+  box-shadow: none;
+}
+/* 弹簧回弹（释放时 CSS 近似 spring） */
+button:not(:active) {
+  transition: transform .25s cubic-bezier(.34,1.56,.64,1),
+              background-color .15s ease-out,
+              box-shadow .15s ease-out,
+              border-color .15s ease-out;
+}
+button:disabled { box-shadow: none; transform: none; }
+
+/* ===== 输入框（EInput.qml：radius 10、focus 边框 2px accent + 外发光） ===== */
+input, select {
+  border-radius: 10px;
+  border-width: 1px;
+  transition: border-color .15s ease-out,
+              border-width .16s cubic-bezier(.4,.1,.3,1),
+              box-shadow .15s ease-out,
+              background-color .15s ease-out;
+}
+input:focus, select:focus {
+  border-width: 2px;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent),
+              0 1px 4px rgba(0,0,0,.2);
+  outline: none;
+}
+
+/* ===== 滑条（ESlider.qml：track=secondaryColor、fill=focusColor、handle=textColor） ===== */
+input[type="range"] {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--panel2);
+  appearance: none;
+  border: none;
+  box-shadow: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 2px solid var(--accent);
+  box-shadow: 0 1px 4px rgba(0,0,0,.35);
+  cursor: grab;
+  transition: box-shadow .15s ease-out, transform .1s ease-out;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+input[type="range"]::-webkit-slider-thumb:active {
+  transform: scale(.9);
+  cursor: grabbing;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--text); border: 2px solid var(--accent);
+}
+
+/* ===== 弹窗 / 对话框（EAlertDialog.qml：radius 18、scale .92→1 OutBack、overlay 220ms） ===== */
+.confirm-box, .settings-box {
+  border-radius: 18px;
+  padding: 22px 24px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.06) inset;
+  animation: sveDialogIn .28s cubic-bezier(.34,1.4,.64,1);
+}
+@keyframes sveDialogIn {
+  from { opacity: 0; transform: scale(.92) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.confirm-overlay { transition: background-color .22s ease-out; }
+.confirm-overlay:not(.hidden) { background: rgba(0,0,0,.45); }
+.confirm-overlay.hidden { background: transparent; }
+
+/* 弹窗标题：20px 粗体 accent 色 */
+.confirm-box .anchor-title,
+.settings-box .anchor-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* 弹窗按钮行：右对齐、大间距 */
+.anchor-btns { gap: 10px; }
+.anchor-btns button { padding: 8px 20px; border-radius: 12px; font-weight: 600; }
+
+/* ===== Toast（EToast.qml：radius 16、y-offset ±12、OutCubic 220ms、shadow） ===== */
+#toast {
+  border-radius: 16px;
+  padding: 12px 20px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.06) inset;
+  font-size: 13px;
+}
+#toast.si-toast-enter { animation: sveToastEnter .22s cubic-bezier(.25,.9,.35,1); }
+#toast.si-toast-exit  { animation: sveToastExit .2s ease-in forwards; }
+@keyframes sveToastEnter { from { opacity: 0; transform: translateX(-50%) translateY(-12px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+@keyframes sveToastExit  { from { opacity: 1; transform: translateX(-50%) translateY(0); } to { opacity: 0; transform: translateX(-50%) translateY(-12px); } }
+
+/* ===== 卡片（ECard.qml：radius 20、padding 15、shadow） ===== */
+.home-card {
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+}
+.home-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,.3);
+  transform: translateY(-2px);
+}
+
+/* ===== 页签 pill（圆角加大 + 活跃标签 accent 下划线） ===== */
+.tab-pill { border-radius: 8px 8px 0 0; }
+.tab-pill.active { border-bottom: 2px solid var(--accent); }
+.tab-pill.hide-label .tab-label { opacity: 0; }
+
+/* ===== 面板 / 工具栏 / 覆盖层（统一使用 EvolveUI 暗灰色系） ===== */
+#toolbar, #leftPanel, #rightPanel {
+  box-shadow: none;
+}
+#toolbar { border-bottom: 1px solid var(--border); }
+#rightPanel { border-left: 1px solid var(--border); }
+
+/* ===== 滚动条（SiUI：radius 4、8px 轨道、主题色 thumb） ===== */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 4px; opacity: .5; }
+::-webkit-scrollbar-thumb:hover { background: var(--text); }
+#layerList::-webkit-scrollbar-thumb, #libScroll::-webkit-scrollbar-thumb {
+  background: var(--dim); border-radius: 4px;
+}
+
+/* ===== 覆盖层 / 主页 ===== */
+#homeOverlay { backdrop-filter: blur(0px); }
+.home-card-cover { border-radius: 12px 12px 0 0; }
+.home-card-name { font-weight: 600; }
+
+/* ===== 编辑条（进入编辑从上方弹出的动画增强版：弹性缓动） ===== */
+#editBar:not(.hidden) { animation: sveEditBarIn .28s cubic-bezier(.34,1.4,.64,1); }
+@keyframes sveEditBarIn {
+  from { opacity: 0; transform: translateY(-16px) scale(.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ===== 选中功能栏（滑入动画增强：弹性） ===== */
+#selToolbar.sve-bar-in { animation: sveBarIn .22s cubic-bezier(.34,1.35,.4,1); }
+@keyframes sveBarIn {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ===== 子页签切换（过渡增强） ===== */
+#libTab:not(.hidden), #colorTab:not(.hidden), #savedTab:not(.hidden) {
+  animation: sveTabSwap .22s cubic-bezier(.25,.9,.35,1);
+}
+@keyframes sveTabSwap {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ===== 徽章 / 小标签（圆角统一） ===== */
+.layer-badge, .mask-badge, .tab-badge {
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+/* ===== 设置面板（EvolveUI 风格） ===== */
+.settings-box { border-radius: 18px; }
+.settings-row label { font-weight: 600; }
+
+/* ===== 对话框按钮（勾/叉图标按钮加大触控区） ===== */
+.anchor-btns button { min-width: 80px; }
+
+/* ===== 焦点环统一（accent 色 3px 外发光） ===== */
+button:focus-visible, input:focus-visible, select:focus-visible,
+.tab-pill:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* ===== 链接色 / 可点击文本 ===== */
+a, [data-clickable] { color: var(--accent); cursor: pointer; }
+
+
+/* ===== EvolveUI 风格下拉（主页排序/账户选择） ===== */
+.ev-dd-wrap { position: relative; display: inline-block; }
+.ev-dd-btn {
+  padding: 7px 12px; border-radius: 10px;
+  background: var(--btn-bg); border: 1px solid var(--btn-border);
+  color: var(--text); font-size: 12px; cursor: pointer;
+  display: flex; align-items: center; gap: 6px;
+  transition: border-color .15s ease-out, background-color .15s ease-out;
+  font-weight: 600;
+}
+.ev-dd-btn:hover { border-color: var(--accent); }
+.ev-dd-btn.ev-dd-active { border-color: var(--accent); }
+.ev-dd-btn::after { content: '▾'; font-size: 10px; color: var(--dim); }
+.ev-dd-panel {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 100;
+  background: var(--overlay-bg); border: 1px solid var(--btn-border);
+  border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.3);
+  max-height: 240px; overflow-y: auto;
+  display: none;
+}
+.ev-dd-panel.ev-dd-open { display: block; animation: evDdIn .18s cubic-bezier(.25,.9,.35,1); }
+@keyframes evDdIn { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: none; } }
+.ev-dd-item {
+  padding: 8px 14px; cursor: pointer; font-size: 12px; color: var(--text);
+  transition: background-color .1s ease-out;
+}
+.ev-dd-item:hover { background: var(--btn-hover-bg); }
+.ev-dd-item.active { color: var(--accent); font-weight: 600; }
+
+/* ===== 亚克力（Acrylic）材质：除标签栏和画布外全面板覆盖 ===== */
+:root {
+  --acrylic-bg: rgba(29, 29, 29, .78);
+  --acrylic-blur: blur(24px) saturate(125%);
+  --acrylic-border: rgba(255, 255, 255, .08);
+}
+html[data-theme="light"] {
+  --acrylic-bg: rgba(248, 250, 253, .78);
+  --acrylic-border: rgba(0, 0, 0, .06);
+}
+#toolbar { background: var(--acrylic-bg) !important; backdrop-filter: var(--acrylic-blur); -webkit-backdrop-filter: var(--acrylic-blur); border-bottom: 1px solid var(--acrylic-border); }
+#leftPanel { background: var(--acrylic-bg) !important; backdrop-filter: var(--acrylic-blur); -webkit-backdrop-filter: var(--acrylic-blur); border-right: 1px solid var(--acrylic-border); }
+#rightPanel { background: var(--acrylic-bg) !important; backdrop-filter: var(--acrylic-blur); -webkit-backdrop-filter: var(--acrylic-blur); border-left: 1px solid var(--acrylic-border); }
+#selToolbar { background: var(--acrylic-bg) !important; backdrop-filter: var(--acrylic-blur); -webkit-backdrop-filter: var(--acrylic-blur); border: 1px solid var(--acrylic-border); }
+#editBar { background: var(--acrylic-bg) !important; backdrop-filter: var(--acrylic-blur); -webkit-backdrop-filter: var(--acrylic-blur); border: 1px solid var(--acrylic-border); }
+#clipboardPanel { background: var(--acrylic-bg) !important; backdrop-filter: var(--acrylic-blur); -webkit-backdrop-filter: var(--acrylic-blur); border: 1px solid var(--acrylic-border); }
+#logPanel { background: var(--acrylic-bg) !important; backdrop-filter: var(--acrylic-blur); -webkit-backdrop-filter: var(--acrylic-blur); border: 1px solid var(--acrylic-border); }
+#shortcutPanel { background: var(--acrylic-bg) !important; backdrop-filter: var(--acrylic-blur); -webkit-backdrop-filter: var(--acrylic-blur); border: 1px solid var(--acrylic-border); }
+.confirm-box, .settings-box, .help-box { background: var(--acrylic-bg) !important; backdrop-filter: var(--acrylic-blur); -webkit-backdrop-filter: var(--acrylic-blur); border: 1px solid var(--acrylic-border); }
+#homeRail { background: var(--acrylic-bg) !important; backdrop-filter: var(--acrylic-blur); -webkit-backdrop-filter: var(--acrylic-blur); }
+#homeOverlay { background: var(--acrylic-bg) !important; backdrop-filter: var(--acrylic-blur); -webkit-backdrop-filter: var(--acrylic-blur); }
+#tabBar { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+/* 自绘标题栏（UI 改良 C 项）：与 #tabBar 同处顶部 chrome，用同一底色不参与亚克力模糊，
+   避免拖动窗口时模糊层重绘造成的边缘条纹。 */
+#titleBar { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+#canvasWrap { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+
+
+
+/* ===== 功能栏图标按钮（Fluent 图标 + 悬停显示原文案） =====
+   图标取自 PyQt-SiliconUI 内置 Fluent 图标包（fill=currentColor），
+   定义见 js/fluent-icons.js；原文案保留在按钮内 .ti-lbl（隐藏，
+   textContent 不变，按文案断言的判据不受影响），悬停由 App.siTipBind
+   在鼠标右上角显示替换前的原文案。 */
+.sve-icon-btn {
+  padding: 6px;
+  min-width: 34px;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sve-icon-btn svg { width: 20px; height: 20px; display: block; }
+.sve-icon-btn .ti-lbl { display: none; }
+
+/* ===== 顶部工具栏图标按钮（Fluent 图标 + 悬停显示原文案） =====
+   定义见 js/toolbar-icons.js。类名与左侧功能栏的 .sve-icon-btn **刻意分开**：
+   判据 run-toolbaricons.js 的 C7 断言「全页 .sve-icon-btn 恰好 17 个、且都不得越出 #selToolbar」，
+   顶部工具栏若复用那个类名会立刻把判据打红。 */
+.tbi-icon-btn {
+  padding: 6px;
+  min-width: 34px;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tbi-icon-btn svg { width: 20px; height: 20px; display: block; flex: none; }
+.tbi-icon-btn .tbi-lbl { display: none; }
+
+/* ===== 弹窗右上角统一关闭键（×） =====
+   由 App.attachDlgClose（js/util.js）动态插到 .anchor-title / .speed-title **之后**，
+   与标题同为 .confirm-box 的直接子元素（见那里的注释：放标题里面会被 textContent 重写冲掉）。
+   用绝对定位贴到窗体右上角 —— 不参与文档流，所以标题怎么重写、内容多高、
+   有没有 .anchor-btns 都不影响它的位置，比负 margin / flex 靠得住。
+   尺寸与 #layerPickOv .lp-close 对齐，几个窗看起来才是同一套。 */
+.confirm-box, .speed-box { position: relative; }
+.dlg-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0;
+  line-height: 20px;
+  font-size: 16px;
+  border-radius: 6px;
+  box-shadow: none;
+  color: var(--dim);
+}
+.dlg-close:hover { color: var(--text); }
+/* 标题右侧留出 × 的位置，长标题不会被压到按钮底下 */
+.confirm-box > .anchor-title, .speed-box > .speed-title { padding-right: 28px; }
+
+/* ===== 工具栏「快捷键」圆形按钮 + 悬停提示 =====
+   样式取自用户给定的 FAQ 按钮（50px → 现为 34 的 2/3）；配色 2026-09-15 按用户要求
+   改为跟随主题强调色 var(--accent)（深色 #4ea1ff / 浅色 #00A89A），不再写死 147deg #ffe53b→#ff2525；
+   白色图标、悬停 jello-vertical 抖动 + 气泡提示（带小箭头）。气泡 #scTip 仍为黄红渐变（未改）。
+   z-index 提到 50：否则后面的 #main（position:relative）会盖住气泡。 */
+/* 不设 z-index：一旦建层叠上下文，气泡就永远压不过 z-index:100 的 #tabBar */
+#btnShortcuts {
+  position: relative;
+  /* 尺寸 = 左侧竖向功能栏按键（.sve-icon-btn 的 34×34）的 2/3 ≈ 22.67px */
+  width: calc(34px * 2 / 3);
+  height: calc(34px * 2 / 3);
+  flex: none;
+  border: none;
+  padding: 0;
+  border-radius: 50%;
+  /* 配色跟随主题强调色（深色 #4ea1ff 蓝 / 浅色 #00A89A 青），不再写死黄红渐变 */
+  background-color: var(--accent);
+  background-image: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .25);
+}
+#btnShortcuts svg { width: calc(18px * 2 / 3); height: calc(18px * 2 / 3); fill: #fff; }
+/* 悬停不再改色（原为黄红渐变覆盖）：配色统一走 --accent，悬停反馈由 svg 的 jello 动画承担 */
+#btnShortcuts:hover svg { animation: scJelloVertical .7s both; }
+#btnShortcuts:active { transform: scale(.96); }
+@keyframes scJelloVertical {
+  0%   { transform: scale3d(1, 1, 1); }
+  30%  { transform: scale3d(.75, 1.25, 1); }
+  40%  { transform: scale3d(1.25, .75, 1); }
+  50%  { transform: scale3d(.85, 1.15, 1); }
+  65%  { transform: scale3d(1.05, .95, 1); }
+  75%  { transform: scale3d(.95, 1.05, 1); }
+  100% { transform: scale3d(1, 1, 1); }
+}
+/* 悬停气泡：挂在 <body> 上（见 js/shortcuts.js 注释——#toolbar 的 backdrop-filter
+   会建层叠上下文，挂按钮内部永远被 #tabBar 遮挡）。fixed + translate(-50%,-100%)
+   让气泡底边落在按钮上方 8px，位置由 JS 按按钮 rect 计算。 */
+#scTip {
+  position: fixed;
+  z-index: 105;   /* > #tabBar(100) 不被标签栏遮挡；< #tabThumb(110) */
+  transform: translate(-50%, -80%);
+  opacity: 0;
+  background-color: #ffe53b;
+  background-image: linear-gradient(147deg, #ffe53b 0%, #ff2525 74%);
+  color: #fff;
+  padding: 5px 10px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity .18s ease-out, transform .18s cubic-bezier(.34,1.35,.4,1);
+  pointer-events: none;
+  letter-spacing: .5px;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.2;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
+}
+#scTip.sc-tip-show { opacity: 1; transform: translate(-50%, -100%); }
+#scTip::before {
+  position: absolute;
+  content: "";
+  width: 10px;
+  height: 10px;
+  background-color: #ff2525;
+  transform: rotate(45deg);
+  bottom: -4px;
+}
+
+/* ===== 快捷键面板（与 #logPanel 同一套窗口语言，随深浅主题自动切换） =====
+   只使用主题变量 --overlay-bg / --btn-border / --text / --dim，
+   所以 html[data-theme="light"] 下自动变浅色，无需额外覆盖。 */
+#shortcutPanel {
+  position: fixed;
+  right: 12px;
+  /* ⚠ 同 #logPanel：fixed 到视口，要加上标题栏高度（UI 改良 C 项） */
+  top: calc(var(--titlebar-h) + 44px);
+  z-index: 70;
+  width: 460px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - var(--titlebar-h) - 92px);
+  display: flex;
+  flex-direction: column;
+  background: var(--overlay-bg);
+  border: 1px solid var(--btn-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .4);
+  color: var(--text);
+}
+#shortcutPanel .sc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; margin-bottom: 8px; }
+#shortcutPanel .sc-title { font-size: 13px; color: var(--text); font-weight: 600; }
+#shortcutPanel .sc-close { font-size: 12px; padding: 3px 10px; }
+#shortcutPanel .sc-body { flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; }
+#shortcutPanel .sc-group { margin-bottom: 12px; }
+#shortcutPanel .sc-group:last-child { margin-bottom: 2px; }
+#shortcutPanel .sc-group-title { font-size: 12px; font-weight: 600; color: var(--accent); margin: 0 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+#shortcutPanel .sc-row { display: flex; align-items: baseline; gap: 10px; padding: 3px 0; }
+#shortcutPanel .sc-keys { flex: none; width: 168px; display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+#shortcutPanel .sc-keys kbd { background: var(--btn-border); color: var(--text); border-radius: 3px; padding: 1px 5px; font-size: 11px; font-family: inherit; white-space: nowrap; }
+#shortcutPanel .sc-plus { color: var(--dim); font-size: 11px; }
+#shortcutPanel .sc-desc { flex: 1; font-size: 12px; color: var(--dim); line-height: 1.5; }
+html[data-theme="light"] #shortcutPanel .sc-keys kbd { color: var(--text); }
+
+/* ===== 标签栏「设置」按钮：紫色三横条 + 悬停圆点对滑 =====
+   样式取自用户给定的片段；原片段是 45×45，但标签栏整条只有 34px 高
+   （padding 4px → 内容区 26px），放不下 → 按同类元素尺寸等比缩到 26px：
+   圆角 10→6、gap 6→3、圆点偏移 ±4→±2。
+   用 #tabBar #btnSettings 提高特异性，压过上面的
+   `#tabNewDoc, #btnSettings {...}` 与全局 `button:hover`。 */
+#tabBar #btnSettings {
+  flex: none;
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background-color: rgb(129, 110, 216);
+  border: none;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgb(212, 209, 255);
+  cursor: pointer;
+}
+#tabBar #btnSettings:hover {
+  background-color: rgb(129, 110, 216);
+  box-shadow: 0 0 0 2px rgb(212, 209, 255);
+  color: #fff;
+}
+#tabBar #btnSettings .bar {
+  width: 55%;
+  height: 2px;
+  background-color: rgb(229, 229, 229);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border-radius: 2px;
+}
+#tabBar #btnSettings .bar::before {
+  content: "";
+  width: 2px;
+  height: 2px;
+  background-color: rgb(126, 117, 255);
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid #fff;
+  transition: all .3s;
+  box-shadow: 0 0 3px #fff;
+}
+#tabBar #btnSettings .bar1::before { transform: translateX(-2px); }
+#tabBar #btnSettings .bar2::before { transform: translateX(2px); }
+#tabBar #btnSettings:hover .bar1::before { transform: translateX(2px); }
+#tabBar #btnSettings:hover .bar2::before { transform: translateX(-2px); }
+
+/* ===== 设置窗内的「自定义快捷键」视图（与设置主视图同一个窗，互斥切换） ===== */
+.settings-box.km-mode { width: 470px; }
+#settingsKeyView { display: flex; flex-direction: column; min-height: 0; }
+.settings-box .km-hint { font-size: 11px; color: var(--dim); line-height: 1.5; margin-bottom: 8px; }
+.settings-box .km-scroll {
+  overflow-y: auto; max-height: 46vh; min-height: 120px;
+  border: 1px solid var(--btn-border); border-radius: 10px; padding: 8px 10px;
+}
+.settings-box .km-group { margin-bottom: 10px; }
+.settings-box .km-group:last-child { margin-bottom: 0; }
+.settings-box .km-group-title {
+  font-size: 12px; font-weight: 600; color: var(--accent);
+  margin: 0 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--border);
+}
+.settings-box .km-row { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
+.settings-box .km-label { flex: 1; font-size: 12px; color: var(--text); line-height: 1.5; }
+.settings-box .km-keys { flex: none; display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; max-width: 190px; }
+.settings-box .km-key {
+  display: inline-flex; align-items: center; gap: 3px; justify-content: center;
+  min-width: 36px; padding: 2px 7px; font-size: 11px; border-radius: 6px; box-shadow: none;
+}
+.settings-box .km-key kbd { background: transparent; padding: 0; font-size: 11px; }
+.settings-box .km-key.km-capturing {
+  border-color: var(--accent); background: var(--accent-sel-bg);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.settings-box .km-key.km-capturing:hover { background: var(--accent-sel-bg); color: var(--text); }
+.settings-box .km-key .km-esc { font-size: 10px; color: var(--dim); }
+.settings-box .km-warn { margin-top: 8px; font-size: 11px; color: #e05252; line-height: 1.5; }
+.settings-box .km-reset { min-width: 72px; }
+
+/* 快捷键视图顶部的选项行（第一个是「画布拖动使用空格」开关） */
+.settings-box .km-opt-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 2px 2px 10px; margin-bottom: 10px; border-bottom: 1px solid var(--border);
+}
+.settings-box .km-opt-label { color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; }
+/* 开关：原生 checkbox 藏起来，用 track 画滑轨 + ::after 当滑块 */
+.sve-switch { position: relative; flex: none; display: inline-flex; align-items: center; cursor: pointer; }
+.sve-switch input { position: absolute; width: 1px; height: 1px; opacity: 0; margin: 0; pointer-events: none; }
+.sve-switch-track {
+  position: relative; display: block; width: 38px; height: 21px; border-radius: 11px;
+  background: var(--switch-off); transition: background-color .16s ease;
+}
+.sve-switch-track::after {
+  content: ''; position: absolute; top: 2.5px; left: 2.5px; width: 16px; height: 16px;
+  border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+  transition: transform .16s var(--ease-pop);
+}
+.sve-switch input:checked + .sve-switch-track { background: var(--accent); }
+.sve-switch input:checked + .sve-switch-track::after { transform: translateX(17px); }
+.sve-switch input:focus-visible + .sve-switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ===== 画布右键「此处的图层」选择器 =====
+   满屏透明捕获层（点窗外即关）+ 光标旁的浮窗；入场/出场用 @keyframes
+   （项目约定：弹层动效一律 keyframes，不靠 opacity:0 假装可见） */
+#layerPickOv { position: fixed; inset: 0; z-index: 118; }
+#layerPickOv.hidden { display: none !important; }
+#layerPickOv .lp-box {
+  position: fixed; min-width: 200px; max-width: 320px;
+  background: var(--overlay-bg); border: 1px solid var(--btn-border); border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  padding: 8px 8px 6px; display: flex; flex-direction: column;
+  backdrop-filter: var(--acrylic-blur); -webkit-backdrop-filter: var(--acrylic-blur);
+  animation: lpIn .16s var(--ease-pop);
+}
+#layerPickOv.sve-closing { pointer-events: none; }
+#layerPickOv.sve-closing .lp-box { animation: lpOut .12s ease-in forwards; }
+@keyframes lpIn { from { opacity: 0; transform: scale(.94) translateY(-4px); } to { opacity: 1; transform: none; } }
+@keyframes lpOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(.96) translateY(-3px); } }
+#layerPickOv .lp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 2px 6px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+#layerPickOv .lp-title { font-size: 12px; font-weight: 600; color: var(--accent); }
+#layerPickOv .lp-close {
+  width: 20px; height: 20px; min-width: 20px; padding: 0; line-height: 18px;
+  font-size: 15px; border-radius: 5px; box-shadow: none; flex: none;
+}
+/* 行高用变量统一口径：列表恰好露出 3 行，第 4 行起靠滚轮翻（用户要求） */
+#layerPickOv { --lp-row-h: 66px; --lp-gap: 3px; }
+#layerPickOv .lp-list {
+  overflow-y: auto;
+  max-height: calc(3 * var(--lp-row-h) + 2 * var(--lp-gap));
+  display: flex; flex-direction: column; gap: var(--lp-gap);
+  overscroll-behavior: contain;   /* 滚到头不要把滚动传给画布 */
+}
+#layerPickOv .lp-row {
+  display: flex; align-items: center; gap: 9px; padding: 4px 6px; min-height: var(--lp-row-h);
+  border-radius: 8px; cursor: pointer; border: 1px solid transparent;
+  transition: background-color .12s ease-out, border-color .12s ease-out;
+}
+#layerPickOv .lp-row:hover { background: var(--card-hover-bg); border-color: var(--btn-border); }
+#layerPickOv .lp-row.sel { background: var(--accent-sel-bg); border-color: var(--accent); }
+#layerPickOv .lp-thumb {
+  width: 56px; height: 56px; flex: none; border: 1px solid var(--btn-border); border-radius: 5px;
+  background: repeating-conic-gradient(#ffffff 0 25%, #d5d9de 0 50%) 0 0 / 10px 10px;
+}
+#layerPickOv .lp-thumb img { width: 100%; height: 100%; object-fit: contain; display: none; }
+#layerPickOv .lp-thumb.has-img img { display: block; }
+#layerPickOv .lp-meta { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+#layerPickOv .lp-name { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
+#layerPickOv .lp-badge { flex: none; background: var(--btn-border); border-radius: 3px; padding: 1px 5px; font-size: 11px; color: var(--dim); }
+#layerPickOv .lp-badge.lp-mask { background: #4a3a1f; color: #e8c46a; }
+
+/* ===== 帮助模式（右键顶部 ? 进入；点按钮看说明；Esc 或右键别处退出） ===== */
+/* 整屏鼠标变问号光标：进入模式后一眼能看出「现在点按钮不是执行、是看说明」 */
+body.sve-help-mode, body.sve-help-mode * { cursor: help !important; }
+/* 入口按钮自身高亮，表明「已经进入帮助模式」 */
+#btnShortcuts.sve-help-armed {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.16), 0 0 12px var(--accent);
+}
+/* 底部提示条：常驻、不拦指针，位置避开画布右上角的按钮群与右下角剪贴板面板 */
+#helpHint {
+  position: fixed; left: 50%; bottom: 16px; z-index: 400;
+  transform: translateX(-50%) translateY(8px);
+  background: var(--overlay-bg); border: 1px solid var(--btn-border); border-radius: 999px;
+  padding: 6px 16px; font-size: 12px; line-height: 1.4; color: var(--text);
+  box-shadow: 0 4px 18px rgba(0,0,0,.4); pointer-events: none;
+  opacity: 0; transition: opacity .16s var(--ease-pop), transform .16s var(--ease-pop);
+}
+#helpHint.sve-show { opacity: 1; transform: translateX(-50%); }
+/* 帮助说明窗：铺满全屏的遮罩 + 居中卡片（与其它弹窗同一套观感） */
+#helpOv {
+  position: fixed; inset: 0; z-index: 300;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.34);
+}
+#helpOv.hidden { display: none; }
+#helpOv:not(.hidden) { animation: sveHelpIn .16s var(--ease-pop); }
+#helpOv.sve-closing { opacity: 0; transition: opacity .13s ease-in; pointer-events: none; }
+@keyframes sveHelpIn { from { opacity: 0; } to { opacity: 1; } }
+.help-box {
+  position: relative; width: 440px; max-width: calc(100vw - 60px); max-height: 70vh; overflow: auto;
+  border-radius: 16px; padding: 18px 20px 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.45);
+}
+.help-title { font-size: 15px; font-weight: 600; color: var(--text); padding-right: 30px; margin-bottom: 8px; }
+.help-body { font-size: 13px; line-height: 1.75; color: var(--text); white-space: pre-line; }
+.help-foot { margin-top: 14px; display: flex; justify-content: flex-end; }
+
+/* 弹窗右下角的浮动帮助键（见 js/help.js）：
+   弹窗遮罩 .confirm-overlay 是 z-index 120，会把顶部工具栏的 ? 盖住 ——
+   所以弹窗开着时在软件右下角补一个同款 ?，弹窗一关就自动收起。
+   z-index 必须高于 120（否则自己也点不到），但低于 #helpOv 的 300（读说明时不必再露脸）。 */
+#helpFab {
+  position: fixed; right: 16px; bottom: 16px; z-index: 130;
+  /* 尺寸与顶部 ? 一致（.sve-icon-btn 的 34×34 的 2/3） */
+  width: calc(34px * 2 / 3); height: calc(34px * 2 / 3);
+  flex: none; border: none; padding: 0; border-radius: 50%;
+  background-color: var(--accent); color: #fff;
+  font: inherit; font-size: calc(18px * 2 / 3); font-weight: 700; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .4);
+}
+#helpFab svg { width: calc(18px * 2 / 3); height: calc(18px * 2 / 3); fill: #fff; }
+#helpFab.hidden { display: none; }
+#helpFab:hover svg { animation: scJelloVertical .7s both; }
+#helpFab:active { transform: scale(.96); }
+#helpFab.sve-help-armed { box-shadow: 0 0 0 2px rgba(255,255,255,.2), 0 0 14px var(--accent); }

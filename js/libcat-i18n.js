@@ -1,0 +1,116 @@
+/* ---------- 素材库（画布右侧「彩绘纹饰」图案栏）分组名词典 ----------
+   与 js/i18n.js 同机制：加载时并入 App.i18n.dicts，切语言时由「重建素材面板」重刷器生效。
+   分组 id 是稳定数据键（由 assets/FH6_Vinyl_Symbols.svg 的 inkscape:label 分类段映射而来，
+   见 js/library.js 的 App.LIB_CAT_MAP）：14–35 已按用户要求两两合并成 11 组字体；
+   「填充图案」组按用户要求隐藏，词条仍保留，放开 App.LIB_HIDE_PATTERN_GROUP 即可复用。 */
+App.LIB_CAT_I18N = {
+  'zh-CN': {
+    'lib.cat.all': '全部分组',
+    'lib.cat.01': '基本形状',
+    'lib.cat.02': '社区彩绘纹饰1',
+    'lib.cat.03': '社区彩绘纹饰2',
+    'lib.cat.04': '社区彩绘纹饰3',
+    'lib.cat.05': '社区彩绘纹饰4',
+    'lib.cat.06': '渐层变化',
+    'lib.cat.07': '条纹风格',
+    'lib.cat.08': '狂野豪迈',
+    'lib.cat.09': '赛车图标',
+    'lib.cat.10': '火焰图腾',
+    'lib.cat.11': '水彩泼洒',
+    'lib.cat.12': '部落图腾',
+    'lib.cat.13': '自然景象',
+    'lib.cat.font1': '字体1', 'lib.cat.font2': '字体2', 'lib.cat.font3': '字体3',
+    'lib.cat.font4': '字体4', 'lib.cat.font5': '字体5', 'lib.cat.font6': '字体6',
+    'lib.cat.font7': '字体7', 'lib.cat.font8': '字体8', 'lib.cat.font9': '字体9',
+    'lib.cat.font10': '字体10', 'lib.cat.font11': '字体11',
+    'lib.cat.pattern': '填充图案'
+  },
+  'zh-TW': {
+    'lib.cat.all': '全部分組',
+    'lib.cat.01': '基本形狀',
+    'lib.cat.02': '社群彩繪紋飾1',
+    'lib.cat.03': '社群彩繪紋飾2',
+    'lib.cat.04': '社群彩繪紋飾3',
+    'lib.cat.05': '社群彩繪紋飾4',
+    'lib.cat.06': '漸層變化',
+    'lib.cat.07': '條紋風格',
+    'lib.cat.08': '狂野豪邁',
+    'lib.cat.09': '賽車圖標',
+    'lib.cat.10': '火焰圖騰',
+    'lib.cat.11': '水彩潑灑',
+    'lib.cat.12': '部落圖騰',
+    'lib.cat.13': '自然景象',
+    'lib.cat.font1': '字型1', 'lib.cat.font2': '字型2', 'lib.cat.font3': '字型3',
+    'lib.cat.font4': '字型4', 'lib.cat.font5': '字型5', 'lib.cat.font6': '字型6',
+    'lib.cat.font7': '字型7', 'lib.cat.font8': '字型8', 'lib.cat.font9': '字型9',
+    'lib.cat.font10': '字型10', 'lib.cat.font11': '字型11',
+    'lib.cat.pattern': '填充圖案'
+  },
+  'en': {
+    'lib.cat.all': 'All Groups',
+    'lib.cat.01': 'Basic Shapes',
+    'lib.cat.02': 'Community Vinyl 1',
+    'lib.cat.03': 'Community Vinyl 2',
+    'lib.cat.04': 'Community Vinyl 3',
+    'lib.cat.05': 'Community Vinyl 4',
+    'lib.cat.06': 'Gradient Shapes',
+    'lib.cat.07': 'Stripes',
+    'lib.cat.08': 'Wild & Bold',
+    'lib.cat.09': 'Racing Icons',
+    'lib.cat.10': 'Flames',
+    'lib.cat.11': 'Paint Splats',
+    'lib.cat.12': 'Tribal',
+    'lib.cat.13': 'Nature',
+    'lib.cat.font1': 'Font 1', 'lib.cat.font2': 'Font 2', 'lib.cat.font3': 'Font 3',
+    'lib.cat.font4': 'Font 4', 'lib.cat.font5': 'Font 5', 'lib.cat.font6': 'Font 6',
+    'lib.cat.font7': 'Font 7', 'lib.cat.font8': 'Font 8', 'lib.cat.font9': 'Font 9',
+    'lib.cat.font10': 'Font 10', 'lib.cat.font11': 'Font 11',
+    'lib.cat.pattern': 'Fill Patterns'
+  },
+  'ja': {
+    'lib.cat.all': 'すべてのグループ',
+    'lib.cat.01': '基本図形',
+    'lib.cat.02': 'コミュニティビニール1',
+    'lib.cat.03': 'コミュニティビニール2',
+    'lib.cat.04': 'コミュニティビニール3',
+    'lib.cat.05': 'コミュニティビニール4',
+    'lib.cat.06': 'グラデーション',
+    'lib.cat.07': 'ストライプ',
+    'lib.cat.08': 'ワイルド',
+    'lib.cat.09': 'レーシングアイコン',
+    'lib.cat.10': '炎',
+    'lib.cat.11': 'ペイントしぶき',
+    'lib.cat.12': 'トライバル',
+    'lib.cat.13': '自然',
+    'lib.cat.font1': 'フォント1', 'lib.cat.font2': 'フォント2', 'lib.cat.font3': 'フォント3',
+    'lib.cat.font4': 'フォント4', 'lib.cat.font5': 'フォント5', 'lib.cat.font6': 'フォント6',
+    'lib.cat.font7': 'フォント7', 'lib.cat.font8': 'フォント8', 'lib.cat.font9': 'フォント9',
+    'lib.cat.font10': 'フォント10', 'lib.cat.font11': 'フォント11',
+    'lib.cat.pattern': '塗りつぶしパターン'
+  },
+  'ko': {
+    'lib.cat.all': '전체 그룹',
+    'lib.cat.01': '기본 도형',
+    'lib.cat.02': '커뮤니티 비닐 1',
+    'lib.cat.03': '커뮤니티 비닐 2',
+    'lib.cat.04': '커뮤니티 비닐 3',
+    'lib.cat.05': '커뮤니티 비닐 4',
+    'lib.cat.06': '그라데이션',
+    'lib.cat.07': '스트라이프',
+    'lib.cat.08': '와일드',
+    'lib.cat.09': '레이싱 아이콘',
+    'lib.cat.10': '불꽃',
+    'lib.cat.11': '페인트 튀김',
+    'lib.cat.12': '트라이벌',
+    'lib.cat.13': '자연',
+    'lib.cat.font1': '폰트 1', 'lib.cat.font2': '폰트 2', 'lib.cat.font3': '폰트 3',
+    'lib.cat.font4': '폰트 4', 'lib.cat.font5': '폰트 5', 'lib.cat.font6': '폰트 6',
+    'lib.cat.font7': '폰트 7', 'lib.cat.font8': '폰트 8', 'lib.cat.font9': '폰트 9',
+    'lib.cat.font10': '폰트 10', 'lib.cat.font11': '폰트 11',
+    'lib.cat.pattern': '채우기 패턴'
+  }
+};
+/* 并入主词典（i18n.js 先加载） */
+Object.keys(App.LIB_CAT_I18N).forEach(function (lang) {
+  if (App.i18n.dicts[lang]) Object.assign(App.i18n.dicts[lang], App.LIB_CAT_I18N[lang]);
+});

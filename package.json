@@ -1,0 +1,57 @@
+{
+  "name": "fh6-vinyl-group-editor",
+  "version": "1.0.0",
+  "description": "SVG vinyl pattern editor (Electron)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win",
+    "dist:dir": "electron-builder --win --dir"
+  },
+  "build": {
+    "appId": "com.fh6vinylgroup.editor",
+    "productName": "FH6 Vinyl Group Editor",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "update-check.js",
+      "auto-name.js",
+      "workcopy-store.js",
+      "keymap.js",
+      "dlg-i18n.js",
+      "preload.js",
+      "index.html",
+      "js/**/*",
+      "css/**/*",
+      "assets/**/*",
+      "icons/**/*",
+      "!css/**/*.bak*",
+      "!*.bak*",
+      "!icons/*-prev*.ico",
+      "!icons/electron-default.ico"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icons/app-icon.ico"
+    },
+    "portable": {
+      "artifactName": "FH6-Vinyl-Group-Editor.exe"
+    },
+    "artifactName": "FH6-Vinyl-Group-Editor-${version}-${arch}.${ext}"
+  },
+  "devDependencies": {
+    "electron": "^43.4.0",
+    "electron-builder": "^26.15.3"
+  },
+  "repository": "https://github.com/KlaraStellaa/fh6-vinyl-group-editor",
+  "license": "MIT"
+}

@@ -1,0 +1,203 @@
+/* ============================================================
+   EvolveUI 全组件 CSS 备用库
+   来源：EvolveUI-main/components/*.qml（MIT 许可证）
+   行为参数逐文件提取后以 CSS 等价实现。
+   使用方式：index.html 中在 style.css 之后引入本文件即可。
+   ============================================================ */
+
+/* ===== 全局设计令牌 ===== */
+:root {
+  --ev-accent: #00C4B3;
+  --ev-accent-light: #00C4B333;
+  --ev-radius-btn: 12px;
+  --ev-radius-card: 16px;
+  --ev-radius-dialog: 18px;
+  --ev-radius-input: 10px;
+  --ev-radius-toast: 16px;
+  --ev-radius-tooltip: 6px;
+  --ev-shadow-btn: 0 1px 4px rgba(0,0,0,.25), 0 0 0 1px rgba(255,255,255,.04) inset;
+  --ev-shadow-card: 0 2px 8px rgba(0,0,0,.2);
+  --ev-shadow-dialog: 0 8px 32px rgba(0,0,0,.45);
+  --ev-shadow-tooltip: 0 2px 8px rgba(0,0,0,.35);
+  --ev-ease-pop: cubic-bezier(.34,1.35,.4,1);
+  --ev-ease-out: cubic-bezier(.25,.9,.35,1);
+  --ev-ease-spring: cubic-bezier(.34,1.56,.64,1);
+  --ev-ease-glide: cubic-bezier(.4,.1,.3,1);
+  --ev-transition-color: background-color .15s ease-out, border-color .15s ease-out, color .15s ease-out;
+  --ev-transition-transform: transform .12s cubic-bezier(.34,1.35,.4,1);
+}
+
+/* ===== 按钮（EButton.qml）=====
+   radius 20、hover=darker(1.2)、press=scale(.96)+opacity .85、
+   release=Spring(spring 2.5,damping .25)、shadow、bold、150ms 色彩过渡 */
+.ev-btn {
+  border: none;
+  border-radius: var(--ev-radius-btn);
+  font-weight: 600;
+  padding: 8px 18px;
+  cursor: pointer;
+  box-shadow: var(--ev-shadow-btn);
+  transition: var(--ev-transition-color), var(--ev-transition-transform);
+}
+.ev-btn:hover { filter: brightness(.88); }
+.ev-btn:active { transform: scale(.96); opacity: .85; }
+.ev-btn:not(:active) { transition: transform .25s cubic-bezier(.34,1.56,.64,1), var(--ev-transition-color); }
+.ev-btn:disabled { opacity: .4; box-shadow: none; transform: none; }
+
+/* ===== 输入框（EInput.qml）=====
+   radius 10、focus:border-width 2 + accent 色 + 外发光、150ms 色彩过渡 */
+.ev-input {
+  border-radius: var(--ev-radius-input);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  font-size: 14px;
+  transition: border-color .15s ease-out, border-width .16s cubic-bezier(.4,.1,.3,1), box-shadow .15s ease-out;
+}
+.ev-input:focus {
+  border-width: 2px;
+  border-color: var(--ev-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ev-accent) 18%, transparent);
+  outline: none;
+}
+
+/* ===== 滑条（ESlider.qml）=====
+   track=secondaryColor、fill=focusColor(#00C4B3)、handle=textColor+accent border */
+.ev-slider {
+  appearance: none; height: 6px; border-radius: 3px;
+  background: var(--panel2);
+  cursor: pointer;
+}
+.ev-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--text); border: 2px solid var(--ev-accent);
+  box-shadow: 0 1px 4px rgba(0,0,0,.35);
+  transition: box-shadow .15s, transform .1s;
+}
+.ev-slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+.ev-slider::-webkit-slider-thumb:active { transform: scale(.9); cursor: grabbing; }
+
+/* ===== 开关（ESwitchButton.qml）=====
+   track radius 20、thumb=focusColor(#00C4B3)、press scale .96、Spring 回弹 */
+.ev-switch {
+  position: relative; width: 48px; height: 24px;
+  border-radius: 20px;
+  background: var(--panel2);
+  cursor: pointer;
+  transition: background-color .2s ease-out;
+}
+.ev-switch::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--ev-accent);
+  transition: transform .2s var(--ev-ease-pop);
+}
+.ev-switch.ev-switch-on { background: var(--ev-accent-light); }
+.ev-switch.ev-switch-on::after { transform: translateX(24px); }
+
+/* ===== 复选框（ECheckBox.qml）=====
+   选中时 accent 底 + 白色对勾图标 */
+.ev-checkbox {
+  width: 20px; height: 20px;
+  border-radius: 6px;
+  border: 2px solid var(--border);
+  transition: background-color .15s, border-color .15s;
+}
+.ev-checkbox.ev-checkbox-on { background: var(--ev-accent); border-color: var(--ev-accent); }
+
+/* ===== 对话框（EAlertDialog.qml）=====
+   overlay rgba(0,0,0,.45) 220ms OutCubic、卡片 radius 18 scale .92→1 OutBack */
+.ev-dialog-overlay {
+  position: fixed; inset: 0; z-index: 2000;
+  background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity .22s cubic-bezier(.25,.9,.35,1);
+}
+.ev-dialog-card {
+  width: 420px; max-width: 90vw;
+  border-radius: var(--ev-radius-dialog);
+  padding: 20px 22px;
+  box-shadow: var(--ev-shadow-dialog);
+  transition: opacity .22s cubic-bezier(.25,.9,.35,1), scale .22s cubic-bezier(.34,1.4,.64,1);
+}
+.ev-dialog-overlay.ev-dialog-opening .ev-dialog-card {
+  animation: evDialogIn .28s cubic-bezier(.34,1.4,.64,1);
+}
+@keyframes evDialogIn {
+  from { opacity: 0; scale: .92; }
+  to   { opacity: 1; scale: 1; }
+}
+
+/* ===== Toast（EToast.qml）=====
+   radius 16、enter y-12→0 OutCubic 220ms、exit y0→-12 InCubic 200ms、duration 2200ms */
+.ev-toast {
+  border-radius: var(--ev-radius-toast);
+  padding: 12px 20px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
+  font-size: 14px;
+  max-width: 420px;
+}
+.ev-toast.ev-toast-enter { animation: evToastEnter .22s cubic-bezier(.25,.9,.35,1); }
+@keyframes evToastEnter { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+
+/* ===== 卡片（ECard.qml）=====
+   radius 20、padding 15、shadow */
+.ev-card {
+  border-radius: var(--ev-radius-card);
+  padding: 15px;
+  box-shadow: var(--ev-shadow-card);
+}
+
+/* ===== 抽屉（EDrawer.qml）=====
+   radius 24、panelWidth 300、从右滑入、shadow */
+.ev-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 300px; z-index: 1500;
+  border-radius: 24px 0 0 24px;
+  padding: 15px;
+  box-shadow: -4px 0 16px rgba(0,0,0,.3);
+  transform: translateX(100%);
+  transition: transform .28s var(--ev-ease-glide);
+}
+.ev-drawer.ev-drawer-open { transform: translateX(0); }
+
+/* ===== 悬停提示（tooltip.py）=====
+   radius 6、padding 8、跟随鼠标右上角（x+4,y-height）、文本刷新闪高光 */
+.ev-tooltip {
+  position: fixed; z-index: 3000; pointer-events: none;
+  border-radius: var(--ev-radius-tooltip);
+  padding: 8px;
+  box-shadow: var(--ev-shadow-tooltip);
+  opacity: 0;
+  transition: opacity .15s ease-out;
+}
+.ev-tooltip.ev-tooltip-show { opacity: 1; }
+.ev-tooltip .ev-tip-hl {
+  position: absolute; inset: 0; border-radius: inherit;
+  background: #fff; opacity: 0;
+}
+.ev-tooltip .ev-tip-hl.ev-tip-flash { animation: evTipFlash .35s ease-out; }
+@keyframes evTipFlash { from { opacity: .5; } to { opacity: 0; } }
+
+/* ===== 下拉菜单（EDropdown.qml）=====
+   弹出时 scale .95→1 + fade，200ms OutCubic */
+.ev-dropdown {
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.3);
+  animation: evDropdownIn .18s cubic-bezier(.25,.9,.35,1);
+}
+@keyframes evDropdownIn { from { opacity: 0; transform: scale(.95) translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* ===== 进度条（EFitnessProgress.qml 风格）===== */
+.ev-progress {
+  height: 8px; border-radius: 4px;
+  background: var(--panel2); overflow: hidden;
+}
+.ev-progress-fill {
+  height: 100%; border-radius: 4px;
+  background: var(--ev-accent);
+  transition: width .3s var(--ev-ease-glide);
+}
+
+/* ===== 分隔线 ===== */
+.ev-divider { height: 1px; background: var(--border); margin: 10px 0; }

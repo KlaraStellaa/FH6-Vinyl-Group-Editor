@@ -1,0 +1,33 @@
+# Git 换行符与二进制处理规则
+# ============================================================
+# ★ 为什么必须有这个文件：
+#   Git 默认会在提交时把 CRLF 转成 LF。而本项目的 start.bat 是给用户
+#   **双击运行**的 —— .bat 一旦变成 LF 换行（或含非 ASCII），cmd 解析会错位，
+#   典型症状是「双击后黑框一闪就没了、什么都不发生」。
+#   所以必须显式锁定 .bat/.cmd 为 CRLF。
+# ============================================================
+
+# 默认：按 LF 存储、按 LF 检出
+#   （本项目源码本来就用 LF，统一成 LF 才不会让工作区文件"集体变样"）
+* text=auto eol=lf
+
+# Windows 批处理：强制 CRLF，且不做任何换行转换
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制文件：绝不转换（避免 Git 误判为文本而破坏文件）
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.exe  binary
+*.dll  binary
+*.node binary
+*.7z   binary
+*.zip  binary
+*.gz   binary
+*.ttf  binary
+*.woff binary
+*.woff2 binary

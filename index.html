@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' app: data: blob:; style-src 'self' 'unsafe-inline'; img-src 'self' app: data: blob:; script-src 'self'; connect-src 'self' app: data: blob:">
+<title data-i18n="app.title">FH6 Vinyl Group Editor</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/evolve-components.css">
+  <link rel="stylesheet" href="css/thumb-loader.css">
+</head>
+<body>
+<!-- 自绘标题栏（UI 改良 C 项）：main.js 已 frame:false，这里补上窗口控制键。
+     整条是拖动区（CSS: -webkit-app-region: drag），三个按钮在 CSS 里显式 no-drag。
+     标题文字由 js/titlebar.js 从既有 <title data-i18n="app.title"> 读取，不新增品牌名。 -->
+<div id="titleBar">
+  <div class="titlebar-drag">
+    <span class="titlebar-appicon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" focusable="false"><path d="M12 2.6 4.2 7v10L12 21.4 19.8 17V7L12 2.6Zm0 2.3 5.8 3.3v6.6L12 18.1 6.2 14.8V8.2L12 4.9Zm0 3.4a3.7 3.7 0 1 0 0 7.4 3.7 3.7 0 0 0 0-7.4Z" fill="currentColor"/></svg>
+    </span>
+    <span id="titleBarTitle" data-i18n="app.title">FH6 Vinyl Group Editor</span>
+  </div>
+  <div class="titlebar-btns">
+    <button id="winMin" type="button" class="titlebar-btn" data-i18n="win.minimize" data-i18n-attr="aria-label" aria-label="最小化" title="最小化"></button>
+    <button id="winMax" type="button" class="titlebar-btn" data-i18n="win.maximize" data-i18n-attr="aria-label" aria-label="最大化" title="最大化"></button>
+    <button id="winClose" type="button" class="titlebar-btn titlebar-btn-close" data-i18n="win.close" data-i18n-attr="aria-label" aria-label="关闭窗口" title="关闭窗口"></button>
+  </div>
+</div>
+<div id="tabBar"></div>
+<div id="toolbar">
+  <div id="toolbarBtns">
+    <button id="btnOpen" data-i18n="toolbar.open">打开 SVG 文件</button>
+    <button id="btnSave" data-i18n="toolbar.save">保存 SVG</button>
+    <button id="btnSaveWork" data-i18n="toolbar.saveWork">保存工作进程</button>
+    <button id="btnHistAnchor" data-i18n="toolbar.histAnchor">恢复工作进程</button>
+    <span class="tb-sep"></span>
+    <button id="btnBase" data-i18n="toolbar.baseLight">背景：灰白</button>
+    <button id="btnGrid" data-i18n="toolbar.gridOn">网格：开</button>
+    <button id="btnZoomWheel" data-i18n="toolbar.zoomOn">滚轮缩放：开</button>
+    <button id="btnShortcuts" data-i18n="toolbar.shortcutsAria" data-i18n-attr="aria-label" aria-label="查看快捷键">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512" aria-hidden="true">
+        <path d="M80 160c0-35.3 28.7-64 64-64h32c35.3 0 64 28.7 64 64v3.6c0 21.8-11.1 42.1-29.4 53.8l-42.2 27.1c-25.2 16.2-40.4 44.1-40.4 74V320c0 17.7 14.3 32 32 32s32-14.3 32-32v-1.4c0-8.2 4.2-15.8 11-20.2l42.2-27.1c36.6-23.6 58.8-64.1 58.8-107.7V160c0-70.7-57.3-128-128-128H144C73.3 32 16 89.3 16 160c0 17.7 14.3 32 32 32s32-14.3 32-32zm80 320a40 40 0 1 0 0-80 40 40 0 1 0 0 80z"/>
+      </svg>
+    </button>
+    <span class="bg-tools">
+      <button id="btnOpenImage" data-i18n="toolbar.openImage">打开背景图片文件</button>
+      <button id="btnBgImage" data-i18n="toolbar.bgNone">背景图片：未设置</button>
+    </span>
+  </div>
+</div>
+<div id="main">
+  <div id="leftPanel">
+    <div class="panel-title" data-i18n="panel.layers">图层</div>
+    <div id="layerWrap">
+      <div id="layerList"></div>
+      <div id="wheelBox" class="hidden"></div>
+    </div>
+    <div id="totalCount">图案总数：0</div>
+  </div>
+
+  <div id="selToolbar" class="hidden">
+    <button id="btnEditPos" data-i18n="sel.editPos">编辑位置</button>
+    <button id="btnEditColor" data-i18n="sel.editColor">改变颜色</button>
+    <button id="btnReplace" data-i18n="sel.replace">更换图案</button>
+    <button id="btnToMask" data-i18n="sel.toMask">切换为蒙版</button>
+    <button id="btnToLayer" data-i18n="sel.toLayer">切换为图层</button>
+    <button id="btnFlipH" data-i18n="sel.flipH">水平翻转</button>
+    <button id="btnFlipV" data-i18n="sel.flipV">垂直翻转</button>
+    <span class="st-sep"></span>
+    <span class="btn-group">
+      <button id="btnMerge" data-i18n="sel.merge">创建新图层分组</button>
+      <button id="btnSplit" data-i18n="sel.split">取消分组</button>
+    </span>
+    <button id="btnCut" data-i18n="sel.cut">剪切</button>
+    <button id="btnCopy" data-i18n="sel.copy">复制</button>
+    <button id="btnDelete" data-i18n="sel.delete">删除</button>
+    <button id="btnSelectAll" data-i18n="sel.selectAll">高亮所有图层</button>
+    <button id="btnClearSel" data-i18n="sel.clearSel">取消高亮所有图层</button>
+    <button id="btnSavePalette" data-i18n="sel.savePalette">保存</button>
+    <button id="btnDeleteAll" data-i18n="sel.deleteAll">删除所有图层</button>
+    <button id="btnLocateLayer" data-i18n="sel.locateLayer">定位图层位置</button>
+  </div>
+
+  <div id="canvasWrap">
+    <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
+      <defs id="appDefs"></defs>
+      <rect id="gridRect" x="0" y="0" width="10" height="10" fill="url(#sveGridP)" pointer-events="none"></rect>
+      <g id="bgG"></g>
+      <g id="layersRoot"></g>
+      <g id="overlayG">
+        <g id="flashG"></g>
+        <g id="outlineG"></g>
+        <g id="handleG"></g>
+        <!-- 缩放锚点图标：文档坐标定位 + 1/scale 反向缩放 → 屏幕上恒定尺寸；不拦截指针 -->
+        <g id="anchorG" pointer-events="none"></g>
+      </g>
+    </svg>
+
+    <div id="editBar" class="hidden">
+      <div class="edit-modes">
+        <button data-mode="move" class="active" data-i18n="edit.mode.move" data-i18n-keep="1"><kbd>1</kbd>移动</button>
+        <button data-mode="size" data-i18n="edit.mode.size" data-i18n-keep="1"><kbd>2</kbd>大小</button>
+        <button data-mode="rotate" data-i18n="edit.mode.rotate" data-i18n-keep="1"><kbd>3</kbd>旋转</button>
+        <button data-mode="skew" data-i18n="edit.mode.skew" data-i18n-keep="1"><kbd>4</kbd>倾斜</button>
+        <button data-mode="opacity" data-i18n="edit.mode.opacity" data-i18n-keep="1"><kbd>5</kbd>透明度</button>
+        <button id="btnFinish" data-i18n="edit.finish">完成</button>
+      </div>
+      <div id="editRow2">
+        <button id="btnShowHandles" class="hidden" data-i18n="edit.handlesOn">手柄显示：开</button>
+        <button id="btnAxisHint" class="hidden" data-i18n="edit.axisOn">方向指示：开</button>
+        <button id="btnPlaceAnchor" class="hidden" data-i18n="edit.anchorPlace">放置锚点</button>
+        <button id="btnPropMode" class="hidden" data-i18n="edit.propRatio">等比</button>
+        <div id="editValueBox" class="hidden">
+          <label id="editValueLabel" data-i18n="edit.label.rotate">旋转角度</label>
+          <input id="editValueInput" type="number" step="0.5">
+          <span id="editValueUnit">°</span>
+          <input type="range" id="editValueRange" min="-180" max="180" step="0.5" value="0" class="hidden">
+        </div>
+        <button id="btnRemoveBg" class="hidden" data-i18n="edit.removeBg">移除背景</button>
+      </div>
+    </div>
+
+    <div id="bgButtons">
+      <button id="btnHideLayers" data-i18n="canvas.hideLayers">隐藏图层</button>
+      <button id="btnHideBg" data-i18n="canvas.hideBg">隐藏背景</button>
+      <div class="bg-opacity-col">
+        <input type="range" id="bgOpacityRange" min="0" max="100" step="1" value="100">
+        <span class="bg-opacity-label" data-i18n="canvas.opLayers">图层</span>
+      </div>
+      <div class="bg-opacity-col">
+        <input type="range" id="bgOpacityBgRange" min="0" max="100" step="1" value="100">
+        <span class="bg-opacity-label" data-i18n="canvas.opBg">背景</span>
+      </div>
+    </div>
+
+    <div id="clipboardPanel" class="hidden">
+      <div id="cpThumbBox"><img id="cpThumbImg" alt=""></div>
+      <div id="cpCount">×0</div>
+    </div>
+
+    <div id="homeOverlay">
+      <div id="homeMain">
+        <div id="homeRail">
+          <button data-home-act="new" data-i18n="home.new">新建</button>
+          <button data-home-act="open" data-i18n="home.open">打开…</button>
+        </div>
+        <div id="homeContent">
+          <div id="homeHead">
+            <h2 data-i18n="home.head">最近使用项</h2>
+            <div id="homeTools">
+              <input id="homeSearch" type="search" placeholder="搜索文件名…" data-i18n="home.search" data-i18n-attr="placeholder">
+              <select id="homeSort">
+                <option value="recent" data-i18n="home.sort.recent">最近使用</option>
+                <option value="name" data-i18n="home.sort.name">名称</option>
+                <option value="size" data-i18n="home.sort.size">大小</option>
+              </select>
+            </div>
+          </div>
+          <div id="homeSelBar">
+            <span id="homeSelName"></span>
+            <button id="btnHomeOpen" data-i18n="home.openBtn">打开</button>
+            <button id="btnHomeRename" data-i18n="home.rename">重命名</button>
+            <button id="btnHomeExportAs" data-i18n="home.exportAs">另存为…</button>
+            <button id="btnHomeDelete" data-i18n="home.delete">删除</button>
+            <span class="hs-sep"></span>
+            <button id="btnHomeImport" data-i18n="home.import">导入</button>
+            <button id="btnHomeRefresh" data-i18n="home.refresh">刷新</button>
+          </div>
+          <div id="homeTabs" class="ev-tabs">
+            <div class="ev-tabs-track">
+              <input type="radio" id="htab-all" name="homeTab" value="all" checked>
+              <label for="htab-all" data-home-tab="all" data-i18n="home.tab.all">全部</label>
+              <input type="radio" id="htab-workcopy" name="homeTab" value="workcopy">
+              <label for="htab-workcopy" data-home-tab="workcopy" data-i18n="home.tab.workcopy">最近工作进程</label>
+              <input type="radio" id="htab-svg" name="homeTab" value="svg">
+              <label for="htab-svg" data-home-tab="svg" data-i18n="home.tab.svg">SVG图像</label>
+              <span class="ev-glider"></span>
+            </div>
+          </div>
+          <div id="homeGrid"></div>
+          <div id="homeEmpty" class="hidden" data-i18n="home.empty">暂无文件</div>
+        </div>
+      </div>
+    </div>
+    <div id="loadingOverlay"><div class="loader-box" data-i18n="loading.lib">正在加载图案库…</div></div>
+    <div id="toast" class="hidden"></div>
+  </div>
+
+  <div id="rightPanel">
+    <div id="panelTabs">
+      <button id="panelMinBtn">▶</button>
+      <div class="ev-tabs ev-tabs-panel">
+        <div class="ev-tabs-track">
+          <input type="radio" id="ptab-lib" name="panelTab" value="lib" checked>
+          <label for="ptab-lib" data-tab="lib" data-i18n="panel.lib">彩绘纹饰形状</label>
+          <input type="radio" id="ptab-color" name="panelTab" value="color">
+          <label for="ptab-color" data-tab="color" data-i18n="panel.color">颜色</label>
+          <span class="ev-glider"></span>
+        </div>
+      </div>
+    </div>
+    <!-- 2026-09-12 用户要求删除：「彩绘纹饰形状 / 已保存的彩绘」两个子页签（已有别的功能代替） -->
+    <div id="libTab">
+      <div id="libScroll"></div>
+    </div>
+    <!-- 2026-09-12 用户要求删除：已保存的彩绘面板（保存/导出/删除整块功能移除） -->
+    <div id="colorTab" class="hidden">
+      <div class="color-swatch-row">
+        <div id="colorSwatch"></div>
+        <input id="hexInput" value="#ffffff" spellcheck="false">
+        <button id="btnEyeLayer" data-i18n="color.eyeLayer">图层取色</button>
+        <button id="btnEyeBg" data-i18n="color.eyeBg">背景取色</button>
+      </div>
+      <canvas id="colorWheel" width="180" height="180"></canvas>
+      <div class="slider-row">
+        <span class="slider-label">H</span>
+        <input type="range" id="hRange" min="0" max="100" step="1" value="0">
+        <input type="number" id="hInput" min="0" max="100" step="1" value="0">
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">S</span>
+        <input type="range" id="sRange" min="0" max="100" step="1" value="0">
+        <input type="number" id="sInput" min="0" max="100" step="1" value="0">
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">B</span>
+        <input type="range" id="bRange" min="0" max="100" step="1" value="100">
+        <input type="number" id="bInput" min="0" max="100" step="1" value="100">
+      </div>
+      <div class="fav-header">
+        <span data-i18n="color.applySection">应用颜色</span>
+        <button id="btnApplyColor" data-i18n="color.apply">应用</button>
+      </div>
+      <div class="hist-header">
+        <span data-i18n="color.histSection">历史使用过的颜色</span>
+      </div>
+      <div id="histGrid"></div>
+      <div class="fav-header">
+        <span data-i18n="color.favSection">收藏颜色</span>
+        <button id="btnFav" data-i18n="color.favAdd">+ 收藏当前</button>
+      </div>
+      <div id="favGrid"></div>
+    </div>
+    <div id="panelResizer"></div>
+  </div>
+</div>
+
+<!-- 日志面板：查看路径 / 复制最近日志 / 打开文件夹 -->
+<div id="logPanel" class="hidden">
+  <div class="lp-title" data-i18n="log.title">日志</div>
+  <div class="lp-path" id="logPathText"></div>
+  <div class="lp-btns">
+    <button id="btnLogCopy" data-i18n="log.copy">复制最近日志</button>
+    <button id="btnLogOpen" data-i18n="log.open">保存日志</button>
+    <button id="btnLogClose" data-i18n="log.close">关闭</button>
+  </div>
+</div>
+
+<!-- 快捷键面板：列出全部快捷键与说明（样式与 #logPanel 同语言，随主题深浅色切换） -->
+<div id="shortcutPanel" class="hidden">
+  <div class="sc-head">
+    <div class="sc-title" data-i18n="toolbar.shortcuts">help</div>
+    <button id="btnShortcutClose" class="sc-close" data-i18n="log.close">关闭</button>
+  </div>
+  <div class="sc-body" id="shortcutList"></div>
+</div>
+
+<script src="js/util.js"></script>
+<script src="js/i18n.js"></script>
+<script src="dlg-i18n.js"></script>
+<script src="js/toast-i18n.js"></script>
+<script src="js/libcat-i18n.js"></script>
+<!-- 帮助模式词条（95 条 × 5 语言）：加载后并入 App.i18n.dicts，必须在 js/i18n.js 之后 -->
+<script src="js/help-i18n.js"></script>
+<!-- 快捷键绑定表（纯函数，主进程与渲染层共用）必须在 settings.js 之前加载：
+     settings.load() 会用它把 settings.json 里的 keymap 差分应用到绑定表 -->
+<script src="keymap.js"></script>
+<script src="js/keymap.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/model.js"></script>
+<script src="js/thumb-render-core.js"></script>
+<script src="js/render.js"></script>
+<script src="js/library.js"></script>
+<script src="js/panels.js"></script>
+<script src="js/selection.js"></script>
+<script src="js/layerpicker.js"></script>
+<!-- 帮助模式：Esc 监听必须在加载期注册（早于 main.js 的全局键盘处理），
+     否则会出现「帮助模式退了、选中也被全局 Esc 一起清掉」——与 layerpicker 同一套案底。
+     同时它的捕获阶段拦截要早于其它模块的 document 捕获监听（如 shortcuts.js 的关面板）。 -->
+<script src="js/help.js"></script>
+<script src="js/colorpanel.js"></script>
+<script src="js/background.js"></script>
+<script src="js/editmode.js"></script>
+<script src="js/io.js"></script>
+<script src="js/forza.js"></script>
+<script src="js/history.js"></script>
+<script src="js/main.js"></script>
+<script src="js/fza.js"></script>
+<script src="js/home.js"></script>
+<script src="js/tabs.js"></script>
+<script src="js/fluent-icons.js"></script>
+<!-- 顶部工具栏图标化（6 个按钮）。必须在 i18n.js 之后：
+     它首跑时读的是 HTML 里的原文案，之后由 App.i18n.onApply 重挂（见 main.js 末尾）。 -->
+<script src="js/toolbar-icons.js"></script>
+<!-- 自绘标题栏：必须在 i18n.js 之后（要用 App.i18n.t / onApply），
+     且要晚于 <body> 开头的 #titleBar 被解析到。 -->
+<script src="js/titlebar.js"></script>
+<script src="js/shortcuts.js"></script>
+</body>
+</html>
