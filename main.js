@@ -55,6 +55,8 @@ if (ISOLATE) {
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
 app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('disable-gpu-sandbox');
+app.commandLine.appendSwitch('force-high-performance-gpu');
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }
