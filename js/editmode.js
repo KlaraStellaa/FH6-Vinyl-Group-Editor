@@ -257,6 +257,7 @@ App.exitEdit = function (cancel) {
 };
 
 App.setEditMode = function (mode) {
+  if (mode === 'opacity' && App.state.edit && App.state.edit.type === 'bg') return;
   if (App.cancelColorPreview) App.cancelColorPreview();
   if (App.state.anchorPlacing && mode !== 'size' && mode !== 'rotate' && mode !== 'skew') App.cancelAnchorPlacing();
   App.state.editMode = mode;
@@ -267,6 +268,8 @@ App.setEditMode = function (mode) {
 App.updateEditBar = function () {
   $$('#editBar .edit-modes button[data-mode]').forEach(b =>
     b.classList.toggle('active', b.getAttribute('data-mode') === App.state.editMode));
+  const opModeBtn = $('#editBar .edit-modes button[data-mode="opacity"]');
+  if (opModeBtn) opModeBtn.classList.toggle('hidden', !!(App.state.edit && App.state.edit.type === 'bg'));
   const mode = App.state.editMode;
   const isSize = mode === 'size';
   const isRotSkewOp = mode === 'rotate' || mode === 'skew' || mode === 'opacity';
@@ -638,7 +641,14 @@ App.applySnapCenterKeep = function (s) {
 
 App.anchorTarget = function () {
   const e = App.state.edit;
-  if (!e || e.type !== 'layer') return null;
+  if (!e) return null;
+  if (e.type === 'bg') {
+    const m = App.state.bg.image;
+    if (!m) return null;
+    if (!m.id) m.id = 'bg';
+    return m;
+  }
+  if (e.type !== 'layer') return null;
   const items = App.editTargets();
   if (items.length !== 1) return null;
   const it = items[0];
@@ -1065,6 +1075,19 @@ App.onEditPointerDown = function (e) {
     return;
   }
   if (mode === 'move') {
+    const bgHit = App.hitBgImageAt ? App.hitBgImageAt(e.clientX, e.clientY) : null;
+    if (bgHit) {
+      App.editHist.checkpoint();
+      App.drag = {
+        kind: 'editmove',
+        startX: e.clientX, startY: e.clientY,
+        scale: App.state.view.scale,
+        snap: [{ it: bgHit, x: bgHit.x, y: bgHit.y }]
+      };
+      try { App.svg.setPointerCapture(e.pointerId); } catch (err) { }
+      e.preventDefault();
+      return;
+    }
     const layer = (e.clientX === 0 && e.clientY === 0 && e.target)
       ? App.hitLayer(e)
       : App.hitLayerPaintedSync(e.clientX, e.clientY);

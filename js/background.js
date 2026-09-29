@@ -216,6 +216,17 @@ App.applyBgTransform = function (m) {
   m.el.setAttribute('pointer-events', App.state.edit && App.state.edit.type === 'bg' && App.state.editMode === 'move' ? 'all' : 'none');
 };
 
+App.hitBgImageAt = function (clientX, clientY) {
+  const e = App.state.edit;
+  if (!e || e.type !== 'bg') return null;
+  const m = App.state.bg.image;
+  if (!m || App.state.bg.hidden) return null;
+  const b = App.getItemDocBBox(m);
+  if (!b || !b.corners || b.corners.length < 4) return null;
+  const pd = App.screenToDoc(clientX, clientY);
+  return App.pointInQuad(pd, b.corners) ? m : null;
+};
+
 App.removeBackground = function () {
   const m = App.state.bg.image;
   if (!m) return;
