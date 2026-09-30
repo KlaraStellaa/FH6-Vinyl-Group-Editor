@@ -472,6 +472,7 @@ App.refreshPanel = function () {
 App.fillVisibleThumbs = function () {
   const list = App.layerListEl;
   if (!list) return;
+  if (!list.clientHeight) return;
   const st = list.scrollTop, vh = list.clientHeight;
   $$('.layer-item', list).forEach(item => {
     const top = item.offsetTop, bottom = top + item.offsetHeight;

@@ -1144,6 +1144,7 @@ App.onEditPointerDown = function (e) {
         startX: e.clientX, startY: e.clientY,
         scale: App.state.view.scale,
         box: g.box,
+        handleDoc: { x: hp.x, y: hp.y },
         center: _anchorCenter,
         anchorFix: _af,
         anchorDoc: _ad,
@@ -1152,7 +1153,8 @@ App.onEditPointerDown = function (e) {
         grabAngle: Math.atan2(hp.y - _anchorCenter.y, hp.x - _anchorCenter.x),
         rotLock: 0,
         skewLock: 0,
-        snap: App.editTargets().map(it => ({ it, x: it.x, y: it.y, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew }))
+        snap: App.editTargets().map(it => ({ it, x: it.x, y: it.y, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew,
+          flipH: !!it.flipH, flipV: !!it.flipV }))
       };
       try { App.svg.setPointerCapture(e.pointerId); } catch (err) { }
       e.preventDefault();
@@ -1305,11 +1307,26 @@ App.onEditPointerMove = function (e) {
     }
     const lx = dx * dxx + dy * dxy;
     const ly = dx * dyx + dy * dyy;
+    const _lcs = App.localContentSize(it);
+    const _tanS = Math.tan(((it && it.skew) || 0) * D2R);
+    const _hx = (h.includes('e') || h.includes('w')) ? _lcs.w / 2 : 0;
+    const _hy = (h.includes('n') || h.includes('s')) ? _lcs.h / 2 : 0;
+    let _denX = 2 * (_hx + _tanS * _hy);
+    let _denY = 2 * _hy;
+    if (App.drag.snap.length > 1 && App.drag.handleDoc && App.drag.groupC) {
+      const _th0 = ((App.drag.g0 && App.drag.g0.rot) || 0) * D2R;
+      const _ox = App.drag.handleDoc.x - App.drag.groupC.x;
+      const _oy = App.drag.handleDoc.y - App.drag.groupC.y;
+      _denX = 2 * (_ox * Math.cos(_th0) + _oy * Math.sin(_th0));
+      _denY = 2 * (-_ox * Math.sin(_th0) + _oy * Math.cos(_th0));
+    }
+    if (!isFinite(_denX) || Math.abs(_denX) < 1e-6) _denX = Math.max(1, _lcs.w);
+    if (!isFinite(_denY) || Math.abs(_denY) < 1e-6) _denY = Math.max(1, _lcs.h);
     let gx = 0, gy = 0;
-    if (h.includes('e')) gx += lx / 200;
-    if (h.includes('w')) gx -= lx / 200;
-    if (h.includes('n')) gy -= ly / 200;
-    if (h.includes('s')) gy += ly / 200;
+    if (h.includes('e')) gx += lx / _denX;
+    if (h.includes('w')) gx -= lx / _denX;
+    if (h.includes('n')) gy -= ly / _denY;
+    if (h.includes('s')) gy += ly / _denY;
     if (App.state.sizeMode === 'prop') {
       if (App.drag.snap.length === 1 && it) {
         const p = App.propScalePair(gx, gy);
@@ -1349,8 +1366,8 @@ App.onEditPointerMove = function (e) {
       }
     } else {
     apply(() => App.drag.snap.forEach(s => {
-      const ssx = (s.it.flipH ? -1 : 1) * (s.sx || 1);
-      const ssy = (s.it.flipV ? -1 : 1) * (s.sy || 1);
+      const ssx = (s.flipH ? -1 : 1) * (s.sx || 1);
+      const ssy = (s.flipV ? -1 : 1) * (s.sy || 1);
       if (App.drag.anchorFix && App.drag.anchorDoc) {
         const af = App.drag.anchorFix, ad = App.drag.anchorDoc;
         s.it.rot = rotD ? s.rot + rotD : s.it.rot;
