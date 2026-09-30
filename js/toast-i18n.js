@@ -1,3 +1,8 @@
+/* ---------- Toast（画布中下方弹窗提示）文案词典 ----------
+   与 js/i18n.js 同机制：加载时并入 App.i18n.dicts。
+   toast 是**瞬时**提示，调用时按当前语言取词即可，不需要注册重刷器；
+   带变量的用 `{name}` 占位，调用侧走 App.i18n.tf(key, {…})。
+   键名分区：toast.bg / color / edit / sel / forza / fza / home / io / lib / main / tab */
 App.TOAST_I18N = {
   'zh-CN': {
     'toast.bg.removed': '背景图片已移除',
@@ -675,6 +680,7 @@ App.TOAST_I18N = {
     'toast.tab.docCreated': '새 문서를 만들었습니다'
   }
 };
+/* 并入主词典（i18n.js 先加载） */
 Object.keys(App.TOAST_I18N).forEach(function (lang) {
   if (App.i18n.dicts[lang]) Object.assign(App.i18n.dicts[lang], App.TOAST_I18N[lang]);
 });

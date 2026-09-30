@@ -1,3 +1,8 @@
+/* ---------- 原生对话框 / 应用内确认框 文案（主进程 + 渲染层共用） ----------
+   **原生对话框由 OS 渲染**，标题/按钮/过滤器名必须由主进程在打开对话框时按
+   「当前界面语言」传进去，渲染层的 App.i18n 管不到它们。
+   主进程：const DLG = require('./dlg-i18n.js');  DLG.get(lang, 'dlg.openSvg')
+   渲染层：<script src="dlg-i18n.js"></script> 加载后自动并入 App.i18n.dicts（dlg.*） */
 (function () {
   var DICT = {
     'zh-CN': {
@@ -83,12 +88,14 @@
     DICT[lang]['dlg.overwriteMsg'] = overwrite[lang][1];
     DICT[lang]['dlg.fileChanged'] = overwrite[lang][2];
   });
+  /* 窗口标题（主进程侧；渲染层 <title data-i18n> 用 i18n.js 里的同名键） */
   var titles = { 'zh-CN': 'FH6 Vinyl Group Editor', 'zh-TW': 'FH6 Vinyl Group Editor', 'en': 'FH6 Vinyl Group Editor',
     'ja': 'SVG パターンコラージュエディター', 'ko': 'SVG 패턴 콜라주 편집기' };
   Object.keys(titles).forEach(function (l) { if (DICT[l]) DICT[l]['app.title'] = titles[l]; });
   var api = {
     dicts: DICT,
     langs: ['zh-CN', 'zh-TW', 'en', 'ja', 'ko'],
+    /* 取词 + {占位符} 替换（与渲染层 App.i18n.tf 同语义） */
     get: function (lang, key, params) {
       var d = DICT[lang] || DICT['zh-CN'];
       var s = d[key] || DICT['zh-CN'][key] || key;
@@ -102,6 +109,7 @@
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.DLG_I18N = api;
+  /* 渲染层：并入 App.i18n.dicts，这样 fzaConfirm 等能直接用 App.i18n.t('dlg.*') */
   if (typeof App !== 'undefined' && App.i18n && App.i18n.dicts) {
     Object.keys(DICT).forEach(function (lang) {
       if (App.i18n.dicts[lang]) Object.assign(App.i18n.dicts[lang], DICT[lang]);

@@ -14,9 +14,13 @@ contextBridge.exposeInMainWorld('sveThumbHost', {
   writeCache: async (filePath, bytes) => {
     const fp = path.resolve(String(filePath || ''));
     const name = path.basename(fp);
-    if (path.basename(path.dirname(fp)) !== 'svg-thumb-cache' || !/^[a-f0-9]{40}\.png$/i.test(name)) {
-      throw new Error('缩略图缓存路径无效');
-    }
+    const parent = path.basename(path.dirname(fp));
+    /* 两种命名缓存都放行：svg-thumb-cache/<sha1>.png（主页）与
+       thumb-cache/<ns>/<sha1>.png（工作进程卡 / 彩绘纹饰，见 main.js genericThumbPath） */
+    const bare = parent === 'svg-thumb-cache' && /^[a-f0-9]{40}\.png$/i.test(name);
+    const namespaced = path.basename(path.dirname(path.dirname(fp))) === 'thumb-cache' &&
+      /^[a-z0-9_-]{1,24}$/i.test(parent) && /^[a-f0-9]{40}\.png$/i.test(name);
+    if (!bare && !namespaced) throw new Error('缩略图缓存路径无效');
     const data = Buffer.from(bytes);
     if (data.length < 8 || data[0] !== 0x89 || data[1] !== 0x50 || data[2] !== 0x4e || data[3] !== 0x47) {
       throw new Error('缩略图 PNG 数据无效');

@@ -9,6 +9,9 @@
   <link rel="stylesheet" href="css/thumb-loader.css">
 </head>
 <body>
+<!-- 自绘标题栏（UI 改良 C 项）：main.js 已 frame:false，这里补上窗口控制键。
+     整条是拖动区（CSS: -webkit-app-region: drag），三个按钮在 CSS 里显式 no-drag。
+     标题文字由 js/titlebar.js 从既有 <title data-i18n="app.title"> 读取，不新增品牌名。 -->
 <div id="titleBar">
   <div class="titlebar-drag">
     <span class="titlebar-appicon" aria-hidden="true">
@@ -55,6 +58,9 @@
     <div id="totalCount">图案总数：0</div>
   </div>
 
+  <!-- 功能栏：竖排两列（左列＝第一行、右列＝第二行），列内仍自上而下。
+       左列＝原横杠下方的操作键 + 「分组内编辑」+「返回」；右列＝「编辑图层」~「垂直翻转」。
+       两列是**并排的 flex 列**，DOM 顺序即视觉顺序；不要改回单列。 -->
   <div id="selToolbar" class="hidden">
     <div class="st-col">
       <span class="btn-group">
@@ -69,6 +75,7 @@
       <button id="btnSavePalette" data-i18n="sel.savePalette">保存</button>
       <button id="btnDeleteAll" data-i18n="sel.deleteAll">删除所有图层</button>
       <button id="btnLocateLayer" data-i18n="sel.locateLayer">定位图层位置</button>
+      <!-- 分组内编辑：只显示该分组内的图层；未选中分组图层时置灰 -->
       <button id="btnGroupEdit" data-i18n="sel.groupEdit">分组内编辑</button>
     </div>
     <div class="st-col">
@@ -92,6 +99,7 @@
         <g id="flashG"></g>
         <g id="outlineG"></g>
         <g id="handleG"></g>
+        <!-- 缩放锚点图标：文档坐标定位 + 1/scale 反向缩放 → 屏幕上恒定尺寸；不拦截指针 -->
         <g id="anchorG" pointer-events="none"></g>
       </g>
     </svg>
@@ -121,6 +129,7 @@
     </div>
 
     <div id="bgButtons">
+      <!-- 隐藏其他图层：平时 .hidden，仅进入「编辑图层」后显示；只显示当前正在编辑的图层 -->
       <button id="btnHideOthers" data-i18n="canvas.hideOthers" class="hidden">隐藏其他图层</button>
       <button id="btnHideLayers" data-i18n="canvas.hideLayers">隐藏图层</button>
       <button id="btnHideBg" data-i18n="canvas.hideBg">隐藏背景</button>
@@ -186,6 +195,9 @@
     <div id="loadingOverlay"><div class="loader-box" data-i18n="loading.lib">正在加载图案库…</div></div>
     <div id="toast" class="hidden"></div>
 
+    <!-- 返回（退出分组内编辑）：画布左下角常驻键，紧邻图层栏。
+         不在分组内编辑状态时 .hidden 隐藏；分组内编辑期间**不随功能栏（#selToolbar）显隐**。
+         位置与 #editBar（左上）/ #bgButtons（右上）/ #clipboardPanel（右下）各占一角，互不遮挡。 -->
     <button id="btnGroupBack" class="hidden" data-i18n="sel.groupBack">返回</button>
   </div>
 
@@ -246,6 +258,7 @@
   </div>
 </div>
 
+<!-- 日志面板：查看路径 / 复制最近日志 / 打开文件夹 -->
 <div id="logPanel" class="hidden">
   <div class="lp-title" data-i18n="log.title">日志</div>
   <div class="lp-path" id="logPathText"></div>
@@ -256,6 +269,7 @@
   </div>
 </div>
 
+<!-- 快捷键面板：列出全部快捷键与说明（样式与 #logPanel 同语言，随主题深浅色切换） -->
 <div id="shortcutPanel" class="hidden">
   <div class="sc-head">
     <div class="sc-title" data-i18n="toolbar.shortcuts">help</div>
@@ -265,12 +279,18 @@
 </div>
 
 <script src="js/util.js"></script>
+<!-- 通用缩略图磁盘缓存（渲染层）：App.sha1Hex / thumbCacheLookup / Store / Drop。
+     必须在 render.js（App.libThumb）与 fza.js 之前加载 —— 那两处会在运行时调它 -->
+<script src="js/thumb-disk-cache.js"></script>
 <script src="js/i18n.js"></script>
 <script src="dlg-i18n.js"></script>
 <script src="js/toast-i18n.js"></script>
 <script src="js/libcat-i18n.js"></script>
 <script src="js/name-i18n.js"></script>
+<!-- 帮助模式词条（95 条 × 5 语言）：加载后并入 App.i18n.dicts，必须在 js/i18n.js 之后 -->
 <script src="js/help-i18n.js"></script>
+<!-- 快捷键绑定表（纯函数，主进程与渲染层共用）必须在 settings.js 之前加载：
+     settings.load() 会用它把 settings.json 里的 keymap 差分应用到绑定表 -->
 <script src="keymap.js"></script>
 <script src="js/keymap.js"></script>
 <script src="js/theme.js"></script>
@@ -282,6 +302,9 @@
 <script src="js/panels.js"></script>
 <script src="js/selection.js"></script>
 <script src="js/layerpicker.js"></script>
+<!-- 帮助模式：Esc 监听必须在加载期注册（早于 main.js 的全局键盘处理），
+     否则会出现「帮助模式退了、选中也被全局 Esc 一起清掉」——与 layerpicker 同理。
+     同时它的捕获阶段拦截要早于其它模块的 document 捕获监听（如 shortcuts.js 的关面板）。 -->
 <script src="js/help.js"></script>
 <script src="js/colorpanel.js"></script>
 <script src="js/background.js"></script>
@@ -294,7 +317,11 @@
 <script src="js/home.js"></script>
 <script src="js/tabs.js"></script>
 <script src="js/fluent-icons.js"></script>
+<!-- 顶部工具栏图标化（6 个按钮）。必须在 i18n.js 之后：
+     它首跑时读的是 HTML 里的原文案，之后由 App.i18n.onApply 重挂（见 main.js 末尾）。 -->
 <script src="js/toolbar-icons.js"></script>
+<!-- 自绘标题栏：必须在 i18n.js 之后（要用 App.i18n.t / onApply），
+     且要晚于 <body> 开头的 #titleBar 被解析到。 -->
 <script src="js/titlebar.js"></script>
 <script src="js/shortcuts.js"></script>
 </body>
