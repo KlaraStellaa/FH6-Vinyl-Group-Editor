@@ -1,13 +1,9 @@
 'use strict';
-/* 图案库：加载两个素材文件、分类展示、拖拽、替换图案 */
 App.symbols = [];        // {key, cat, label, w, h, uriStart, uriEnd, thumb}
 App.symbolMap = new Map();
-App.categories = [];     // [{id, key, items:[symbol]}]  id=稳定分组键（筛选值），key=显示名词条
+App.categories = [];
 App.patterns = [];       // [{key, name, node, fill, stroke}]
 
-/* 分组表：raw = assets/FH6_Vinyl_Symbols.svg 里 inkscape:label 的分类段（数据键，资产不改）；
-   id = 稳定标识（下拉筛选值，切语言不变）；key = 显示名词条（js/libcat-i18n.js）。
-   14–35 两两合并：11 套字体 × 大小写 → 字体1…字体11（各 80 个图案，大写在前小写在后）。 */
 App.LIB_CAT_MAP = {
   '01_Primitives': { id: 'c01', key: 'lib.cat.01' },
   '02_Community_Vinyls_1': { id: 'c02', key: 'lib.cat.02' },
@@ -45,8 +41,6 @@ App.LIB_CAT_MAP = {
   '34_Upper_Letters_11': { id: 'font11', key: 'lib.cat.font11' },
   '35_Lower_Letters_11': { id: 'font11', key: 'lib.cat.font11' }
 };
-/* 第 36 组「填充图案」隐藏：下拉栏与正文都不再出现。App.patterns 仍照常加载，
-   已存在的填充图层照常渲染，只是不再从素材面板拖入/替换；置 false 即恢复显示。 */
 App.LIB_HIDE_PATTERN_GROUP = true;
 App.libText = null;
 App.symbolUri = s => 'data:image/jpeg;base64,' + App.libText.slice(s.uriStart, s.uriEnd);
@@ -57,11 +51,6 @@ App.loadLibrary = async function () {
     fetch('assets/FH6_Vinyl_Patterns.svg').then(r => { if (!r.ok) throw new Error('patterns fetch ' + r.status); return r.text(); })
   ]);
   App.libText = symText;
-  /* 素材版本 = 两个素材文件的 stat（主进程读，带 mtime+size）。
-     它进「彩绘纹饰」缩略图的缓存身份 —— 素材一更新，整批剪影缓存自然失效，
-     不会换了素材还显示旧图案（见 js/render.js 的 App.libThumbIdentity）。
-     ★ 不能用 fetch 响应的 ETag/Last-Modified：本机 net.fetch(file://) 不保证带这些头，
-      实测为空 ⇒ 会退化成"永远同一个版本"，缓存永不失效。 */
   try {
     const r = window.sveApi && window.sveApi.libAssetVer ? await window.sveApi.libAssetVer() : null;
     App.libAssetVer = (r && r.ok && r.ver) ? r.ver : ('len:' + symText.length + ':' + patText.length);
@@ -142,14 +131,10 @@ App.parsePatterns = function (text) {
   console.log('[library] patterns:', App.patterns.length);
 };
 
-/* 当前背景主题对应的蒙版指示图案：浅色背景用 light、深色用 dark，
-   两者均含 mask_indicator 字样，可被 Inkscape2Forza 识别为蒙版 */
 App.maskThemeKey = function () {
   return App.state.bg.base === 'dark' ? 'mask_indicator_dark' : 'mask_indicator_light';
 };
 
-/* 蒙版指示图案定义：按当前背景主题克隆为 #sveMaskInd（图层引用不变，换主题即跟随）。
-   透明蒙版显示开关（render.js 定义）：为 true 时图案内容全部置空——画布中蒙版不再显示灰网格 */
 App.ensureMaskIndDef = function () {
   if (!App.defs) return;
   const themeKey = App.maskThemeKey();
@@ -181,7 +166,7 @@ App.ensureMaskIndDef = function () {
   App.defs.appendChild(node);
 };
 
-App.libFilter = null;   /* null = 全部分组；分组 id = 只显示该分组（存 id 而非名字：切语言后筛选不失效） */
+App.libFilter = null;
 
 App.buildLibraryPanel = function () {
   const scroll = $('#libScroll');
@@ -195,7 +180,6 @@ App.buildLibraryPanel = function () {
   if (!App.LIB_HIDE_PATTERN_GROUP) cats.push({ id: 'pattern', key: 'lib.cat.pattern', items: App.patterns, isPattern: true });
   const catLabel = id => { const c = cats.find(x => x.id === id); return App.i18n.t(c && c.key ? c.key : String(id)); };
 
-  /* 分组筛选下拉：点按钮弹出全部分组，选中后只渲染对应分组 */
   const filterBar = document.createElement('div');
   filterBar.className = 'lib-filter-bar';
   const filterBtn = document.createElement('div');
@@ -213,7 +197,7 @@ App.buildLibraryPanel = function () {
       App.libFilter = value;
       filterBtn.textContent = label;
       filterPanel.classList.remove('open');
-      App.buildLibraryPanel();   /* 按新筛选重建 */
+      App.buildLibraryPanel();
     });
     filterPanel.appendChild(item);
   };
@@ -241,7 +225,6 @@ App.buildLibraryPanel = function () {
   };
   const pumpThumbs = () => {
     if (thumbEpoch !== App.libThumbEpoch) return;
-    /* 主页覆盖素材库时完全停下；画布正在拖拽/缩放时短暂让出主线程。 */
     if (App.Home && App.Home.shown) return;
     if (App.renderInteractionBusy && App.renderInteractionBusy()) {
       scheduleThumbPump(100);
@@ -301,7 +284,6 @@ App.buildLibraryPanel = function () {
       tile.title = isPat ? item.name : item.label;
       const img = document.createElement('img');
       img.draggable = false;
-      /* 需求：图标 64px、不显示图案名字（名字保留在悬停提示里） */
       tile.appendChild(img);
       tile.addEventListener('dragstart', e => {
         e.dataTransfer.setData('text/plain', 'SVE:' + JSON.stringify({ kind: isPat ? 'pattern' : 'symbol', key: item.key }));
@@ -319,14 +301,12 @@ App.buildLibraryPanel = function () {
   });
 };
 
-/* 切语言时重建素材面板：下拉项与正文分组标题都走词条；筛选值存 id，重建后仍停在同一分组 */
 App.refreshLibraryPanel = function () {
   if (App.state && App.state.loaded) App.buildLibraryPanel();
 };
 
 App.findSymbol = key => App.symbolMap.get(key);
 
-/* 更换图案（保持大小、旋转、颜色、透明度） */
 App.replaceSelectedPattern = function (spec) {
   const sel = App.operationTargets();
   if (sel.length !== 1) { showToast(App.i18n.t('toast.lib.oneLayerOnly')); return; }
@@ -340,10 +320,6 @@ App.replaceSelectedPattern = function (spec) {
     layer.symbolKey = spec.key;
     layer.name = sym.label;
     layer.dataUri = App.symbolUri(sym);
-    /* ★ 尺寸必须跟着新图案走：w/h 是「图案本机尺寸」，画布按它贴剪影、导出按符号
-       viewBox 渲染。旧版只换 symbolKey 不改 w/h，于是新图案被塞进旧图案的框里压扁，
-       导出时又按真实尺寸画出来 —— 两边不一致（2026-09-25 用户报障）。
-       normalizeSymbolSize 会写回 sym.w/sym.h 并按比例补偿 sx/sy，视觉大小仍然不变。 */
     App.normalizeSymbolSize(layer);
   } else {
     const pat = App.patterns.find(p => p.key === spec.key);
@@ -359,7 +335,6 @@ App.replaceSelectedPattern = function (spec) {
   if (App.dropEditStaticItem) App.dropEditStaticItem(layer);
   if (App.contentChanged) App.contentChanged();
   App.refreshPanel();
-  /* 替换完成：退出更换模式（否则遗留状态会导致之后点击库形状再次误替换），并刷新闪烁动画为新图案 */
   App.setReplacing(false);
   if (App.requestFlashRefresh) App.requestFlashRefresh();
 };

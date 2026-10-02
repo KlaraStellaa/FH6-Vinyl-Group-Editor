@@ -1,20 +1,3 @@
-/* ---------- 「帮助模式」帮助文本（5 语言） ----------
-   帮助文本量大（**118 个词条** × 5 语言 = 590 句），塞进 js/i18n.js 会把那份词典撑得没法看。
-   这里沿用 dlg-i18n.js / toast-i18n.js / libcat-i18n.js 的既有约定：加载后并入 App.i18n.dicts。
-
-   词条构成（118 = 100 + 12 + 6）：
-     100 条正文 help.<标识>       —— 对应 js/help.js 的 MAP（103 条登记、100 个不同标识，dlgOk/dlgCancel/speedReset 各复用 2 次）
-     12 条 help.n.<标识>          —— 只有图标没有文字的按钮 / 画布 / 图层行的标题
-      6 条帮助模式自身 UI          —— help.title / help.hint / help.armed / help.unknown / help.close / help.kbdSuffix
-
-   词条命名：
-     help.<按钮标识>    —— 正文（必填）
-     help.n.<按钮标识>  —— **只有图标没有文字**的按钮（× / ▶ / ? / 滑条）的标题；
-                           缺省时由按钮自身的文字或 aria-label 兜底（见 js/help.js 的 labelOf）
-     help.title / help.hint / help.armed / help.unknown / help.close —— 帮助模式自身的 UI 文案
-
-   新增按钮时的流程：① 在 js/help.js 的 MAP 里加一条 [选择器, 标识]；
-                     ② 在这里给 5 种语言各补一条 help.<标识>。 */
 (function () {
   var DICT = {
     'zh-CN': {
@@ -24,7 +7,6 @@
       'help.unknown': '「{name}」还没有帮助说明。',
       'help.close': '关闭',
       'help.kbdSuffix': '快捷键为 {k}。',
-      /* 图标按钮的标题（无文字可用） */
       'help.n.btnShortcuts': '快捷键 / 帮助',
       'help.n.helpFab': '帮助（弹窗里也能用）',
       'help.n.tabClose': '关闭文档',
@@ -37,8 +19,6 @@
       'help.n.lpClose': '关闭窗口',
       'help.n.lpRow': '图层列表行',
       'help.n.btnShortcutClose': '关闭',
-      /* --- 标题栏 --- */
-      /* --- 顶部工具栏 --- */
       'help.btnOpen': '从磁盘里选一个 SVG 打开。当前文档有没保存的改动时，会先提示你。',
       'help.btnSave': '把整份文档导出成一个 SVG，存到「SVGImages」目录。',
       'help.btnSaveWork': '把当前文档存成「工作进程」，以后可以再打开继续编辑。会一并保存下背景图片设置、历史颜色等信息。',
@@ -51,13 +31,11 @@
       'help.helpFab': '弹窗（比如设置页）开着时，顶部那个 ? 被盖住了，这里补一个。左键或右键都能进入帮助模式。',
       'help.btnOpenImage': '选一张图片垫在画布底下，用来描图。图片只作参考，不会导出到 SVG 里。',
       'help.btnBgImage': '点它进入背景编辑：可以拖动、缩放、旋转这张底图；再点一次退出编辑。',
-      /* --- 标签栏 --- */
       'help.tabHome': '回到主页（最近文件列表）。',
       'help.tabPill': '点击切换到这个文档。拖动可以调整顺序。鼠标悬停可显示缩略图。',
       'help.tabClose': '关闭这个文档。有没保存的改动会先询问。',
       'help.tabNewDoc': '新建一个空白文档，在新标签里打开。',
       'help.btnSettings': '打开设置：语言、主题颜色、编辑速率、快捷键、查看日志。',
-      /* --- 左侧功能栏（17 键） --- */
       'help.selEditPos': '进入编辑模式，直接拖动、缩放选中的图层。也可以双击画布上的图案，或双击 Enter 进入编辑。',
       'help.selEditColor': '把选中图层换成右侧「颜色」面板当前的颜色。',
       'help.selReplace': '给选中图层换一个图案，位置和大小保持不变。',
@@ -77,7 +55,6 @@
       'help.selLocateLayer': '把画布视图移到该图层位置。',
       'help.selGroupEdit': '直接修改分组，无需拆解再合并',
       'help.selGroupBack': '退出分组内编辑。',
-      /* --- 编辑模式工具栏 --- */
       'help.editModeMove': 'WASD / 方向键均可操作，鼠标拖动可移动图层位置',
       'help.editModeSize': 'WASD / 方向键均可操作，鼠标拖动可移动图层位置，Shift + 拖动角手柄可旋转图层，Shift + 拖动上下手柄可倾斜图层',
       'help.editModeRotate': 'WASD / 方向键 / 鼠标拖拽均可操作',
@@ -89,20 +66,16 @@
       'help.btnPlaceAnchor': '指定缩放的固定点。设了锚点后，缩放会绕这个点进行，而不是绕图层中心。再点一次取消锚点。 默认快捷键：f。',
       'help.btnPropMode': '「大小」模式下是否保持长宽比。等比：拖角时宽高一起变；自由：可以只拉一个方向。',
       'help.btnRemoveBg': '删掉这张背景图片。只在编辑背景时出现。',
-      /* --- 画布右上角 --- */
       'help.canvas': '左键选中图层；右键显示该位置存在的所有图层，左键双击图层进入编辑状态；按住 tab + 鼠标左键点击高亮 / 取消高亮该图层；按住 tab + 鼠标左键拖动框选内的图层高亮；按住 tab + ctrl + 鼠标左键拖动框选内的图层取消高亮。ctrl+z撤销，ctrl+shift+z重做',
       'help.btnHideLayers': '临时把全部图层藏起来，方便单独看背景图。只是不显示，不会删掉内容。',
       'help.btnHideBg': '临时隐藏背景图片。',
       'help.btnHideOthers': '只显示当前正在编辑的图层。',
       'help.bgOpacityRange': '调整所有图层的显示透明度。不影响原图层。',
       'help.bgOpacityBgRange': '调整背景图片的显示透明度，同样只影响显示。',
-      /* --- 图层栏「+」栏 --- */
       'help.layerPlusRow': '可导入软件目录内 / 游戏存档内彩绘纹饰分组，可导入 SVG 文件。',
       'help.layerItem': '鼠标左键点击选中图层；左键拖动调整图层位置；tab 高亮 / 取消高亮图层。按住 tab 可维持高亮 / 取消高亮状态，使用鼠标滚轮可扫选；鼠标双击进入编辑，enter 双击进入编辑。按 x 键可剪切目标图层，按 y 键可将其粘贴到目标图层下方。',
-      /* --- 右键图层选择窗 --- */
       'help.lpClose': '关掉这个窗口。',
       'help.lpRow': '左键点一行 = 选中那一层并关窗。右键 = 按这个位置重新挑一次。',
-      /* --- 右侧面板 --- */
       'help.panelMinBtn': '收起右侧面板，把画布变宽；再点一次展开。收起时鼠标移动到右侧边缘会自动弹出，离开时自动收起。',
       'help.ptabLib': '图案库页签。把一个图案拖到画布上就能添加；也可以用图层栏的「+」栏选 SVG。',
       'help.libItem': '将目标图层拖入画布位置即可放置。',
@@ -111,7 +84,6 @@
       'help.btnEyeBg': '进入取色模式：点击画布上任意位置，取那个像素点的颜色作为当前颜色。',
       'help.btnApplyColor': '把当前颜色应用到选中的图层。没选图层时不会生效。',
       'help.btnFav': '把当前颜色存进收藏。',
-      /* --- 主页 --- */
       'help.homeNew': '新建一个空白文档。',
       'help.homeOpen': '从磁盘上任意位置选一个 SVG 打开。',
       'help.btnFzaGeo': '从 Geometrize（forza-painter）导出的 JSON 生成彩绘。',
@@ -129,22 +101,17 @@
       'help.btnHomeRefresh': '重新扫描目录，刷新文件列表。外部新增或删除了文件时用。',
       'help.homeTabs': '切换列表显示哪一类文件。',
       'help.homeCard': '单击：选中（高亮，下方出现操作按钮）。双击：在新标签里打开。',
-      /* --- 速率窗 / 快捷键窗自己的按钮（弹窗里的通用「确定 / 取消 / ×」按批注不单独配说明） --- */
       'help.dlgOk': '保存这次改动并关窗。',
       'help.dlgCancel': '放弃这次改动并关窗。',
       'help.speedReset': '恢复成默认值（还没保存，要点「确定」才生效）。',
-      /* --- Forza 选择窗口 --- */
       'help.fzaCancel': '关闭选择窗口，不做任何改动。',
       'help.fzaImportFile': '从磁盘上选一个 SVG，加进候选列表。',
       'help.fzaMulti': '允许一次选多个图案或分组。再点一次退出多选。', 'help.fzaUndo': '撤销注入：列出最近三次注入操作。确认即可把它们恢复成注入前的内容。',
       'help.fzaSource': '候选列表的来源：软件自己保存的彩绘 / 从游戏存档里读出来的彩绘。',
-      /* --- 日志窗 --- */
       'help.btnLogCopy': '把最近的运行日志复制到剪贴板。软件出问题时把它发给我。',
       'help.btnLogOpen': '把日志写成文件保存下来。',
       'help.btnLogClose': '关掉日志窗口。',
-      /* --- 快捷键窗 --- */
       'help.btnShortcutClose': '关闭快捷键一览表。',
-      /* --- 设置窗 --- */
       'help.btnEditSpeed': '调整用 WASD 连续调整时的快慢。',
       'help.btnNudgeSpeed': '调整用方向键单步微调时的步长。',
       'help.btnKeymap': '自定义快捷键。和已有按键冲突时会自动交换，不会出现某个功能没键可用。',
@@ -277,8 +244,6 @@
       'help.armed': 'Help mode is on',
       'help.unknown': 'No help text yet for "{name}".',
       'help.close': 'Close',
-      /* 前导空格是**有意**的：英文句尾是「.」，直接拼会连成 image.Shortcut；
-         中日韩句尾是「。」本身就有分隔感，所以那三种语言不带空格。 */
       'help.kbdSuffix': ' Shortcut: {k}.',
       'help.n.btnShortcuts': 'Shortcuts / Help',
       'help.n.helpFab': 'Help (works inside dialogs)',
@@ -517,7 +482,6 @@
       'help.armed': '도움말 모드 켜짐',
       'help.unknown': '「{name}」에 대한 설명이 아직 없습니다.',
       'help.close': '닫기',
-      /* 前导空格同上：韩文句尾是「.」 */
       'help.kbdSuffix': ' 단축키: {k}.',
       'help.n.btnShortcuts': '단축키 / 도움말',
       'help.n.helpFab': '도움말(대화 상자 안에서도 사용)',

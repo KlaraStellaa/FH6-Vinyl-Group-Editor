@@ -15,8 +15,6 @@ contextBridge.exposeInMainWorld('sveThumbHost', {
     const fp = path.resolve(String(filePath || ''));
     const name = path.basename(fp);
     const parent = path.basename(path.dirname(fp));
-    /* 两种命名缓存都放行：svg-thumb-cache/<sha1>.png（主页）与
-       thumb-cache/<ns>/<sha1>.png（工作进程卡 / 彩绘纹饰，见 main.js genericThumbPath） */
     const bare = parent === 'svg-thumb-cache' && /^[a-f0-9]{40}\.png$/i.test(name);
     const namespaced = path.basename(path.dirname(path.dirname(fp))) === 'thumb-cache' &&
       /^[a-z0-9_-]{1,24}$/i.test(parent) && /^[a-f0-9]{40}\.png$/i.test(name);

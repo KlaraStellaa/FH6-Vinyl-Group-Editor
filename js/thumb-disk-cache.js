@@ -1,31 +1,12 @@
 'use strict';
-/* 通用缩略图磁盘缓存（渲染层一侧）。
-   主进程侧实现在 main.js：genericThumbPath / svg-thumb-cache-get / -put / -drop，
-   缓存目录 userData/thumb-cache/<命名空间>/<sha1>.png，URL 走 app://thumb-cache/<ns>/<key>.png。
 
-   为什么需要它：
-   · 工作进程卡的缩略图（fza.js 的 App.fzaSvgThumb）以前每次都把整份模型重新导出成
-     SVG 再交给隐藏进程光栅化 —— 文档动辄上千图层，启动主页要等很久；
-   · 「彩绘纹饰」面板（App.libThumb）以前每次都把素材里那 1400 个内嵌 JPEG 逐个解码、
-     逐像素染色成白色剪影 —— 只在内存 Map 里留着，进程一退就全没了。
-   两者都属于「输入不变则输出不变」的纯计算，正适合落盘。
-
-   ★ 缓存 key 必须随「内容版本」变化（工作进程 = name+mtime；素材 = 素材文件 mtime），
-     否则文件更新后仍旧命中旧图 —— 这是本功能要解决的原始问题。 */
-
-/* 版本号：渲染逻辑（剪影染色 / 光栅化参数）一变就必须升，否则旧缓存不失效。
-   与主页那套 thumb-v8-480 同理（见 §4.2 交接书 3.4 节）。 */
 App.LIB_THUMB_NS = 'lib-thumb-v1';
 
-/* 把「身份串」变成 40 位十六进制 key。
-   用同步实现的 SHA-1：身份串很短（名字+mtime），无需异步，也不用引第三方库。
-   纯实现，独立于被测逻辑，供 __tests__ / 判据直接调用。 */
 (function () {
   const K = [
     0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, 0xca62c1d6
   ];
   function rotl(n, s) { return ((n << s) | (n >>> (32 - s))) >>> 0; }
-  /* 输入按 UTF-8 编码成字节（名字可能是中文） */
   function utf8Bytes(str) {
     const out = [];
     for (let i = 0; i < str.length; i++) {
@@ -78,7 +59,6 @@ App.thumbCacheKey = function (identity) {
   return (/^[a-f0-9]{40}$/.test(String(identity || ''))) ? String(identity) : App.sha1Hex(identity);
 };
 
-/* 批量查盘：命中返回 Map<identity, url>。失败一律静默（缓存是优化，不是功能）。 */
 App.thumbCacheLookup = async function (ns, identities) {
   const out = new Map();
   const list = (identities || []).filter(Boolean);
@@ -100,7 +80,6 @@ App.thumbCacheLookup = async function (ns, identities) {
   return out;
 };
 
-/* 写盘一个 dataURL。返回落盘后的 URL（可直接当 <img src>），失败返回 ''。 */
 App.thumbCacheStore = async function (ns, identity, dataUrl) {
   if (!dataUrl || !window.sveApi || typeof window.sveApi.thumbCachePut !== 'function') return '';
   try {
@@ -112,7 +91,6 @@ App.thumbCacheStore = async function (ns, identity, dataUrl) {
   }
 };
 
-/* 失效：删掉若干 identity 的缓存。keys 为空数组时，主进程会清空整个命名空间。 */
 App.thumbCacheDrop = async function (ns, identities) {
   try {
     if (!window.sveApi || typeof window.sveApi.thumbCacheDrop !== 'function') return false;

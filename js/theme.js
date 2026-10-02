@@ -1,20 +1,5 @@
 'use strict';
-/* 主题配色：预设表 + 「种子色 → 整套变量」的推导 + 应用。
-   为什么要有推导：一套主题要 27 个 CSS 变量，让用户手调 27 个值既不现实也必然调丑。
-   所以只让用户（和预设）给 6 个种子色，其余按统一比例从「面板 ↔ 正文色」插值出来 ——
-   同一组比例对深色族（提亮）和浅色族（压暗）都成立。
-
-   ★ 这套比例与 _forza-src/_tools/gen-themes.cjs（生成 css/style.css 里 6 套扩展主题的
-     变量块）是**同一套公式**。两边若不一致，"预览里的自定义色"与"预设色"就会长得不像一家人 ——
-     判据 _forza-src/run-themes.js 的 T8 拿 CSS 块里的种子回灌 derive() 逐个变量比对，守着这一点。
-
-   应用方式：
-     · 预设 → 只写 data-theme（用 CSS 里预先算好的变量块，首屏无闪动）
-     · 自定义 → 写 data-theme="custom" + 把推导出的变量内联到 <html> 的 style 上
-   两族差异用 data-scheme（dark/light）表达，与主题 id 解耦。 */
 App.theme = {
-  /* 预设表：id 必须与 css/style.css 的变量块一一对应（dark 那套写在 :root 里）。
-     文案走 i18n 词条；zh 是词条生效前的兜底。 */
   THEMES: [
     { id: 'dark',     scheme: 'dark',  key: 'settings.dark',  zh: '深色' },
     { id: 'midnight', scheme: 'dark',  key: 'settings.theme.midnight', zh: '午夜蓝' },
@@ -27,16 +12,13 @@ App.theme = {
   ],
   CUSTOM_ID: 'custom',
   DEFAULT: 'light',
-  /* 自定义主题要用户挑的种子（其余全部推导） */
   SEED_KEYS: ['bg', 'panel', 'accent', 'text'],
-  /* 推导出来的变量清单（顺序无关，只用于内联/清理） */
   VAR_KEYS: ['--bg', '--panel', '--panel2', '--border', '--switch-off', '--text', '--dim', '--accent',
     '--btn-bg', '--btn-border', '--btn-hover-bg', '--btn-active-bg', '--input-bg', '--tabbar-bg',
     '--tab-pill-bg', '--tab-pill-hover-bg', '--tab-pill-active-bg', '--card-bg', '--card-hover-bg',
     '--overlay-bg', '--accent-sel-bg', '--thumb-bg', '--swatch-bg', '--scrollbar-thumb',
     '--btn-shadow', '--acrylic-bg', '--acrylic-border'],
 
-  /* ---------- 颜色工具 ---------- */
   _hex(h) {
     const s = String(h || '').replace('#', '').trim();
     const v = s.length === 3 ? s.split('').map(c => c + c).join('') : s;
@@ -47,13 +29,11 @@ App.theme = {
     const c = this._hex(h);
     return c ? '#' + c.map(v => v.toString(16).padStart(2, '0')).join('') : null;
   },
-  /* 线性插值 a→b（t=0 取 a）。不做 gamma 校正：与 gen-themes.cjs 保持逐位一致 */
   mix(a, b, t) {
     const x = this._hex(a), y = this._hex(b);
     if (!x || !y) return this._hex6(a) || '#000000';
     return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('');
   },
-  /* 相对亮度（WCAG）：用于明暗族判定与对比度守卫 */
   _lum(c) {
     const v = this._hex(c) || [0, 0, 0];
     const f = x => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); };
@@ -63,12 +43,10 @@ App.theme = {
     const L1 = this._lum(a), L2 = this._lum(b);
     return (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
   },
-  /* 明暗族按**底色亮度**判定，不让用户理解这个概念 */
   schemeOf(bg) {
     return this._lum(bg) > 0.42 ? 'light' : 'dark';
   },
 
-  /* ---------- 推导（与 gen-themes.cjs 同公式） ---------- */
   STEPS: {
     panel2: { dark: 0.035, light: 0.22 },
     btnBg: { dark: 0.04, light: 0 },
@@ -88,10 +66,8 @@ App.theme = {
     tabbar: { dark: null, light: 0.09 },
     thumbFromBg: { dark: 0.15, light: null },
     thumb: { dark: null, light: 0.06 },
-    dim: { dark: 0.61, light: 0.60 }      /* 次要文字：从面板向正文色走六成 */
+    dim: { dark: 0.61, light: 0.60 }
   },
-  /* seeds: { bg, panel, accent, text, dim?, border?, scheme? }
-     缺 dim/border/scheme 时按同一套比例推出来 —— 自定义主题只给 4 个种子即可。 */
   derive(seeds) {
     const s = seeds || {};
     const bg = this._hex6(s.bg) || '#1b1d21';
@@ -135,13 +111,11 @@ App.theme = {
     return { vars: v, scheme: scheme, seeds: { bg: bg, panel: panel, accent: accent, text: text, dim: dim, border: border } };
   },
 
-  /* ---------- 应用 ---------- */
   presetOf(id) { return this.THEMES.find(t => t.id === id) || null; },
   clearVars() {
     const de = document.documentElement;
     this.VAR_KEYS.forEach(k => de.style.removeProperty(k));
   },
-  /* 应用预设（走 CSS 变量块） */
   applyPreset(id) {
     const t = this.presetOf(id) || this.presetOf(this.DEFAULT);
     this.clearVars();
@@ -150,7 +124,6 @@ App.theme = {
     de.dataset.scheme = t.scheme;
     return { kind: 'preset', id: t.id, scheme: t.scheme };
   },
-  /* 应用自定义（内联变量 + data-theme=custom） */
   applyCustom(seeds) {
     const r = this.derive(seeds);
     const de = document.documentElement;
@@ -160,7 +133,6 @@ App.theme = {
     de.dataset.scheme = r.scheme;
     return { kind: 'custom', id: this.CUSTOM_ID, scheme: r.scheme, seeds: r.seeds, vars: r.vars };
   },
-  /* 自定义色的对比度体检：返回不足的项（空数组 = 合格） */
   customWarnings(seeds) {
     const r = this.derive(seeds);
     const out = [];
@@ -168,7 +140,6 @@ App.theme = {
     if (this.contrast(r.vars['--panel'], r.vars['--dim']) < 2) out.push({ key: 'dim', value: +this.contrast(r.vars['--panel'], r.vars['--dim']).toFixed(2) });
     return out;
   },
-  /* 自定义色的出厂值（沿用浅色预设的种子，用户改起来有参照） */
   defaultSeeds() {
     return { bg: '#F8FAFD', panel: '#FFFFFF', accent: '#00A89A', text: '#000000' };
   }
