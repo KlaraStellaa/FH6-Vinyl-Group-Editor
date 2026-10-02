@@ -1498,13 +1498,14 @@ App.handleGeometry = function () {
 App.handleSizePx = function (box) {
   if (!box || !(box.w > 0) || !(box.h > 0)) return 9;
   const short = Math.min(box.w, box.h) * (App.state.view.scale || 1);
-  return Math.max(3, Math.min(9, short / 4));
+  return Math.max(1, Math.min(9, short / 4));
 };
 
 App.handleHitPx = function (box) {
+  const v = App.handleSizePx(box);
   const short = (box && box.w > 0 && box.h > 0)
     ? Math.min(box.w, box.h) * (App.state.view.scale || 1) : Infinity;
-  return Math.max(6, Math.min(14, short * 0.4));
+  return Math.min(v * 1.5, short / 2);
 };
 
 App.drawHandles = function () {

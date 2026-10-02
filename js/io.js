@@ -471,7 +471,7 @@ App.importGeneric = function (root) {
 App.placePatternAt = function (spec, x, y) {
   if (App.cancelColorPreview) App.cancelColorPreview();
   App.history.markDiscrete();
-  const inv = clamp(1 / (App.state.view.scale || 1), 0.02, 50);
+  const inv = clamp(1 / (App.state.view.scale || 1), 0.005, 200);
   let l = null;
   if (spec.kind === 'symbol') {
     const sym = App.symbolMap.get(spec.key);
@@ -869,7 +869,7 @@ App.restoreWorkCopy = function (data) {
   if (data.view && isFinite(data.view.x)) {
     App.state.view.x = data.view.x;
     App.state.view.y = data.view.y;
-    App.state.view.scale = clamp(data.view.scale || 1, 0.02, 32);
+    App.state.view.scale = clamp(data.view.scale || 1, 0.005, 32);
   }
   App.updateView();
   if (App.Tabs && App.Tabs.clearDirty) App.Tabs.clearDirty();

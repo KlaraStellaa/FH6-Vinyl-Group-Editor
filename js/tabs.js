@@ -389,7 +389,7 @@ App.Tabs = {
     if (data.view && isFinite(data.view.x)) {
       App.state.view.x = data.view.x;
       App.state.view.y = data.view.y;
-      App.state.view.scale = clamp(data.view.scale || 1, 0.02, 32);
+      App.state.view.scale = clamp(data.view.scale || 1, 0.005, 32);
     }
     App.updateView();
     App.ensureMaskIndDef();

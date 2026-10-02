@@ -149,6 +149,7 @@ App.enterEdit = function (spec) {
       App.editSession.grp = { rot: 0, skew: 0, sx: 1, sy: 1 };
       const e = groupExtent(t);
       App.editSession.grpC = { x: e.cx, y: e.cy };
+      App.editSession.grpLCS = { w: e.w, h: e.h };
       App.editSession.grpM0 = t.map(it => layerDocMatrix(it));
     }
   }
@@ -379,6 +380,7 @@ App.applyEditMove = function (dx, dy) {
     it.x += dx; it.y += dy;
     App.applyItemTransform(it);
   }));
+  App.groupRebase();
   if (App.scheduleFrameUpdate) App.scheduleFrameUpdate('edit');
   else App.drawOutlines();
 };
@@ -481,6 +483,7 @@ App.groupRebase = function () {
   es.grpM0 = items.map(it => layerDocMatrix(it));
   const e = groupExtent(items);
   es.grpC = { x: e.cx, y: e.cy };
+  es.grpLCS = { w: e.w, h: e.h };
 };
 App.applyGroupScaleAt = function (items, cx, cy, fx, fy) {
   items.forEach(it => {
@@ -563,10 +566,12 @@ App.scaleItemKeepCenterAbs = function (it, ddx, ddy) {
 App.applyGroupScaleAbs = function (ddx, ddy) {
   const items = App.editTargets();
   if (items.length < 2) return false;
-  if (!App.editSession || !App.editSession.grp) return false;
-  const e = groupExtent(items);
-  const fx = ddx ? 1 + (128 * ddx) / Math.max(1e-6, e.w) : 1;
-  const fy = ddy ? 1 + (128 * ddy) / Math.max(1e-6, e.h) : 1;
+  const es = App.editSession;
+  if (!es || !es.grp) return false;
+  const e = (es.grpLCS && es.grpLCS.w > 0) ? es.grpLCS : groupExtent(items);
+  const k = 128 / Math.max(1, e.w);
+  const fx = ddx ? 1 + ddx * k : 1;
+  const fy = ddy ? 1 + ddy * k : 1;
   if (fx === 1 && fy === 1) return true;
   App.groupTransformApply(g => { g.sx *= fx; g.sy *= fy; });
   return true;
@@ -1414,6 +1419,7 @@ App.onEditPointerMove = function (e) {
 };
 
 App.onEditPointerUp = function () {
+  if (App.drag && App.drag.kind === 'editmove') App.groupRebase();
   App.drag = null;
   App.editHist.endGesture();
 };
@@ -1457,12 +1463,25 @@ App.editFlipCycle = function () {
   App.editHist.checkpoint();
   App.editHist.endGesture();
   App.state.editFlipStep = (App.state.editFlipStep + 1) % 4; // 1,2,3,0
+  const names = ['edit.flip.none', 'edit.flip.h', 'edit.flip.hv', 'edit.flip.v'];
+  const wantH = App.state.editFlipStep === 1 || App.state.editFlipStep === 2;
+  const wantV = App.state.editFlipStep === 2 || App.state.editFlipStep === 3;
+  if (items.length >= 2 && App.editSession && App.editSession.grp) {
+    App.groupTransformApply(g => {
+      g.sx = Math.abs(g.sx) * (wantH ? -1 : 1);
+      g.sy = Math.abs(g.sy) * (wantV ? -1 : 1);
+    });
+    App.refreshLayerThumbs();
+    if (App.contentChanged) App.contentChanged();
+    showToast(App.i18n.tf('toast.edit.flip', { v: App.i18n.t(names[App.state.editFlipStep]) }));
+    return;
+  }
   items.forEach(it => {
     const c = it.kind === 'merged' && App.mergedContentCenter ? App.mergedContentCenter(it) : null;
     const af = App.anchorFixedLocal(it);
     const p0 = af ? App.itemLocalToDoc(it, af.x, af.y) : null;
-    it.flipH = App.state.editFlipStep === 1 || App.state.editFlipStep === 2;
-    it.flipV = App.state.editFlipStep === 2 || App.state.editFlipStep === 3;
+    it.flipH = wantH;
+    it.flipV = wantV;
     if (af && p0) App.placeItemAtDocPoint(it, af.x, af.y, p0.x, p0.y);
     else if (c) App.anchorToKeepCenter(it, c.x, c.y);
     App.applyItemTransform(it);
@@ -1471,6 +1490,6 @@ App.editFlipCycle = function () {
   App.drawOutlines();
   App.refreshLayerThumbs();
   if (App.contentChanged) App.contentChanged();
-  const names = ['edit.flip.none', 'edit.flip.h', 'edit.flip.hv', 'edit.flip.v'];
+  App.groupRebase();
   showToast(App.i18n.tf('toast.edit.flip', { v: App.i18n.t(names[App.state.editFlipStep]) }));
 };
