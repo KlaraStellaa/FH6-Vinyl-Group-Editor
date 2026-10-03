@@ -222,7 +222,13 @@
       Array.prototype.slice.call(root.querySelectorAll('symbol')).forEach(function (s) {
         const id = s.getAttribute('id');
         const vb = String(s.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
-        if (id && vb.length === 4 && vb.every(Number.isFinite) && vb[2] > 0 && vb[3] > 0) symBox[id] = vb;
+        if (!(id && vb.length === 4 && vb.every(Number.isFinite) && vb[2] > 0 && vb[3] > 0)) return;
+        const sW = parseFloat(s.getAttribute('width')), sH = parseFloat(s.getAttribute('height'));
+        const vpW = (isFinite(sW) && sW > 0) ? sW : vb[2];
+        const vpH = (isFinite(sH) && sH > 0) ? sH : vb[3];
+        const fit = Math.min(vpW / vb[2], vpH / vb[3]);
+        const cw = vb[2] * fit, ch = vb[3] * fit;
+        symBox[id] = [(vpW - cw) / 2, (vpH - ch) / 2, cw, ch];
       });
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
       const grow = function (M, bx) {

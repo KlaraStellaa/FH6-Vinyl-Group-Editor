@@ -294,7 +294,7 @@ App.fzaComputeThumbDataUrl = async function (root) {
       if (maxX < 0) return null;
       return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
     };
-    let box = boxOf(200) || boxOf(8);
+    let box = boxOf(8) || boxOf(200);
     if (!box) return null;
     const PAD = 2;
     const bx = Math.max(0, box.x - PAD), by = Math.max(0, box.y - PAD);
@@ -315,7 +315,7 @@ App.fzaComputeThumbDataUrl = async function (root) {
           fg2.drawImage(img2, 0, 0, W2, H2);
           const oFull = full, oFg = fg, oW = W, oH = H, oBox = box;
           full = full2; fg = fg2; W = W2; H = H2;
-          const b2 = boxOf(200) || boxOf(8);
+          const b2 = boxOf(8) || boxOf(200);
           if (b2) {
             const b2x = Math.max(0, b2.x - PAD), b2y = Math.max(0, b2.y - PAD);
             box = { x: b2x, y: b2y, w: Math.min(W2 - b2x, b2.w + PAD * 2), h: Math.min(H2 - b2y, b2.h + PAD * 2) };

@@ -136,9 +136,17 @@
     var l = App.findLayer(id);
     close();
     if (!l) return;
-    App.state.selectedByTab = false;
     App.state.selBarDismissed = false;
     var _bi = App.panelLayers().indexOf(l);
+    if (App.state.selected.size > 1 || (App.state.selectedByTab && App.state.selected.size >= 1)) {
+      if (_bi >= 0) App.lastWheelIdx = _bi;
+      App.syncPanelSelectionClasses();
+      App.updateSelToolbar();
+      if (App.requestFlashRefresh) App.requestFlashRefresh();
+      App.scrollItemToTop(l);
+      return;
+    }
+    App.state.selectedByTab = false;
     if (_bi >= 0) App.lastWheelIdx = _bi;
     App.setSelection([l.id], { scrollPanel: true });
     if (App.requestFlashRefresh) App.requestFlashRefresh();
