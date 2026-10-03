@@ -546,7 +546,6 @@ App.autoSaveEditor = {
         '<label for="autoSaveLimit" data-i18n="autosave.limit"></label>' +
         '<input id="autoSaveLimit" class="speed-input" type="number" min="1" max="1000" step="1">' +
       '</div>' +
-      '<div class="autosave-note" id="autoSaveNote"></div>' +
       '<div class="anchor-btns">' +
         '<button class="autosave-reset" data-i18n="autosave.reset"></button>' +
         '<button class="autosave-cancel" data-i18n="autosave.cancel"></button>' +
@@ -562,7 +561,6 @@ App.autoSaveEditor = {
       const t = e.target;
       if (!t || !t.classList || !t.classList.contains('speed-input')) return;
       this.markBad();
-      this.syncNote();
     });
     w.addEventListener('keydown', e => {
       if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); this.cancel(); return; }
@@ -613,19 +611,7 @@ App.autoSaveEditor = {
     const b = this.el && this.el.querySelector('.autosave-toggle');
     return !!(b && b.classList.contains('autosave-on'));
   },
-  toggleEnabled() { this.setToggleUI(!this.isEnabled()); this.syncNote(); },
-
-  syncNote() {
-    const el = this.el && this.el.querySelector('#autoSaveNote');
-    if (!el) return;
-    const f = this.readForm();
-    const d = App.autoSaveDefaults;
-    el.textContent = App.i18n.tf('autosave.note', {
-      i: f ? f.intervalMin : d.intervalMin,
-      n: f ? f.limit : d.limit
-    });
-    el.classList.toggle('autosave-note-off', !this.isEnabled());
-  },
+  toggleEnabled() { this.setToggleUI(!this.isEnabled()); },
 
   open() {
     const w = this.build();
@@ -640,7 +626,6 @@ App.autoSaveEditor = {
     const title = w.querySelector('#autoSaveTitle');
     title.setAttribute('data-i18n', 'autosave.title');
     title.textContent = App.i18n.t('autosave.title');
-    this.syncNote();
     App.showOverlay(w);
     return true;
   },
@@ -654,7 +639,6 @@ App.autoSaveEditor = {
     w.querySelector('#autoSaveInterval').classList.remove('speed-bad');
     w.querySelector('#autoSaveLimit').classList.remove('speed-bad');
     this.setToggleUI(d.enabled);
-    this.syncNote();
     return true;
   },
 

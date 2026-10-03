@@ -505,8 +505,6 @@ input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px 
 .autosave-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--panel, #fff); box-shadow: 0 1px 3px rgba(0, 0, 0, .35); transition: transform .15s ease; }
 .autosave-toggle.autosave-on { background: var(--accent); border-color: var(--accent); }
 .autosave-toggle.autosave-on::after { transform: translateX(20px); }
-.autosave-note { font-size: 11px; color: var(--dim); margin-top: 6px; }
-.autosave-note.autosave-note-off { opacity: .5; }
 #autoSavePanel .anchor-btns { margin-top: 12px; }
 
 .sve-anchor-icon { filter: drop-shadow(0 0 2px rgba(0, 0, 0, .85)); }
