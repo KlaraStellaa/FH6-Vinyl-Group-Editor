@@ -57,7 +57,7 @@ class WorkcopyStore {
   save(content, source, dir, lang) {
     this.validate(content);
     const io = this.fs;
-    let fp, backup = null;
+    let fp;
     if (source) {
       // Only a capability issued by file-read / the native open dialog is accepted.
       // Never trust an arbitrary path or filename received over IPC.
@@ -67,10 +67,7 @@ class WorkcopyStore {
       const oldText = io.readFileSync(fp, 'utf8');
       if (hash(oldText) !== source.revision)
         throw new Error('源文件已被其他标签或程序修改。为避免覆盖较新的内容，保存已停止；请先另存当前内容再重新打开');
-      // Keep one recoverable previous version, outside the home list (.bak extension).
-      backup = fp + '.bak';
-      atomicWrite(backup, oldText, true, io);
-      // Detect external changes that happened while the backup was being written.
+      // Detect external changes that happened while this save was in progress.
       if (hash(io.readFileSync(fp, 'utf8')) !== source.revision)
         throw new Error('保存期间源文件发生变化，已停止覆盖');
       atomicWrite(fp, content, true, io);
@@ -79,7 +76,7 @@ class WorkcopyStore {
       fp = path.join(dir, name);
       atomicWrite(fp, content, false, io);
     }
-    return { ok: true, name: path.basename(fp), path: fp, backup, source: this.source(fp, content) };
+    return { ok: true, name: path.basename(fp), path: fp, source: this.source(fp, content) };
   }
 }
 module.exports = { WorkcopyStore, atomicWrite };

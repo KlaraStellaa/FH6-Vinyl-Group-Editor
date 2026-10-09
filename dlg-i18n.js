@@ -72,11 +72,11 @@
     }
   };
   var overwrite = {
-    'zh-CN': ['确认覆盖', '已存在同名文件「{name}」。确定覆盖吗？将保留上一版 .bak 备份。', '文件在确认期间已变化，请重新保存。'],
-    'zh-TW': ['確認覆蓋', '同名檔案「{name}」已存在。確定覆蓋嗎？將保留上一版 .bak 備份。', '確認期間檔案已變更，請重新儲存。'],
-    'en': ['Confirm overwrite', '"{name}" already exists. Overwrite it? The previous version will be kept as a .bak file.', 'The file changed during confirmation. Please save again.'],
-    'ja': ['上書きの確認', '「{name}」は既に存在します。上書きしますか？前の版は .bak に保存されます。', '確認中にファイルが変更されました。もう一度保存してください。'],
-    'ko': ['덮어쓰기 확인', '"{name}" 파일이 이미 있습니다. 덮어쓸까요? 이전 버전은 .bak 파일로 보관됩니다.', '확인 중 파일이 변경되었습니다. 다시 저장하세요.']
+    'zh-CN': ['确认覆盖', '已存在同名文件「{name}」。确定覆盖吗？', '文件在确认期间已变化，请重新保存。'],
+    'zh-TW': ['確認覆蓋', '同名檔案「{name}」已存在。確定覆蓋嗎？', '確認期間檔案已變更，請重新儲存。'],
+    'en': ['Confirm overwrite', '"{name}" already exists. Overwrite it?', 'The file changed during confirmation. Please save again.'],
+    'ja': ['上書きの確認', '「{name}」は既に存在します。上書きしますか？', '確認中にファイルが変更されました。もう一度保存してください。'],
+    'ko': ['덮어쓰기 확인', '"{name}" 파일이 이미 있습니다. 덮어쓸까요?', '확인 중 파일이 변경되었습니다. 다시 저장하세요.']
   };
   Object.keys(overwrite).forEach(function (lang) {
     DICT[lang]['dlg.overwriteTitle'] = overwrite[lang][0];

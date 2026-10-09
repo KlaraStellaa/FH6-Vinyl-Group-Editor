@@ -967,7 +967,6 @@ app.whenReady().then(() => {
       }
       if (exists && (!fs.existsSync(p) || fs.readFileSync(p, 'utf8') !== previous))
         return { ok: false, error: dt('dlg.fileChanged') };
-      if (exists) atomicWrite(p + '.bak', previous, true);
       atomicWrite(p, content, exists);
       if (exists && prevStat) {
         try {
