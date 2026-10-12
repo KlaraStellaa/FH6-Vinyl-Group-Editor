@@ -1,7 +1,10 @@
 'use strict';
+/* 选中、多选、外框、闪烁、剪切/粘贴/删除/合并/拆分 */
 App.setSelection = function (ids, opts) {
   opts = opts || {};
   App.state.selected = new Set(ids);
+  /* 不在这里清除 selBarDismissed：只有鼠标点击/Enter 呼出才清除，
+     Tab 扫选等选择变化不会把功能栏顶出来 */
   App.syncPanelSelectionClasses();
   App.drawOutlines();
   App.startFlash();
@@ -16,7 +19,7 @@ App.toggleLayerSelection = function (layer) {
   const s = new Set(App.state.selected);
   if (s.has(layer.id)) s.delete(layer.id);
   else s.add(layer.id);
-  App.state.selectedByTab = s.size >= 1;
+  App.state.selectedByTab = s.size >= 1; // Tab 操作产生的选择
   App.setSelection(Array.from(s));
 };
 
@@ -31,9 +34,19 @@ App.hitLayer = function (e) {
   return null;
 };
 
+/* 按住/单击 Tab：白框所在图层立即响应——未选→选定（并进入加选扫过）；
+   多选集合内的图层按 Tab → 取消（取消扫过）；
+   普通单选（未处于多选）按 Tab → 保持选中、直接进入多选；
+   多选遗留单选（selectedByTab=true 只剩 1 个）按 Tab：
+     - 白框图层是遗留项 → 取消它、退出多选
+     - 白框图层是其他图层 → 清除遗留、从该图层开始新多选 */
 App.actOnWhiteBoxLayer = function () {
   if (!App.state.layers.length) return;
+  /* 白框停在「+」栏上时它不在任何图层行上：Tab 一律不动图层状态。
+     否则停靠态按 Tab 会把「+」栏下面那一行图层选上——lastWheelIdx 已被停靠置空，
+     回退口径 i=0 恰好落在面板第一行，而白框并不在那个图层上。 */
   if (App.state.plusAnchorActive) return;
+  /* Tab 手势期间功能栏一律收起（多选不呼出） */
   App.state.selBarDismissed = true;
   const ids = App.panelLayers().map(l => l.id);
   let i;
@@ -47,28 +60,41 @@ App.actOnWhiteBoxLayer = function () {
   const wasSelected = App.state.selected.has(layer.id);
   const legacySingle = App.state.selectedByTab && App.state.selected.size === 1;
   App.state.sweepDir = 0;
+  /* 记录本次 Tab 手势对白框图层的自动操作：期间发生鼠标点击/拖动则立刻回滚 */
   App.state.tabAutoSel = { id: layer.id, prevSelected: wasSelected };
+  /* 单选残留清理：当前只有 1 个选中且白框不在该图层上——清除残留，从白框图层开始加选。
+     仅针对【鼠标点击的普通单选】（selectedByTab=false）：
+     用户按 Tab 逐个加选产生的选择（selectedByTab=true）绝不清空——
+     否则"按 Tab 加选第一个 → 白框移到下一个 → 再按 Tab"时第一个被误清
+     （多选必须累积，而不是只能同时存在一个） */
   if (App.state.selected.size === 1 && !wasSelected && !App.state.selectedByTab) {
     App.state.selectedByTab = false;
     App.setSelection([]);
   }
   if (legacySingle && wasSelected) {
+    /* 多选遗留单选：白框图层是遗留项 → Tab 取消它、退出多选 */
     App.state.sweepMode = 'remove';
     App.state.selectedByTab = false;
     App.setSelection([]);
   } else if (wasSelected && App.state.selected.size === 1) {
+    /* 普通单选：保持选中并进入多选（加选扫过从该图层开始），不取消 */
     App.state.sweepMode = 'add';
     App.state.selectedByTab = true;
     App.setSelection(Array.from(App.state.selected));
   } else if (wasSelected) {
+    /* 多选集合内的图层再按 Tab：取消它（Tab 切换语义：未选=加选、已选=取消） */
     App.state.sweepMode = 'remove';
     App.toggleLayerSelection(layer);
   } else {
+    /* 未选图层：正常加选（累积多选——逐个 Tab 加选时之前的保持选中，
+       不会被"单选残留清理"误清——见上方 selectedByTab 条件） */
     App.state.sweepMode = 'add';
     App.toggleLayerSelection(layer);
   }
 };
 
+/* Tab 手势期间鼠标介入（点击/拖动）：回滚 Tab 对白框图层的自动加选/取消。
+   返回被回滚的图层 id（没有则 null）——点击该图层时不应再重复切换 */
 App.rollbackTabAutoSel = function () {
   const t = App.state.tabAutoSel;
   if (!t) return null;
@@ -76,9 +102,9 @@ App.rollbackTabAutoSel = function () {
   const l = App.findLayer(t.id);
   if (!l) return t.id;
   if (t.prevSelected && !App.state.selected.has(l.id)) {
-    App.state.selected.add(l.id);
+    App.state.selected.add(l.id); // Tab 取消了的：恢复
   } else if (!t.prevSelected && App.state.selected.has(l.id)) {
-    App.state.selected.delete(l.id);
+    App.state.selected.delete(l.id); // Tab 加选了的：取消
   } else {
     return t.id;
   }
@@ -87,6 +113,11 @@ App.rollbackTabAutoSel = function () {
   return t.id;
 };
 
+/* 像素级命中：判定范围 = 图案可见像素（半透明/羽化边缘不再误选），透明区穿透到下层。
+   剪影 PNG 的 alpha = 原图亮度，浅色边缘视觉几乎不可见但 alpha>0，
+   浏览器 visiblePainted 只要 alpha>0 就命中，导致判定范围比视觉大——这里按 alpha≥32 判定。
+   坐标换算用 transform 属性链矩阵（纯字符串解析，零布局）——getScreenCTM 会强制整树布局，
+   大量图层时每次点击都卡 */
 App.canvasAlphaAt = function (c, layer, clientX, clientY) {
   const doc = App.screenToDoc(clientX, clientY);
   const inv = App.transformChainMat ? App.transformChainMat(layer).inverse() : null;
@@ -101,6 +132,8 @@ App.canvasAlphaAt = function (c, layer, clientX, clientY) {
   if (px < 0 || py < 0 || px >= c.width || py >= c.height) return 0;
   return c.getContext('2d', { willReadFrequently: true }).getImageData(px, py, 1, 1).data[3];
 };
+/* 从顶层到底层找第一个"可见像素"图层（透明区穿透下层）。
+   剪影画布在图层创建时即预生成，命中判定可同步完成；未就绪时按几何保守命中 */
 App.hitLayerPaintedSync = function (clientX, clientY) {
   for (let i = App.state.layers.length - 1; i >= 0; i--) {
     if (App.layerVisibleAtSync(App.state.layers[i], clientX, clientY)) return App.state.layers[i];
@@ -118,36 +151,49 @@ App.layerVisibleAtSync = function (layer, clientX, clientY) {
     return false;
   }
   const b = App.getItemDocBBox(layer);
-  if (!b.corners || b.corners.length < 4) return true;
+  if (!b.corners || b.corners.length < 4) return true; // 无法计算：保守命中
   const pd = App.screenToDoc(clientX, clientY);
   if (!App.pointInQuad(pd, b.corners)) return false;
   if (layer.kind === 'symbol' && !layer.isMask) {
     const c = App.symbolColorCanvasSync(layer.dataUri, layer.color || '#ffffff', Math.max(1, Math.round(layer.w)), Math.max(1, Math.round(layer.h)));
-    if (!c) return true;
+    if (!c) return true; // 位图未就绪：保守命中
     return App.canvasAlphaAt(c, layer, clientX, clientY) >= 32;
   }
-  return true;
+  return true; // pattern/import/蒙版：矩形（不透明）命中
 };
 
+/* 普通模式画布点击：只选中，不移动；按住 Tab 点击=加入/移出多选 */
 App.onCanvasPointerDown = function (e) {
-  if (App.state.spaceDown) return;
+  if (App.state.spaceDown) return; // 平移由 main 处理
+  /* Tab 手势期间鼠标点击：先回滚 Tab 对白框图层的自动加选/取消。
+     tabPending 流程在 pointerdown 已回滚并把 rolledId 通过 _rolledId 传入；
+     直接调用（测试/框选路径）时现场回滚 */
   let rolledId = e && e._rolledId;
   if (App.state.tabDown && rolledId === undefined) rolledId = App.rollbackTabAutoSel();
+  /* 模拟事件可能不带坐标（以 target 派发）：退化为 DOM 命中；真实事件坐标恒有效 */
   let layer = (e.clientX === 0 && e.clientY === 0 && e.target)
     ? App.hitLayer(e)
     : App.hitLayerPaintedSync(e.clientX, e.clientY);
+  /* 分组内编辑：组外图层在画布上照常显示，但**不参与点选**（当作点到空白）。
+     否则会选到图层栏里根本不存在的图层，后续操作的对象与所见对不上。 */
   if (!App.inGroupEditScope(layer)) layer = null;
   if (layer) {
     const top = App.topOf(layer);
     if (App.state.tabDown) {
+      /* 按住 Tab 点击画布中的图案：加入/移出多选，白框立刻选中点到的图层。
+         点击=明确意图：无论是否刚回滚过白框层都切换（Tab+滚轮扫过后再点击该层，
+         rollback 恢复原状态后 toggle 是用户的新操作——用 rolledId 拦截的话
+         导致"点到白框层加不进去/第一个被取消"） */
       App.state.tabGestureUsed = true;
       App.toggleLayerSelection(top);
       const ids = App.panelLayers().map(l => l.id);
       const bi = ids.indexOf(top.id);
       if (bi >= 0) { App.lastWheelIdx = bi; App.syncPanelSelectionClasses(); }
       App.scrollItemToTop(top);
+      /* 白框已移动：补刷新闪烁覆盖层（否则闪烁停在旧白框位置） */
       App.requestFlashRefresh(false);
     } else if (App.state.selected.size > 1 || (App.state.selectedByTab && App.state.selected.size >= 1)) {
+      /* 多选（含遗留单选）状态下普通点击：绝不取消多选；白框移到点击的图层并呼出功能栏（按钮作用于整个多选集合） */
       App.state.selBarDismissed = false;
       const ids = App.panelLayers().map(l => l.id);
       const i = ids.indexOf(top.id);
@@ -157,14 +203,17 @@ App.onCanvasPointerDown = function (e) {
       App.requestFlashRefresh();
       App.scrollItemToTop(top);
     } else {
+      /* 普通点击：单选该图层并快速定位（普通单选不显示红三角） */
       App.state.selectedByTab = false;
       App.lastWheelIdx = undefined;
       App.state.selBarDismissed = false;
       App.setSelection([top.id], { scrollPanel: true });
     }
   } else {
+    /* 按住 Tab 点击画布空白处：不清空多选（防止扫选过程中误触清空） */
     if (App.state.replacing || App.state.tabDown) return;
     if (App.state.selected.size > 1 || (App.state.selectedByTab && App.state.selected.size >= 1)) {
+      /* 多选（含遗留单选）状态下点击空白：绝不清空多选，只收起功能栏、白框不动 */
       App.state.selBarDismissed = true;
       App.updateSelToolbar();
     } else {
@@ -174,8 +223,10 @@ App.onCanvasPointerDown = function (e) {
   }
 };
 
+/* ---------- Tab 拖拽框选（蓝框 +/−） ---------- */
 App.boxSelect = null;
 App.startBoxSelect = function (e, mode) {
+  /* Tab 手势期间鼠标拖动框选：先回滚 Tab 对白框图层的自动加选/取消 */
   if (App.state.tabDown) App.rollbackTabAutoSel();
   const p = App.screenToDoc(e.clientX, e.clientY);
   App.boxSelect = { mode, x0: p.x, y0: p.y, x1: p.x, y1: p.y, startCX: e.clientX, startCY: e.clientY };
@@ -184,7 +235,7 @@ App.startBoxSelect = function (e, mode) {
     App.overlayG.appendChild(App.boxSelG);
   }
   App.drawBoxSelect();
-  try { App.svg.setPointerCapture(e.pointerId); } catch (err) { }
+  try { App.svg.setPointerCapture(e.pointerId); } catch (err) { /* 合成事件无活动指针 */ }
   if (e.preventDefault) e.preventDefault();
 };
 App.moveBoxSelect = function (e) {
@@ -203,6 +254,7 @@ App.drawBoxSelect = function () {
   if (!g) {
     g = svgEl('g');
     const rect = svgEl('rect', { fill: 'rgba(78,161,255,.15)', stroke: '#4ea1ff', 'stroke-width': 1.5 / sc, class: 'sve-boxsel' });
+    /* 右上角小符号（跟随蓝框移动） */
     const mark = svgEl('text', {
       class: 'sve-boxsel-mark', 'text-anchor': 'middle', 'dominant-baseline': 'central',
       'font-size': 16 / sc, 'font-weight': 'bold', fill: '#ffffff', stroke: '#1d6fd1',
@@ -217,7 +269,7 @@ App.drawBoxSelect = function () {
   b.rect.setAttribute('x', x); b.rect.setAttribute('y', y);
   b.rect.setAttribute('width', w); b.rect.setAttribute('height', h);
   b.rect.setAttribute('stroke-width', 1.5 / sc);
-  b.mark.setAttribute('x', x + w);
+  b.mark.setAttribute('x', x + w); // 右上角
   b.mark.setAttribute('y', y);
   b.mark.setAttribute('font-size', 16 / sc);
   b.mark.setAttribute('stroke-width', 3 / sc);
@@ -236,6 +288,9 @@ App.endBoxSelect = function (e) {
   const moved = Math.hypot(e.clientX - b.startCX, e.clientY - b.startCY) > 4;
   if (b.el) b.el.remove();
   if (!moved) {
+    /* 点按未拖动：按原有 Tab 点击切换选中（加入/移出多选）。
+       注意：startBoxSelect 已对画布设置 pointer capture，pointerup 的 target 恒为画布，
+       hitLayer 会失效——用 elementFromPoint 还原坐标处的真实元素 */
     const t = document.elementFromPoint(e.clientX, e.clientY);
     const fake = Object.assign({}, e, { target: t || App.svg });
     App.onCanvasPointerDown(fake);
@@ -249,8 +304,12 @@ App.endBoxSelect = function (e) {
     else { if (s.has(id)) s.delete(id); }
   });
   App.state.selectedByTab = s.size >= 1;
-  App.state.selBarDismissed = true;
+  App.state.selBarDismissed = true; // Tab 框选不呼出功能栏
   App.setSelection(Array.from(s));
+  /* 白框归位到框选集合的最上层（面板第一个图层）：
+     框选后白框总是自动选中集合第一个图层，不保留原位（含原白框已在集合内的情况）；
+     闪烁动画跟随整个集合（白框在集合内才全部闪）。
+     scrollItemToTop 同时滚动图层栏，让显示的白框（wheelBox）同步到位 */
   if (s.size) {
     let target = null;
     for (let i = App.state.layers.length - 1; i >= 0; i--) {
@@ -259,11 +318,14 @@ App.endBoxSelect = function (e) {
     if (target) {
       App.scrollItemToTop(target);
       App.syncPanelSelectionClasses();
+      /* setSelection 在归位之前执行，overlay 已按旧白框构建过；
+         归位后补一次同步（不重启动画），闪烁动画跟随新白框 */
       if (App.requestFlashRefresh) App.requestFlashRefresh(false);
     }
   }
 };
 
+/* 点在凸多边形内（各边叉积同号） */
 App.pointInPoly = function (p, poly) {
   let sign = 0;
   for (let i = 0; i < poly.length; i++) {
@@ -277,6 +339,7 @@ App.pointInPoly = function (p, poly) {
   }
   return true;
 };
+/* 线段相交（含端点） */
 App.segIntersect = function (p1, p2, p3, p4) {
   const d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x);
   if (d === 0) return false;
@@ -284,13 +347,18 @@ App.segIntersect = function (p1, p2, p3, p4) {
   const u = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / d;
   return t >= 0 && t <= 1 && u >= 0 && u <= 1;
 };
+/* 图层实际图形（旋转角点多边形）与蓝框矩形是否相交：
+   不用轴对齐包围盒（细长图案旋转后包围盒远大于实际图形，会误选框外图层） */
 App.layerPolyHitBox = function (layer, x, y, w, h) {
   const bb = App.getItemDocBBox(layer);
   const poly = (bb.corners && bb.corners.length === 4) ? bb.corners
     : [{ x: bb.x, y: bb.y }, { x: bb.x + bb.w, y: bb.y }, { x: bb.x + bb.w, y: bb.y + bb.h }, { x: bb.x, y: bb.y + bb.h }];
   const rect = [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }];
+  /* 图案任一角点在框内 */
   if (poly.some(p => p.x >= x && p.x <= x + w && p.y >= y && p.y <= y + h)) return true;
+  /* 框任一角点在图案内 */
   if (rect.some(p => App.pointInPoly(p, poly))) return true;
+  /* 任一边相交 */
   for (let i = 0; i < 4; i++) {
     for (let j = 0; j < 4; j++) {
       if (App.segIntersect(poly[i], poly[(i + 1) % 4], rect[j], rect[(j + 1) % 4])) return true;
@@ -298,9 +366,11 @@ App.layerPolyHitBox = function (layer, x, y, w, h) {
   }
   return false;
 };
+/* 与蓝框相交的顶层图层（合并分组：任一子图案在框内 → 整组） */
 App.layersInBox = function (x, y, w, h) {
   const out = [];
   App.state.layers.forEach(top => {
+    /* 分组内编辑：组外图层不参与框选（Tab 拖拽 / Tab+Ctrl 拖拽都走这里） */
     if (!App.inGroupEditScope(top)) return;
     if (top.kind === 'merged') {
       const leaves = [];
@@ -314,6 +384,8 @@ App.layersInBox = function (x, y, w, h) {
   return out;
 };
 
+/* ---------- 选中工具栏 ---------- */
+/* 功能栏呼出/收起（带滑入滑出过渡；高频调用安全：重复同向调用直接跳过） */
 App.setSelToolbarVisible = function (show) {
   const bar = $('#selToolbar');
   if (!bar) return;
@@ -328,6 +400,8 @@ App.setSelToolbarVisible = function (show) {
     setTimeout(() => { bar.classList.add('hidden'); bar.classList.remove('sve-bar-out'); }, 180);
   }
 };
+/* 「返回」（退出分组内编辑）的显隐：已移到画布左下角常驻，**不在内编辑状态时隐藏**。
+   必须能被反复调用（refreshPanel / updateSelToolbar / 各载入路径都会调）。 */
 App.syncGroupBackBtn = function () {
   const btn = $('#btnGroupBack');
   if (!btn) return;
@@ -338,15 +412,23 @@ App.syncGroupBackBtn = function () {
 App.updateSelToolbar = function () {
   const bar = $('#selToolbar');
   const inEdit = !!App.state.edit;
+  /* 定位按钮：没有可定位的图层（白框停在「+」栏 / 无图层）就置灰不可用。
+     这句必须写在下面的早退之前——白框停靠时本函数会提前 return，
+     而那时恰恰是最需要它置灰的时候。 */
   const locateBtn = $('#btnLocateLayer');
   if (locateBtn) locateBtn.disabled = !App.whiteBoxLayer();
+  /* 分组内编辑 / 返回：**必须写在下面的早退之前**——功能栏收起时它们也各有状态。
+     分组内编辑：只有恰好选中一个合并分组才可点（单个普通图层、Tab 多选都置灰）；
+     返回：不在功能栏里（画布左下角常驻键），仅分组内编辑状态显示，其余时候隐藏。 */
   const geBtn = $('#btnGroupEdit');
   if (geBtn) {
     const one = App.operationTargets();
     geBtn.disabled = !(one.length === 1 && one[0].kind === 'merged');
   }
   App.syncGroupBackBtn();
+  /* 颜色面板跟随白框：单个普通图层同步、合并分组不同步、编辑中不同步 */
   if (App.syncColorPanelToTargets) App.syncColorPanelToTargets();
+  /* 无选中或编辑中：隐藏并返回（按钮可用状态只在可见时才有意义） */
   if (!App.state.selected.size || inEdit || App.state.plusAnchorActive) { App.setSelToolbarVisible(false); return; }
   const items = App.operationTargets();
   const single = items.length === 1;
@@ -354,27 +436,50 @@ App.updateSelToolbar = function () {
   $('#btnReplace').disabled = !canReplace;
   $('#btnMerge').disabled = items.length < 2;
   $('#btnSplit').disabled = !App.splitTarget();
+  /* 蒙版按钮：全部已是蒙版 → 禁用“切换为蒙版”；无蒙版 → 禁用“切换为图层” */
   const allMask = items.every(l => !!l.isMask);
   const anyMask = items.some(l => !!l.isMask);
   $('#btnToMask').disabled = allMask;
   $('#btnToLayer').disabled = !anyMask;
+  /* 可见性：仅鼠标点击/Enter 呼出（Tab 手势/白框移动后收起，多选时呼出后按钮作用于整个集合） */
   const show = !App.state.selBarDismissed;
   App.setSelToolbarVisible(!!show);
 };
 
+
+/* ---------- 分组内编辑 ----------
+   状态：App.state.groupEdit 是一个**栈**，每层记 { excluded: Set<layer> }——
+   excluded = 本次范围**之外**的顶层图层（也就是分组外的其他图层）。
+
+   进入 = 真执行「取消分组」（子层提升为顶层，位置不变），再把范围外的图层记进 excluded；
+   返回 = 把范围内的图层真合并回一个分组，然后弹栈。
+
+   图层栏只渲染「不在 excluded 里」的图层；**画布渲染完全不动**（分组外图层照常显示）。
+   嵌套进入 = 再拆一层、excluded 继续收窄，用栈记；「返回」退一层。 */
 App.groupEditActive = function () {
   return !!(App.state.groupEdit && App.state.groupEdit.length);
 };
+/* 当前层的排除集（不在分组内编辑状态时返回 null） */
 App.currentExcluded = function () {
   if (!App.groupEditActive()) return null;
   return App.state.groupEdit[App.state.groupEdit.length - 1].excluded;
 };
+/* 分组内编辑期间**画布上允许选中的范围**：只有当前正在编辑的分组内的图层。
+   组外图层在画布上照常显示（渲染完全不动），但不参与画布点选/框选 ——
+   否则会选到图层栏里根本不存在的图层（面板已被排除集过滤），
+   后续「改变颜色 / 删除 / 合并」等操作的对象与所见对不上。
+   不在内编辑状态时恒为 true（行为与改动前一致）。
+   注：Tab+滚轮扫选走 App.panelLayers()，那条路本来就只含组内图层。 */
 App.inGroupEditScope = function (layer) {
   if (!layer) return false;
   const ex = App.currentExcluded();
   if (!ex) return true;
   return !ex.has(layer);
 };
+/* 分组内编辑时**新加入图层**的插入位置（state.layers 下标；-1 = 追加到最上层）。
+   位置 = 范围内最靠上的图层之上、第一个「范围外」图层之下 —— 于是新图案落在
+   分组上方原有图层的**下面**，同时仍在组内子层的最上面（连放多个时逐个往上叠）。
+   追加到最上层会让内编辑时拖进来的图案盖住分组上方的图层（2026-09-25 用户报障）。 */
 App.groupEditInsertIndex = function () {
   const ex = App.currentExcluded();
   if (!ex) return -1;
@@ -386,6 +491,9 @@ App.groupEditInsertIndex = function () {
   }
   return -1;
 };
+/* 图层栏可见列表 App.panelLayers() 定义在 js/panels.js（面板顺序的唯一来源）；
+   这里只提供它依赖的「当前排除集」。 */
+/* 进入分组内编辑：目标必须是合并分组 */
 App.enterGroupEdit = function (merged) {
   if (!merged || merged.kind !== 'merged') return false;
   const children = (merged.children || []).slice();
@@ -393,11 +501,18 @@ App.enterGroupEdit = function (merged) {
   if (!App.state.groupEdit) App.state.groupEdit = [];
   const prev = App.currentExcluded();
   App.history.markDiscrete();
-  App.splitMerged(merged);
+  App.splitMerged(merged);                     /* 真拆：子层成为顶层图层 */
+  /* 新排除集 = 本次范围外的顶层图层 ∪ 上一层已排除的（嵌套时只可能更窄） */
   const inScope = new Set(children);
   const excluded = new Set();
   App.state.layers.forEach(l => { if (!inScope.has(l)) excluded.add(l); });
   if (prev) prev.forEach(l => excluded.add(l));
+  /* 原始位置锚点 = 范围内**最靠上**的子层（拆分后它正好在分组原来的顶边位置）。
+     「返回」时合并必须落在这个位置上，而不是「白框所在图层」——分组内编辑期间
+     从右侧图案库拖进来的新图层会被追加到图层数组末尾（= 最上层）且白框会跟过去，
+     若按白框定位，合并后整个分组就会跳到图层栏最上面（2026-09-25 用户报障）。
+     注意：任何子层当锚点都得到分组原位置（分组恰好覆盖这些子层），
+     所以用顶边子层做锚点与旧行为在「白框就在组内」时完全等价。 */
   let anchor = children[0];
   children.forEach(ch => {
     if (App.state.layers.indexOf(ch) > App.state.layers.indexOf(anchor)) anchor = ch;
@@ -412,14 +527,19 @@ App.enterGroupEdit = function (merged) {
   try { App.log('info', '进入分组内编辑', { children: children.length }); } catch (e) { /* ignore */ }
   return true;
 };
+/* 返回：退出当前一层的分组内编辑，范围内图层真合并回一个分组 */
 App.exitGroupEdit = function () {
   if (!App.groupEditActive()) return false;
   const ex = App.currentExcluded();
   const frame = App.state.groupEdit[App.state.groupEdit.length - 1];
   const scope = App.state.layers.filter(l => !ex.has(l));
+  /* 范围内被删光 = 这个分组被删掉了：直接退出，不做合并（不新增空分组） */
   let merged = null;
   if (scope.length >= 2) {
     App.history.markDiscrete();
+    /* 合并锚点 = 本层进入时记下的原始位置（见 enterGroupEdit）。
+       白框可能停在内编辑期间新拖进来的图层上（那层在数组最末尾），
+       直接按白框定位会把合并后的分组甩到最上层。 */
     if (frame && frame.anchor && scope.indexOf(frame.anchor) >= 0) {
       const ids = App.panelLayers().map(l => l.id);
       const i = ids.indexOf(frame.anchor.id);
@@ -431,6 +551,10 @@ App.exitGroupEdit = function () {
   App.state.selected = new Set();
   App.state.selectedByTab = false;
   App.refreshPanel();
+  /* 合并发生在「排除集还没弹栈」的时候：那一刻面板被过滤成只剩合并后的分组一行，
+     mergeLayers 内部的 alignWheelScroll 会把白框索引夹到 0 ——
+     结果「返回」之后白框落到最顶层图层、面板滚回顶部（2026-09-25 用户报「分组跑到最上面」）。
+     弹栈 + 重排面板之后，白框必须重新钉回合并后的分组（合并后白框停在分组上 = 既有语义）。 */
   if (merged && App.state.layers.indexOf(merged) >= 0 && App.scrollItemToTop) {
     App.scrollItemToTop(merged, true);
   }
@@ -441,7 +565,14 @@ App.exitGroupEdit = function () {
   try { App.log('info', '退出分组内编辑', { rest: scope.length }); } catch (e) { /* ignore */ }
   return true;
 };
+/* 注意：模型被整体替换的几条路径都已就地清空内编辑状态 ——
+   切标签 / 新建 / 打开文档走 `js/tabs.js` 的 loadDoc（它自己会 refreshPanel），
+   整体清空图层走 `js/model.js` 的 clearAllLayers。
+   撤销/重做**不走**这两条：它由 history.restore 按快照把状态重新装回来。 */
 
+
+/* ---------- 蒙版 / 翻转 ---------- */
+/* 切换所选图层为蒙版（棋盘格指示）或普通图层；合并图层递归处理全部子图层 */
 App.setSelectedMask = function (flag) {
   const items = App.operationTargets();
   if (!items.length) return;
@@ -463,6 +594,8 @@ App.setSelectedMask = function (flag) {
   const finish = () => {
     if (token !== App._maskRenderToken) return;
     App._maskRenderBusy = false;
+    /* 蒙版切换改变了这些图层的显示：缓存必须失效并按新模型重绘。
+       大集合几何未变，可保留旧 autoStatic 到新位图原子落地，杜绝 2000 mask 的中间绘制峰值。 */
     items.forEach(l => { if (App.dropEditStaticItem) App.dropEditStaticItem(l); });
     if (App.contentChanged) App.contentChanged({ preserveAutoStatic });
     items.forEach(l => { if (l.kind === 'merged' && App.markProxyDirty) App.markProxyDirty(l); });
@@ -479,6 +612,8 @@ App.setSelectedMask = function (flag) {
     return;
   }
 
+  /* 合并分组本身没有独立图形，不必再清空并重挂全部子 DOM。叶子按 6ms 预算分片重建，
+     避免一次操作同步创建数千组 mask/use/rect 节点。 */
   if (App.stopFlash) App.stopFlash();
   let i = 0;
   const step = () => {
@@ -497,11 +632,14 @@ App.setSelectedMask = function (flag) {
   setTimeout(step, 0);
 };
 
+/* 翻转所选图层（合并图层整体翻转，不影响子图层各自状态） */
 App.flipSelected = function (axis) {
   const items = App.operationTargets();
   if (!items.length) return;
   App.history.markDiscrete();
   items.forEach(l => {
+    /* 合并分组：锚点远离内容中心，直接翻转标志会让内容绕锚点镜像（跳到远处/消失），
+       翻转后重算锚点保持内容几何中心不动（与普通图层绕自身中心翻转一致） */
     const c = l.kind === 'merged' && App.mergedContentCenter ? App.mergedContentCenter(l) : null;
     if (axis === 'h') l.flipH = !l.flipH;
     else l.flipV = !l.flipV;
@@ -513,16 +651,20 @@ App.flipSelected = function (axis) {
   });
   App.refreshLayerThumbs();
   App.drawOutlines();
+  /* 翻转同样改变显示：位图缓存必须失效并重绘（否则画布上还是翻转前的样子） */
   items.forEach(l => { if (App.dropEditStaticItem) App.dropEditStaticItem(l); });
   if (App.contentChanged) App.contentChanged();
   try { App.log('info', '翻转', { axis, layers: items.length }); } catch (e) { /* ignore */ }
   showToast(axis === 'h' ? App.i18n.t('toast.sel.flipH') : App.i18n.t('toast.sel.flipV'));
 };
 
+/* ---------- 剪切 / 复制 / 粘贴 ---------- */
+/* 白框所在的图层（左侧图层栏白框即当前图层，无需显式选中）；
+   白框停靠在首位「+」功能栏上时没有对应图层 → null（粘贴走第 2 位分支） */
 App.whiteBoxLayer = function () {
   if (App.state.plusAnchorActive) return null;
   if (!App.state.layers.length) return null;
-  const ids = App.panelLayers().map(l => l.id);
+  const ids = App.panelLayers().map(l => l.id); // 面板顺序（最上层在前）
   let i;
   if (App.lastWheelIdx !== undefined) i = clamp(App.lastWheelIdx, 0, ids.length - 1);
   else if (App.state.selected.size === 1) i = ids.indexOf(Array.from(App.state.selected)[0]);
@@ -530,11 +672,15 @@ App.whiteBoxLayer = function () {
   if (i < 0 || i >= ids.length) i = 0;
   return App.findLayer(ids[i]);
 };
+/* 统一的操作目标：Tab 多选状态操作整个选中集合；
+   否则始终操作白框所在图层——选中判定全面跟随白框（剪切/删除/复制/工具栏按钮/颜色全部一致） */
 App.operationTargets = function () {
   if (App.state.selectedByTab && App.state.selected.size) return App.selectedItems();
   const box = App.whiteBoxLayer();
   return box ? [box] : App.selectedItems();
 };
+/* 多选状态下白框是否已滚出集合：此时 X 剪切 / Delete 删除跟随白框图层，
+   而不是继续作用在集合上（集合本身不被取消） */
 App.whiteBoxOutsideSet = function () {
   if (!(App.state.selectedByTab && App.state.selected.size)) return false;
   const box = App.whiteBoxLayer();
@@ -546,6 +692,7 @@ App.activeTargetItems = function () {
 
 App.cutSelection = function () {
   const hadSel = App.state.selected.size > 0;
+  /* 多选状态下白框滚出集合：X 剪切作用于白框图层（集合本身保留） */
   let items;
   if (App.whiteBoxOutsideSet()) {
     const box = App.whiteBoxLayer();
@@ -559,11 +706,12 @@ App.cutSelection = function () {
   App.state.clipboard = items.map(l => App.serializeLayer(l, true));
   items.forEach(l => App.removeTopLayer(l));
   if (hadSel) App.setSelection([]);
-  else App.syncPanelSelectionClasses();
+  else App.syncPanelSelectionClasses(); // 白框原位保留，不呼出功能界面
   App.refreshClipboardPanel();
   showToast(App.i18n.tf('toast.sel.cut', { n: App.state.clipboard.length }));
 };
 
+/* 复制：只放入剪切板，不立即生成副本 */
 App.copySelection = function () {
   const items = App.activeTargetItems();
   if (!items.length) { showToast(App.i18n.t('toast.sel.noCopy')); return; }
@@ -578,11 +726,22 @@ App.pasteClipboard = function () {
   App.history.markDiscrete();
   try { App.log('info', '粘贴', { layers: App.state.clipboard.length }); } catch (e) { /* ignore */ }
   const items = App.state.clipboard;
+  /* 粘贴不消耗剪切板：可反复粘贴，直到下一次剪切/复制才顶替 */
   const newLayers = items.map(slim => App.deserializeLayer(slim));
+  /* 大组粘贴时隐藏图层容器：逐层 DOM 插入会触发增量布局（千层粘贴卡数秒） */
   const hideBatch = newLayers.length > 50 && App.layersRoot.style.display !== 'none';
   if (hideBatch) App.layersRoot.style.display = 'none';
   const sel = App.selectedItems();
+  /* 粘贴位置：①白框停靠在首位「+」功能栏 → 插到第 2 位（现顶层之上）；
+     ②白框所在图层 → 贴到它下方；③无白框用单选图层；④都没有则追加 */
   if (App.state.plusAnchorActive && App.state.layers.length) {
+    /* 数组末尾 = 面板第一行 = 最顶层；**DOM 顺序与数组顺序同向**（SVG 里后面的兄弟画在上面）。
+       「+」栏正下方那一行就是当前最顶层 → 新层要插到**它之上**（DOM 里排在它后面）。
+       ★ 这里必须用 `topEl.after(l.el)` 而不是 `topEl.before(l.el)`：
+       写 before 会把新层插到最顶层的**下面**，而数组那边 splice(insertAt,…) 是插到末尾（最上），
+       两边正好反了 —— 表现为「面板里粘贴的层在最上、画布上却在最底层」（2026-09-25 用户报障）。
+       每次都插在同一个参照点 topEl 之后 ⇒ 后插入的被挤到更上 ⇒ 数组与 DOM 顺序一致，
+       且第 1 个剪贴板项排在最上（与下面注释的意图一致）。 */
     const insertAt = App.state.layers.length;
     const topEl = App.state.layers[insertAt - 1] ? App.state.layers[insertAt - 1].el : null;
     newLayers.forEach((l) => {
@@ -598,6 +757,9 @@ App.pasteClipboard = function () {
     App.state.selectedByTab = false;
     App.state.selBarDismissed = false;
     App.setSelection([]);
+    /* 停靠态【不】调用 scrollItemToTop：它的首句是 if (plusAnchorActive) setPlusAnchor(false)，
+       会把刚停靠好的白框踢回图层行，用户就没法连续按 Y 往「+」栏下方粘。
+       新层已在最顶层、列表本就停在顶（停靠态 scrollTop=0），无需滚动定位 */
     try { App.log('info', '粘贴到「+」栏下方', { layers: newLayers.length, insertAt: insertAt, firstId: newLayers[0] && newLayers[0].id }); } catch (e) { /* ignore */ }
     if (App.contentChanged) App.contentChanged();
 
@@ -607,6 +769,11 @@ App.pasteClipboard = function () {
   try { App.log('info', '粘贴（非停靠）', { layers: newLayers.length, anchorId: anchor && anchor.id }); } catch (e) { /* ignore */ }
   if (!anchor && sel.length === 1 && App.state.layers.includes(sel[0])) anchor = sel[0];
   if (anchor && App.state.layers.includes(anchor)) {
+    /* 粘贴到锚点图层的下方（数组/DOM 中锚点之前；多个图层时紧贴锚点依次向下排）。
+       ★ DOM 用 `ref.before(l.el)`、数组也必须**插在同一个下标**上（splice(idx,0,l)），
+       这样两边同向：后插入的被挤到更下面。
+       早先数组写的是 splice(idx + k, 0, l)（下标随 k 递增），导致数组里第 2 个反而排在更上，
+       与 DOM 顺序相反 —— 粘贴多层时面板行序与画布 z 序对不上（2026-09-25 一并修）。 */
     const idx = App.state.layers.indexOf(anchor);
     newLayers.forEach((l, k) => {
       if (!l.el) App.buildLayerElement(l);
@@ -621,10 +788,13 @@ App.pasteClipboard = function () {
   }
   App.refreshPanel();
   App.refreshCount();
+  /* 恢复容器显示（一次布局）；「隐藏图层」/背景取色器 激活时保持隐藏 */
   if (hideBatch && !App.state.layersHidden && App.state.eyeMode !== 'bg') App.layersRoot.style.display = '';
+  /* 粘贴后不自动选中：仅白框定位到粘贴层（避免粘贴产生的选中被后续 Tab 多选意外带上） */
   App.state.selectedByTab = false;
   App.state.selBarDismissed = false;
   App.setSelection([]);
+  /* 白框自动移到新粘贴的图层上（多个时指向最上层粘贴层） */
   if (newLayers.length) {
     const topPaste = newLayers[newLayers.length - 1];
     if (App.scrollItemToTop) App.scrollItemToTop(topPaste, true);
@@ -635,6 +805,7 @@ App.pasteClipboard = function () {
 
 App.deleteSelection = function () {
   const hadSel = App.state.selected.size > 0;
+  /* 多选状态下白框滚出集合：Delete 删除白框图层（集合本身保留） */
   let items;
   if (App.whiteBoxOutsideSet()) {
     const box = App.whiteBoxLayer();
@@ -650,6 +821,7 @@ App.deleteSelection = function () {
   showToast(App.i18n.tf('toast.sel.deleted', { n: items.length }));
 };
 
+/* 删除图层栏里的全部图层 */
 App.deleteAllLayers = function () {
   if (!App.state.layers.length) { showToast(App.i18n.t('toast.sel.barEmpty')); return; }
   if (App.invalidateEditStatic) App.invalidateEditStatic();
@@ -660,6 +832,7 @@ App.deleteAllLayers = function () {
   } finally {
     App.state.batching = false;
   }
+  /* 清空后重置「隐藏图层」状态：否则再放的新图案默认仍隐藏（按钮与显示脱节） */
   App.state.layersHidden = false;
   if (App.updateHideLayersButton) App.updateHideLayersButton();
   App.refreshPanel();
@@ -688,6 +861,8 @@ App.splitSelected = function () {
   App.setSelection([]);
   showToast(App.i18n.t('toast.sel.split'));
 };
+/* 拆分目标：操作集合为单个合并分组时拆集合；否则白框所在图层是合并分组时拆白框图层
+   （多选状态滚轮把白框移到未选的合并分组上，拆分按钮应作用于白框分组而不是整个多选集合） */
 App.splitTarget = function () {
   const items = App.operationTargets();
   if (items.length === 1 && items[0].kind === 'merged') return items[0];
@@ -695,6 +870,7 @@ App.splitTarget = function () {
   return (box && box.kind === 'merged') ? box : null;
 };
 
+/* ---------- 选中工具栏事件 ---------- */
 App.initSelectionToolbar = function () {
   $('#btnEditPos').addEventListener('click', () => {
     const items = App.operationTargets();
@@ -713,6 +889,7 @@ App.initSelectionToolbar = function () {
   $('#btnFlipV').addEventListener('click', () => App.flipSelected('v'));
   $('#btnMerge').addEventListener('click', App.mergeSelected);
   $('#btnSplit').addEventListener('click', App.splitSelected);
+  /* 分组内编辑 / 返回 */
   $('#btnGroupEdit').addEventListener('click', () => {
     const items = App.operationTargets();
     if (items.length !== 1 || items[0].kind !== 'merged') return;
@@ -724,6 +901,7 @@ App.initSelectionToolbar = function () {
   $('#btnDelete').addEventListener('click', App.deleteSelection);
   $('#btnSelectAll').addEventListener('click', App.selectAllLayers);
   $('#btnClearSel').addEventListener('click', () => {
+    /* 取消所有高亮：清空选定并复位 Tab 标志，工具栏随之隐藏 */
     App.state.selectedByTab = false;
     App.setSelection([]);
   });
@@ -731,19 +909,25 @@ App.initSelectionToolbar = function () {
   $('#btnLocateLayer').addEventListener('click', App.locateWhiteBoxLayer);
 };
 
+/* 定位图层位置：把画布可视区中心移到【白框所在图层】的文档包围盒中心。
+   只平移，不改缩放；不写历史（纯视图操作，与拖拽平移同类）。
+   多选时同样取白框那一层，而不是整个多选集合的并集中心。 */
 App.locateWhiteBoxLayer = function () {
   const layer = App.whiteBoxLayer();
-  if (!layer) return;
+  if (!layer) return;                       /* 按钮已置灰；这里再挡一次 */
   const b = App.getItemDocBBox(layer);
   if (!b || !isFinite(b.x) || !isFinite(b.y) || !isFinite(b.w) || !isFinite(b.h)) return;
   const r = App.wrap.getBoundingClientRect();
   const v = App.state.view;
   const sc = v.scale || 1;
+  /* viewBox = "v.x v.y (w/scale) (h/scale)" ⇒ 可视区中心 = v.x + w/(2*scale)
+     令其等于图层中心，反解 v.x / v.y */
   v.x = (b.x + b.w / 2) - r.width / (2 * sc);
   v.y = (b.y + b.h / 2) - r.height / (2 * sc);
   App.updateView();
 };
 
+/* 高亮全部图层：所有顶层图层加入选定（含合并分组；白框位置保持不动） */
 App.selectAllLayers = function () {
   if (!App.state.layers.length) { showToast(App.i18n.t('toast.sel.noHighlight')); return; }
   App.state.selectedByTab = true;

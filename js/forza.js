@@ -1,10 +1,18 @@
 'use strict';
+/* Inkscape2Forza 兼容层：
+   导出：use(#fh6_t*_i*_w*) + 内嵌符号定义 + mask_indicator_dark 蒙版标记，画布 1920x1080（原点居中）
+         —— 可被 Inkscape2Forza 正常识别并注入 FH6 存档；
+   导入：解析 Inkscape2Forza / 游戏导出的 SVG（use 矩阵分解为 位置/旋转/缩放/倾斜，分组 -> 合并图层，
+         蒙版填充 -> isMask）。
+   坐标约定：编辑器文档原点 <-> Forza 画布中心（960,540）。FH6 旋转为 SVG 旋转取负、y 轴翻转。
+*/
 
 App.FZA = {
   useRe: /fh6_t(\d+)_i(\d+)_w(\d+)/,
   symbolDefCache: null
 };
 
+/* 解析素材文本中所有 <symbol> 的位置与 viewBox（惰性一次缓存） */
 App.FZA.symbolDefMap = function () {
   if (App.FZA.symbolDefCache) return App.FZA.symbolDefCache;
   const map = {};
@@ -26,14 +34,28 @@ App.FZA.symbolDefMap = function () {
   return map;
 };
 
-App.FZA.SKEW_LIMIT = 89.99;
-App.FZA.SKEW_SINGULAR = 1e15;
+/* ---------- 倾斜角的奇点防护 ----------
+   skewX 的剪切量 = tan(skew)。tan 在 ±90°(+k·180°) 发散：tan(90°) ≈ 1.63e16，
+   矩阵元素炸成天文数字 → x/y 漂到 ±1e17 → float64 精度全丢（锚点/包围盒/缩略图一起崩）。
+   精度悬崖**只在正好 ±90°**：89.99999999999°（tan ≈ 5.7e12）的锚点位移仍是 0。
+   所以这里**不做「策略性」限角**，只在真正的奇点上兜底 ——
+   否则会把合法值（例如 89.9°，tan ≈ 573）改掉，造成「模型值 / 渲染 / 导出」三方不一致。
+
+   单位约定（改这里之前先读一遍）：
+     · 编辑器模型 it.skew 是**角度**（度）—— model.js 写 `skewX(deg)`、editmode 用 `skew*D2R`
+     · FH6 / Forza 二进制里的 skew 是**正切**（无量纲）—— 见 decomposeFza / forza-cgroup
+     两者的换算经由「矩阵」隐式完成（skewX(deg) 的矩阵 c = tan(deg)），
+     所以这里只负责角度→矩阵，不要去改 FH6 字段的语义。 */
+App.FZA.SKEW_LIMIT = 89.99;              // 奇点兜底值（距 ±90° 仅 0.01°，任何真实图案都远达不到）
+App.FZA.SKEW_SINGULAR = 1e15;            // |tan| 超过此值即判定为落在奇点上
 App.FZA.normalizeSkew = function (deg) {
   const d = Number(deg);
   if (!isFinite(d)) return 0;
   const L = App.FZA.SKEW_LIMIT;
   return d > L ? L : (d < -L ? -L : d);
 };
+/* 角度 -> tan，且在奇点处兜底。**除奇点外一律原样返回**，
+   保证渲染（skewX 原始值）与矩阵数学用的是同一个 tan。 */
 App.FZA.skewTan = function (deg) {
   const d = Number(deg) || 0;
   const t = Math.tan(d * D2R);
@@ -41,6 +63,7 @@ App.FZA.skewTan = function (deg) {
   return Math.tan(App.FZA.normalizeSkew(d) * D2R);
 };
 
+/* 图层 2x2 矩阵（与 transform 同序：rotate·scale·skewX，翻转折入缩放符号） */
 App.FZA.layerMatrix = function (l) {
   const sxf = (l.flipH ? -1 : 1) * (l.sx || 1);
   const syf = (l.flipV ? -1 : 1) * (l.sy || 1);
@@ -54,6 +77,7 @@ App.FZA.layerMatrix = function (l) {
   };
 };
 
+/* 矩阵乘法 M1·M2（列向量约定） */
 App.FZA.mul = function (m1, m2) {
   return {
     a: m1.a * m2.a + m1.c * m2.b,
@@ -65,6 +89,7 @@ App.FZA.mul = function (m1, m2) {
   };
 };
 
+/* 解析 SVG transform 列表（translate/rotate/scale/skewX/skewY/matrix，与 Inkscape2Forza 同序右乘） */
 App.FZA.matFromString = function (str) {
   let M = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
   if (!str) return M;
@@ -98,6 +123,8 @@ App.FZA.matFromString = function (str) {
   return M;
 };
 
+/* SVG 矩阵 -> 编辑器模型参数（y 向下，内容中心锚点，rot/skew 为角度）。
+   与 Inkscape2Forza decompose_matrix 互逆：FH6 rot = -编辑器的 rot，FH6 skew = -(sx/sy)·tan(编辑器的 skew°) */
 App.FZA.decomposeToModel = function (M) {
   const a = M.a, b = M.b, c = M.c, d = M.d;
   const rot = Math.atan2(b, a) * 180 / Math.PI;
@@ -105,16 +132,30 @@ App.FZA.decomposeToModel = function (M) {
   const rr = rot * D2R;
   const sy = d * Math.cos(rr) - c * Math.sin(rr);
   const t = sx > 1e-9 ? (a * c + b * d) / (a * a + b * b) : 0;
+  /* atan 的值域是 (-90°, 90°)，本来就到不了 ±90°；
+     但 SVG 里真写 `skewX(90)` 时 t = 1.63e16 → atan 给到 89.99999999999999，
+     已经落在奇点上。这里统一过一道 normalizeSkew：
+     保证**进入模型的角度永远良态**，于是「模型值 / skewX 渲染 / 导出矩阵」三方恒一致。
+     该漏斗是导入的唯一入口（editmode 组分解 / modelFromForzaSvg / model 合并都走它）。 */
   const skew = App.FZA.normalizeSkew(Math.atan(t) * 180 / Math.PI);
   return { rot, sx, sy, skew };
 };
 
+/* 编辑器模型矩阵 -> Inkscape2Forza 形式矩阵（导出用，保证其 importer 分解无损失）。
+   翻转直接写入负 sx/sy：FH6 图层格式的 sx/sy 为 float，支持负值（镜像），
+   Inkscape2Forza 分解（sx 恒正、负号进 sy）会把水平镜像正确表示为 rot+180° 与 sy<0——
+   游戏原生渲染镜像，无需 180° 旋转近似（旧近似会导致游戏中角度错误）。 */
 App.FZA.modelToFzaMatrix = function (l) {
-  const sx = (l.flipH ? -1 : 1) * (l.sx || 1);
-  const sy = (l.flipV ? -1 : 1) * (l.sy || 1);
+  const sx = (l.flipH ? -1 : 1) * (l.sx || 1); // 水平镜像 = 负 sx
+  const sy = (l.flipV ? -1 : 1) * (l.sy || 1); // 垂直镜像 = 负 sy
+  /* 这里用 skewTan 而不是裸 Math.tan —— 只在 ±90° 奇点兜底，
+     避免把 1.63e16 这种垃圾写进存档。除奇点外与裸 Math.tan 逐位一致，
+     所以注入/导出的保真度不受影响。 */
   const t = App.FZA.skewTan(l.skew);
+  /* 矩阵 R(rot)·S(sx,sy)·K(t)（与 transform 同序） */
   const a0 = Math.cos((l.rot || 0) * D2R), b0 = Math.sin((l.rot || 0) * D2R);
   const a = a0 * sx, b = b0 * sx, c = a0 * sx * t - b0 * sy, d = b0 * sx * t + a0 * sy;
+  /* 分解为 Inkscape2Forza 参数（其 importer 的逆分解在此形式上无损），再按其约定合成 */
   const sxF = Math.hypot(a, b);
   const rotF = Math.atan2(-b, a);
   const syF = c * Math.sin(rotF) + d * Math.cos(rotF);
@@ -127,6 +168,7 @@ App.FZA.modelToFzaMatrix = function (l) {
   };
 };
 
+/* 导出用的模型序列化：仅包含会写入文件的图层（symbol/merged），pattern/import 跳过 */
 App.FZA.exportSlim = function (l) {
   if (l.kind !== 'symbol' && l.kind !== 'merged') return null;
   if (l.kind === 'symbol' && !(l.symbolKey && App.symbolMap.has(l.symbolKey))) return null;
@@ -137,10 +179,19 @@ App.FZA.exportSlim = function (l) {
   return slim;
 };
 
+/* 生成 Forza 兼容 SVG 字符串（与保存对话框分离，便于测试）。
+   quiet=true 时抑制 showToast（注入/自动保存等静默路径用） */
+/* 导出/保存用的「逻辑图层表」。
+   分组内编辑时模型是**真拆开**的（组内子层成了顶层图层）——直接导出会把正在编辑的
+   那个分组写成并列的独立图案，保存出来的 SVG 里分组结构就没了（FH6 里不再是一个分组）。
+   这里把范围内图层包回一个合并分组：拆分时已把分组变换烘进每个子层，
+   所以包一层**单位变换**的 <g> 与原分组完全等价（位置 / 子层顺序 / 视觉都一致）。
+   2026-09-25 用户报障：分组内编辑时保存 SVG，那个分组要回到「分组」状态。 */
 App.exportLayersView = function () {
   const ex = App.currentExcluded ? App.currentExcluded() : null;
   if (!ex) return App.state.layers;
   const scope = App.state.layers.filter(l => !ex.has(l));
+  /* 凑不成分组（被删到只剩 1 层）→ 与「返回」同一口径：不造单层分组 */
   if (scope.length < 2) return App.state.layers;
   const wrapper = App.newLayer({ kind: 'merged', name: App.i18n.t('name.mergedLayer'), color: '', opacity: 1 });
   wrapper.children = scope.slice();
@@ -154,6 +205,8 @@ App.exportLayersView = function () {
 };
 
 App.buildForzaExportString = function (quiet, layers) {
+  /* layers：可选的显式图层数组（不传 = 当前画布）。主页渲染「工作进程」卡缩略图时用离屏图层调用，
+     避免为了产出一次字符串而把画布内容换掉。 */
   const src = Array.isArray(layers) ? layers : App.exportLayersView();
   if (!src.length) { if (!quiet) showToast(App.i18n.t('toast.forza.noLayers')); return null; }
   const defMap = App.FZA.symbolDefMap();
@@ -187,8 +240,11 @@ App.buildForzaExportString = function (quiet, layers) {
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const f6 = n => Math.round(n * 1e6) / 1e6;
   const hex2 = n => clamp(Math.round(n), 0, 255).toString(16).padStart(2, '0');
+  /* 蒙版填充图案跟随当前背景主题，仍能被识别为蒙版状态 */
   const maskFillRef = 'url(#' + App.maskThemeKey() + ')';
 
+  /* use 元素：内容中心 -> 图层原点。use 内容点 p -> (e,f)+M·(p-min)，viewBox 居中 => min=-W/2，
+     故 (e,f) = (x,y) - M·(W/2,H/2) */
   let nid = 0;
   const writeUse = (l) => {
     const def = defMap[l.symbolKey];
@@ -219,6 +275,7 @@ App.buildForzaExportString = function (quiet, layers) {
     return pad + '<g' + attrs + '>\n' + inner + '\n' + pad + '</g>';
   };
 
+  /* 内嵌符号定义（仅使用到的）+ 蒙版指示图案定义（深/浅两个都带，任选背景主题） */
   const usedKeys = Array.from(new Set(useLayers.map(l => l.symbolKey))).sort();
   const defsParts = [];
   usedKeys.forEach(k => defsParts.push(App.libText.slice(defMap[k].start, defMap[k].end)));
@@ -239,6 +296,13 @@ App.buildForzaExportString = function (quiet, layers) {
     '  <sodipodi:namedview id="namedview1" pagecolor="#ffffff" showgrid="false" />\n' +
     '  <defs>\n' + defsParts.join('\n') + '\n  </defs>\n' +
     body + '\n</svg>\n';
+  /* ★ 页框 =「Forza 画布」∪「内容实际范围」。
+     原来页框固定是画布（-960 -540 1920 1080），画布外的图案虽然写进了文件，
+     但打开时被页框**裁掉**（用户报「工作进程保存 SVG，部分图层显示错误」）。
+     画布上本来就可以平移/缩小，内容超出画布是正常的；这里把页框放宽到内容范围，
+     让保存的图与画布所见一致。
+     同时写 data-sve-canvas 记下**真正的画布**：导入侧（modelFromForzaSvg ->
+     decomposeFza）用 viewBox 当缩放基准，不放这个标记的话「保存→再打开」会被按页框缩小。 */
   const CANVAS_RECT = [-960, -540, 1920, 1080];
   if (App.thumbFrameToContent) {
     try {
@@ -265,13 +329,22 @@ App.buildForzaExportString = function (quiet, layers) {
     String(d.getDate()).padStart(2, '0') + '-' + String(d.getHours()).padStart(2, '0') +
     String(d.getMinutes()).padStart(2, '0') + '.svg';
 
+  /* 默认命名 =「图案 + 该图案的图层数量」。
+     useLayers 是**真正写进文件**的图层（不支持的图案/导入图层会被 skipped），
+     所以它就是「该图案的图层数量」；调用方用它拼默认名。
+     name 字段保留（主页「另存为」工作进程那条路还在用），不改行为。 */
   const warns = [];
   if (skipped) warns.push(App.i18n.tf('toast.forza.exportSkipped', { n: skipped }));
   if (warns.length && !quiet) showToast(App.i18n.tf('toast.forza.exportWarn', { v: warns.join('；') }));
   return { str, name, layers: useLayers.length };
 };
 
+/* ---------- 导入 Inkscape2Forza / 游戏导出的 SVG ---------- */
 App.importForza = function (root) {
+  /* 画布中心（viewBox 或 1920x1080）-> 编辑器文档原点。
+     ★ 本编辑器导出的文件页框可能已放宽到内容范围（见 buildForzaExportString），
+     真正的画布中心记在 data-sve-canvas —— 必须优先用它，否则「打开保存的 SVG」时
+     所有图层会按放宽后的页框中心整体偏移（2026-09-26 用户报障）。 */
   let cx = 960, cy = 540;
   const cvM = ((root.getAttribute('data-sve-canvas') || '').trim().split(/[\s,]+/).map(Number));
   if (cvM.length === 4 && cvM.every(isFinite)) { cx = cvM[0] + cvM[2] / 2; cy = cvM[1] + cvM[3] / 2; }
@@ -317,12 +390,17 @@ App.importForza = function (root) {
       el.getAttribute('data-forza-mask-group') === '1';
   };
 
+  /* 从 data-sve 提取翻转/名称（本编辑器导出的文件，Inkscape 二次编辑后位置仍以 DOM 为准） */
   const slimOf = el => {
     const raw = el.getAttribute('data-sve');
     if (!raw) return null;
     try { return JSON.parse(raw); } catch (e) { return null; }
   };
 
+  /* ancFlip：祖先 <g> 链的净镜像（链矩阵行列式为负 = 奇数次翻转）。
+     导入把分组摊平成「父级单位变换 + 子层绝对坐标」，所以祖先的镜像得由子层自己承担；
+     此时分解出的 p.sy 会带负号。若还拿 data-sve 里**该图案自身**的翻转去覆盖它，
+     这层镜像就被丢掉了 —— 打开后图案左右镜像（2026-09-26 报障的 8 层）。 */
   const buildUse = (useEl, M, mask, opacity, ancFlip) => {
     const href = useEl.getAttribute('href') || useEl.getAttributeNS(XLINK, 'href') || '';
     const id = href.replace(/^#/, '');
@@ -340,6 +418,8 @@ App.importForza = function (root) {
     const slim = slimOf(useEl);
     if (slim && slim.kind === 'symbol' && !ancFlip) {
       flipH = !!slim.flipH; flipV = !!slim.flipV;
+      /* 导出分解只对 flipH（x 轴列翻转）把 180° 折进 rot；flipV 的符号在 sy 的负号里，
+         rot 保持原值——因此只有 flipH 需要按 data-sve 撤销 180°，flipV 再减会错 180° */
       if (flipH) rot = normalizeDeg(p.rot - 180);
     }
     const op = clamp(opacity, 0, 1);
@@ -354,6 +434,7 @@ App.importForza = function (root) {
       l.dataUri = App.symbolUri(sym);
       return l;
     }
+    /* 符号库缺失：原样保留 use（配合内嵌定义仍可显示） */
     adoptSymbolDef(id);
     return App.newLayer({
       kind: 'import', name: App.i18n.t('name.importPrefix') + '·' + id, x: 0, y: 0, w: 0, h: 0,
@@ -390,6 +471,7 @@ App.importForza = function (root) {
 
   App.history.markDiscrete();
   let count = 0;
+  /* 批量导入：抑制逐层面板重建（大量图层时导入速度提升数倍） */
   App.state.batching = true;
   try {
     Array.from(root.children).forEach(ch => {
@@ -400,6 +482,9 @@ App.importForza = function (root) {
         if (l) { App.addLayer(l); count++; }
       } else if (tag === 'g') {
         const M = App.FZA.matFromString(ch.getAttribute('transform'));
+        /* 继承值传 1（不是 parseOpacity(ch)）：buildG 内部会自己乘一次本层的 opacity，
+           这里再传本层的值会把**顶层分组**的不透明度算两遍（0.5 → 子层 0.25）。
+           modelFromForzaSvg 的 walkG 根调用同样传 1。 */
         const sub = buildG(ch, M, isMaskEl(ch), 1);
         if (sub) { App.addLayer(sub); count++; }
       }
@@ -414,6 +499,12 @@ App.importForza = function (root) {
   else showToast(App.i18n.tf('toast.imported', { n: count }));
 };
 
+/* ========== FH6 模型桥：Forza SVG <-> 游戏 C_group 模型 ==========
+   解码侧思路：C_group（主进程解码）-> 本函数生成官方同款 SVG -> App.importForza 进编辑器；
+   编码侧思路：App.buildForzaExportString -> modelFromForzaSvg 读出与 Inkscape2Forza
+   官方 process_svg 完全一致的 FH6 字段模型 -> 主进程编码为 C_group。 */
+
+/* FH6 矩阵分解（镜像 Python svg_codec.decompose_matrix；FH6 画布 1920x1080 等比适配 + y 翻转） */
 App.FZA.decomposeFza = function (a, b, c, d, e, f, minX, minY, canvasX, canvasY, canvasW, canvasH) {
   const realSvgCx = a * (-minX) + c * (-minY) + e;
   const realSvgCy = b * (-minX) + d * (-minY) + f;
@@ -431,11 +522,17 @@ App.FZA.decomposeFza = function (a, b, c, d, e, f, minX, minY, canvasX, canvasY,
   return { tx, ty, sx: sx * scale, sy: sy * scale, rot: rotDeg, skew };
 };
 
+/* 解析 Forza 兼容 SVG（本编辑器导出或官方工具/游戏导出的 SVG）为 FH6 模型（镜像 process_svg）。
+   返回 { root, count }，root.kind==='group'。 */
 App.FZA.modelFromForzaSvg = function (svgStr) {
   const doc = new DOMParser().parseFromString(svgStr, 'image/svg+xml');
   const rootEl = doc.documentElement;
   const vb = ((rootEl.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number));
   let canvasX = 0, canvasY = 0, canvasW = 1920, canvasH = 1080;
+  /* ★ 本编辑器导出的文件页框可能已放宽到内容范围（保存后打开能看全，见 buildForzaExportString），
+     真正的 Forza 画布记在 data-sve-canvas —— 导入的缩放/居中基准必须用它，
+     否则「保存→再打开」会被按放宽后的页框整体缩小。没有该标记（官方工具/游戏导出的文件、
+     旧版本导出的文件）时仍按 viewBox 走，行为不变。 */
   const hint = ((rootEl.getAttribute('data-sve-canvas') || '').trim().split(/[\s,]+/).map(Number));
   if (hint.length === 4 && hint.every(isFinite)) { canvasX = hint[0]; canvasY = hint[1]; canvasW = hint[2]; canvasH = hint[3]; }
   else if (vb.length === 4 && vb.every(isFinite)) { canvasX = vb[0]; canvasY = vb[1]; canvasW = vb[2]; canvasH = vb[3]; }
@@ -523,9 +620,13 @@ App.FZA.modelFromForzaSvg = function (svgStr) {
   return { root, count };
 };
 
+/* FH6 模型 -> Forza 兼容 SVG 字符串（镜像 Python export_cgroup_to_svg：画布 0..1920 官方约定，
+   组保留为 <g>（mask 组加 data-forza-mask-group），形状按各自 isMask 标记蒙版）。
+   embedSvg：含符号 defs 的库文本（默认 App.libText）。返回 { str, name }。 */
 App.FZA.svgStringFromModel = function (root, opts) {
   opts = opts || {};
   const embed = opts.embedSvg || App.libText || '';
+  /* 收集用到的 word -> 符号 id（词表 id 形如 fh6_t{Type}_i{Idx}_w{Word}） */
   const wordToId = {};
   const collect = n => { if (n.kind === 'group') n.children.forEach(collect); else if (!wordToId[n.word]) wordToId[n.word] = null; };
   collect(root);
@@ -594,6 +695,7 @@ App.FZA.svgStringFromModel = function (root, opts) {
     if (out) body.push(out);
   });
 
+  /* 蒙版指示图案（深浅两个都带，兼容任意背景主题） */
   const patternDefs = [];
   (App.patterns || []).forEach(p => {
     if (p.key === maskKey || p.key === maskPattern) {

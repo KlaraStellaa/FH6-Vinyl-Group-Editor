@@ -1,4 +1,5 @@
 'use strict';
+/* 背景：灰白/灰黑底色、网格、背景图片与独立编辑 */
 App.initBackground = function () {
   App.updateBaseButtons();
   App.applyBaseStyle();
@@ -16,6 +17,8 @@ App.initBackground = function () {
   });
   $('#btnHideBg').addEventListener('click', App.toggleBgHidden);
   $('#btnHideLayers').addEventListener('click', App.toggleLayersHidden);
+  /* 「隐藏其他图层」：只在「编辑图层」状态下可见（显隐见 updateHideLayersButton）。
+     开关式，与「隐藏图层」互斥 —— 用的是同一套 state 与同一个刷新函数。 */
   $('#btnHideOthers').addEventListener('click', () => {
     if (App.state.eyeMode === 'bg') { showToast(App.i18n.t('toast.bg.eyeBusyLayers')); return; }
     App.state.hideOthers = !App.state.hideOthers;
@@ -29,10 +32,14 @@ App.initBackground = function () {
   App.updateLayersDisplaySlider();
   App.updateBgOpacitySlider();
 };
+/* 所有图案的显示透明度：竖向滑条快捷调节 0~100。
+   仅影响画布显示（layersRoot 的 CSS opacity）——不改任何图层的 opacity 数据、
+   不进历史、导出 SVG 时会被剔除，编辑/导出中图案原本的透明度都不变 */
 App.onLayersDisplayOpacityInput = function () {
   const v0 = parseFloat($('#bgOpacityRange').value);
   const v = isNaN(v0) ? 100 : clamp(v0, 0, 100);
   App.state.layersDisplayOpacity = v / 100;
+  /* 取色器激活期间用户拖动：退出取色器时保留新值（不被激活前快照覆盖） */
   if (App.state.eyeMode) App.eyeOpacityUserChanged = true;
   App.applyLayersDisplayOpacity();
 };
@@ -50,10 +57,13 @@ App.updateLayersDisplaySlider = function () {
   else if (document.activeElement !== s) s.value = Math.round((App.state.layersDisplayOpacity ?? 1) * 100);
   App.applyLayersDisplayOpacity();
 };
+/* 背景图片显示透明度：竖向滑条快捷调节（与图案显示透明度同一套机制，
+   仅影响背景显示，不改背景图片的 opacity 数据） */
 App.onBgDisplayOpacityInput = function () {
   const v0 = parseFloat($('#bgOpacityBgRange').value);
   const v = isNaN(v0) ? 100 : clamp(v0, 0, 100);
   App.state.bgDisplayOpacity = v / 100;
+  /* 取色器激活期间用户拖动：退出取色器时保留新值（不被激活前快照覆盖） */
   if (App.state.eyeMode) App.eyeOpacityUserChanged = true;
   App.applyBgDisplayOpacity();
 };
@@ -71,10 +81,14 @@ App.updateBgOpacitySlider = function () {
   else if (document.activeElement !== s) s.value = Math.round((App.state.bgDisplayOpacity ?? 1) * 100);
   App.applyBgDisplayOpacity();
 };
+/* 隐藏所有图案图层（画布右上角，两种模式都显示） */
 App.toggleLayersHidden = function () {
+  /* 背景取色器激活时禁用：取色器临时隐藏图案与按钮状态互相覆盖会错乱（退出取色器后
+     按钮说隐藏但图层显示 / 按钮取消隐藏但图层仍隐藏） */
   if (App.state.eyeMode === 'bg') { showToast(App.i18n.t('toast.bg.eyeBusyLayers')); return; }
   if (!App.state.layers.length) { showToast(App.i18n.t('toast.bg.noLayers')); return; }
   App.state.layersHidden = !App.state.layersHidden;
+  /* 与「隐藏其他图层」互斥：整体隐藏时关掉「只显示当前编辑图层」 */
   if (App.state.layersHidden) App.state.hideOthers = false;
   App.updateHideLayersButton();
 };
@@ -86,6 +100,8 @@ App.updateHideLayersButton = function () {
   b.classList.toggle('disabled', !has);
   if (!has) b.textContent = App.i18n.t('canvas.hideLayers');
   else b.textContent = App.i18n.t(App.state.layersHidden ? 'canvas.showLayers' : 'canvas.hideLayers');
+  /* ---- 「隐藏其他图层」：沿用上面这一套（同一个 state + 同一个刷新函数），
+     不另起一套隐藏机制。只在「编辑图层」状态下显示；编辑背景时不显示。 ---- */
   const ob = $('#btnHideOthers');
   const editing = !!(App.state.edit && App.state.edit.type !== 'bg');
   const onlyOthers = !!(editing && App.state.hideOthers);
@@ -95,6 +111,9 @@ App.updateHideLayersButton = function () {
     ob.disabled = !editing;
     ob.textContent = App.i18n.t(onlyOthers ? 'canvas.showOthers' : 'canvas.hideOthers');
   }
+  /* 只显示当前编辑的图层：逐个顶层图层设 display。
+     —— 只在开启期间、或刚关闭需要还原时才遍历（平时零开销）。
+     背景图片**不参与**（背景的显隐只由「隐藏背景」决定）。 */
   if (onlyOthers || App._hideOthersApplied) {
     const targets = onlyOthers ? new Set(App.editTargets()) : null;
     App.state.layers.forEach(l => {
@@ -104,11 +123,17 @@ App.updateHideLayersButton = function () {
     });
     App._hideOthersApplied = !!onlyOthers;
   }
+  /* 背景取色器激活时：图层保持隐藏（取色器临时隐藏优先，任何刷新都不能把它显示出来） */
   App.layersRoot.style.display = (App.state.layersHidden || App.state.eyeMode === 'bg') ? 'none' : '';
+  /* flashG 的显示由闪动动画驱动：这里只响应“隐藏图层”开关——
+     隐藏时强制隐藏；取消隐藏时若有覆盖层则重播一次动画，
+     避免覆盖层以固定颜色卡住（无条件 display='' 会让 Y 复制等
+     操作后闪动残留在画布上） */
   if (App.state.layersHidden) App.flashG.style.display = 'none';
   else if (App.flashOverlayMap && App.flashOverlayMap.size) App.animateFlash();
 };
 App.toggleBgHidden = function () {
+  /* 背景取色器激活时禁用：取色器临时显示背景与按钮状态互相覆盖会错乱 */
   if (App.state.eyeMode === 'bg') { showToast(App.i18n.t('toast.bg.eyeBusyBg')); return; }
   if (!App.state.bg.image) { showToast(App.i18n.t('toast.bg.noBg')); return; }
   App.state.bg.hidden = !App.state.bg.hidden;
@@ -122,6 +147,7 @@ App.updateHideBgButton = function () {
   b.classList.toggle('disabled', !has);
   if (!has) b.textContent = App.i18n.t('canvas.hideBg');
   else b.textContent = App.i18n.t(App.state.bg.hidden ? 'canvas.showBg' : 'canvas.hideBg');
+  /* 背景取色器激活时：背景强制显示（取色需要），任何刷新都不能把它隐藏 */
   App.bgG.style.display = (App.state.eyeMode === 'bg') ? '' : ((has && App.state.bg.hidden) ? 'none' : '');
 };
 
@@ -132,6 +158,7 @@ App.applyBaseStyle = function () {
 App.toggleBase = function () {
   App.state.bg.base = App.state.bg.base === 'light' ? 'dark' : 'light';
   App.applyBaseStyle();
+  /* 蒙版指示图案随背景主题切换（浅色背景用 light，深色用 dark） */
   App.ensureMaskIndDef();
   const mark = l => {
     if (l.isMask) { l.thumbDirty = true; l.thumbCache = null; }
@@ -146,6 +173,7 @@ App.toggleGrid = function () {
   App.updateGridVisibility();
   App.updateBaseButtons();
 };
+/* 滚轮缩放画布开关（顶栏，网格开关右侧） */
 App.toggleWheelZoom = function () {
   App.state.wheelZoomEnabled = !App.state.wheelZoomEnabled;
   App.updateZoomWheelButton();
@@ -176,7 +204,7 @@ App.setBackgroundImage = function (dataUrl) {
   App.history.markDiscrete();
   const token = ++App.bgSeq;
   loadImage(dataUrl).then(img => {
-    if (token !== App.bgSeq) return;
+    if (token !== App.bgSeq) return; // 已被撤销/恢复覆盖
     if (App.state.bg.image && App.state.bg.image.el) App.state.bg.image.el.remove();
     const v = App.state.view;
     const cw = App.wrap.clientWidth / v.scale, ch = App.wrap.clientHeight / v.scale;
@@ -216,6 +244,10 @@ App.applyBgTransform = function (m) {
   m.el.setAttribute('pointer-events', App.state.edit && App.state.edit.type === 'bg' && App.state.editMode === 'move' ? 'all' : 'none');
 };
 
+/* 编辑背景图片（移动模式）鼠标命中：点落在背景图片的四角四边形内 = 命中。
+   背景图片不在 App.state.layers 里，通用的像素命中（hitLayerPaintedSync）扫不到它，
+   所以单独给一条几何命中 —— 与大小/旋转/倾斜模式的「点是否在目标框内」同一套判定。
+   非「编辑背景」状态一律返回 null，否则拖画布会误把背景移走。 */
 App.hitBgImageAt = function (clientX, clientY) {
   const e = App.state.edit;
   if (!e || e.type !== 'bg') return null;
@@ -241,6 +273,7 @@ App.removeBackground = function () {
   App.updateBgOpacitySlider();
 };
 
+/* 取色：把背景图片按当前变换绘制到离屏画布并采样 */
 App.sampleBackgroundColor = function (clientX, clientY) {
   const m = App.state.bg.image;
   if (!m || !m.imgEl) return null;
@@ -263,6 +296,7 @@ App.sampleBackgroundColor = function (clientX, clientY) {
   const px = clamp(Math.round(clientX - r.left), 0, w - 1);
   const py = clamp(Math.round(clientY - r.top), 0, h - 1);
   const d = cx.getImageData(px, py, 1, 1).data;
+  /* 透明 = 图片外的画布背景板：返回 null（取色器据此不做任何反应） */
   if (d[3] === 0) return null;
   return rgbToHex(d[0], d[1], d[2]);
 };

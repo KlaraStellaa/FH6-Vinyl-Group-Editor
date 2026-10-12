@@ -1,3 +1,10 @@
+/* ---------- 命名 / 标签类文案词典（渲染层 + 主进程共用） ----------
+   这些字符串散落在 js/io.js、js/tabs.js、js/model.js、js/forza.js、js/library.js、main.js 里，
+   既当**默认文件名**（图案拼贴-/Forza导出/彩绘）又当**界面标签 / 图层默认名**
+   （未命名/工作进程/图案/合并图层/导入·）。集中到这里，两端共用一份，避免再散回去。
+   与 dlg-i18n.js 同一套写法：Node 端 module.exports，浏览器端并入 App.i18n.dicts。
+   注意：**不要**把 `锚点-` 也搬进来 —— main.js 用 /^锚点-.*\.svework$/ 匹配已有文件，
+   翻译它会让老锚点文件读不出来（历史文件名约定，必须保持原样）。 */
 (function () {
   var DICT = {
     'zh-CN': {
@@ -68,6 +75,7 @@
   };
   var api = {
     langs: ['zh-CN', 'zh-TW', 'en', 'ja', 'ko'],
+    /* 取词 + {占位符} 替换（与渲染层 App.i18n.tf 同语义） */
     get: function (lang, key, params) {
       var d = DICT[lang] || DICT['zh-CN'];
       var s = d[key] || DICT['zh-CN'][key] || key;
@@ -81,6 +89,7 @@
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.NAME_I18N = api;
+  /* 并入主词典（i18n.js 先加载） */
   if (typeof App !== 'undefined' && App.i18n && App.i18n.dicts) {
     Object.keys(DICT).forEach(function (lang) {
       if (App.i18n.dicts[lang]) Object.assign(App.i18n.dicts[lang], DICT[lang]);
