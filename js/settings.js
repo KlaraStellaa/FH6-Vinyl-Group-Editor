@@ -246,7 +246,7 @@ App.settings = {
         '<div class="settings-row" id="settingsFontRow">' +
           '<label data-i18n="settings.font">更改字体</label>' +
           '<span class="settings-now">' +
-            '<span id="fontNowName"></span>' +
+            /* 这一行只写「更改字体」，**不显示当前字体名**（2026-10-26 用户口径） */
             '<button id="btnFont" class="settings-change" data-i18n="settings.change">更改</button>' +
           '</span>' +
         '</div>' +

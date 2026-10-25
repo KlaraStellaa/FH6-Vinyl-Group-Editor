@@ -81,13 +81,17 @@ App.fonts = {
     if (!opts || opts.save !== false) App.settings.save();
   },
 
-  /* 设置主视图里那一行：名字 + 置灰状态（语言不支持时不可点） */
+  /* 设置主视图里那一行：只同步置灰状态（语言不支持时不可点）。
+     这一行**不显示当前字体名** —— 名字写「更改字体」就够了（2026-10-26 用户口径）。 */
   syncPanel() {
     const row = document.getElementById('settingsFontRow');
-    const name = document.getElementById('fontNowName');
     const btn = document.getElementById('btnFont');
     const ok = this.supported();
-    if (name) name.textContent = ok ? this.currentFamily() : App.i18n.t('font.default');
+    /* ★ 标签文案在这里**直接写死正确值**：`data-i18n` 那次翻译发生在词条并入字典之前
+       （fonts-i18n.js 比设置面板构建晚），t() 当时返回的是裸 key，标签就被写成了
+       「settings.font」。这里补一次，不调 apply()（apply 会触发刷新器 → 递归）。 */
+    const lab = row && row.querySelector('label');
+    if (lab) lab.textContent = App.i18n.t('settings.font');
     if (btn) {
       btn.disabled = !ok;
       btn.classList.toggle('disabled', !ok);
