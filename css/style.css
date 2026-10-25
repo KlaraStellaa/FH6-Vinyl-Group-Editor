@@ -1476,14 +1476,16 @@ html[data-scheme="light"] #shortcutPanel .sc-keys kbd { color: var(--text); }
 .settings-box .ft-row:hover { background: var(--btn-hover-bg); }
 .settings-box .ft-row.active { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
 .settings-box .ft-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 悬停时右侧的 ×：**不加圆圈**（2026-10-26 用户口径），就是一个纯字符，
+   只靠颜色变化表示可点；仍然只在悬停、且不是当前字体时出现。 */
 .settings-box .ft-del {
-  display: none; flex: none; width: 20px; height: 20px; padding: 0;
-  line-height: 17px; text-align: center; font-size: 13px;
-  background: transparent; border: 1px solid var(--btn-border); border-radius: 50%;
+  display: none; flex: none; width: 16px; height: 16px; padding: 0;
+  line-height: 16px; text-align: center; font-size: 14px;
+  background: transparent; border: none; border-radius: 0;
   color: var(--dim); cursor: pointer; box-shadow: none;
 }
 .settings-box .ft-row:hover .ft-del { display: block; }
-.settings-box .ft-del:hover { color: var(--text); border-color: var(--text); }
+.settings-box .ft-del:hover { color: var(--text); }
 /* 正在使用的那个：永远不出现 × */
 .settings-box .ft-row[data-current="1"] .ft-del { display: none !important; }
 .settings-box .ft-empty { font-size: 12px; line-height: 1.6; color: var(--dim); padding: 14px 4px; }
