@@ -137,6 +137,10 @@ App.fonts = {
         '<button id="ftConfirm" data-i18n="font.confirm"></button>' +
       '</div>';
     el.dataset.built = '1';
+    /* ★ 视图是**点开时才建**的，此时 i18n 的批量翻译早就跑过了 ——
+       只写 data-i18n 不写文字的话，三个按钮会一片空白（2026-10-26 用户实测）。
+       建完立刻对这块作用域补一次翻译。 */
+    if (App.i18n && App.i18n.apply) App.i18n.apply(el);
     el.querySelector('#ftDownload').addEventListener('click', () => {
       if (window.sveApi && window.sveApi.fontOpenDownload) window.sveApi.fontOpenDownload();
     });
