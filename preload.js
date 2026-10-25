@@ -25,6 +25,24 @@ contextBridge.exposeInMainWorld('sveApi', Object.assign({
   /* 用户设置（语言/主题/速率/收藏）：落 exe 旁的 settings.json（见 main.js settingsPath） */
   settingsGet: () => ipcRenderer.invoke('settings-get'),
   settingsSet: (s) => ipcRenderer.invoke('settings-set', s),
+  /* 自动更新：窗口里点「更新」→ 主进程下载 exe 覆盖自己并重启 */
+  updateInstall: (payload) => ipcRenderer.invoke('update-install', payload || {}),
+  onUpdateAvailable: (cb) => {
+    if (typeof cb !== 'function') return function () { };
+    const h = (_e, info) => { try { cb(info); } catch (err) { /* ignore */ } };
+    ipcRenderer.on('update-available', h);
+    return function () { try { ipcRenderer.removeListener('update-available', h); } catch (err) { /* ignore */ } };
+  },
+  onUpdateProgress: (cb) => {
+    if (typeof cb !== 'function') return function () { };
+    const h = (_e, pr) => { try { cb(pr); } catch (err) { /* ignore */ } };
+    ipcRenderer.on('update-progress', h);
+    return function () { try { ipcRenderer.removeListener('update-progress', h); } catch (err) { /* ignore */ } };
+  },
+  /* 界面字体：导入（选文件→复制进数据目录）/ 删除副本 / 打开下载站点 */
+  fontImport: () => ipcRenderer.invoke('font-import'),
+  fontDelete: (file) => ipcRenderer.invoke('font-delete', { file }),
+  fontOpenDownload: () => ipcRenderer.invoke('font-open-download'),
   fileRecent: () => ipcRenderer.invoke('file-recent'),
   fileRead: (kind, name) => ipcRenderer.invoke('file-read', { kind, name }),
   svgThumbWarm: () => ipcRenderer.invoke('svg-thumb-warm'),

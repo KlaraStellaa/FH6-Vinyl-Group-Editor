@@ -25,7 +25,7 @@ App.flushFrameUpdates = function () {
     /* ★ 缩放范围 [MIN, MAX]：与 io.js 的 loadDoc、tabs.js 的标签恢复三处**必须一致**
        （2026-10-03：最小缩放 0.02 → 0.005 —— 用户口径「画布缩放也可以缩得更小」。
         只是视图层面，不改文档尺寸/导出几何：导出仍按 FH6 画布 1920×1080 原尺寸走。） */
-    const ns = clamp(App.state.view.scale * f, 0.005, 32);
+    const ns = clamp(App.state.view.scale * f, App.MIN_VIEW_SCALE, App.MAX_VIEW_SCALE);
     App.state.view.x = p.anchorX - p.mx / ns;
     App.state.view.y = p.anchorY - p.my / ns;
     App.state.view.scale = ns;
@@ -61,11 +61,13 @@ App.boot = function () {
   App.wireResize();
   if (App.Tabs) App.Tabs.start(); // 顶部多标签（测试模式预置默认文档；正常模式等待主页新建/打开）
 
-  /* 初始视图：原点位于画面中央 */
+  /* 初始视图：原点位于画面中央；缩放 = App.DEFAULT_VIEW_SCALE
+     （坐标系变细 3 倍：屏幕观感不变，但同样视觉大小的图案只占 1/3 文档单位，见 model.js 文件头） */
   const cw = App.wrap.clientWidth || 1200, ch = App.wrap.clientHeight || 800;
-  App.state.view.x = -cw / 2;
-  App.state.view.y = -ch / 2;
-  App.state.view.scale = 1;
+  const vs = App.DEFAULT_VIEW_SCALE || 1;
+  App.state.view.scale = vs;
+  App.state.view.x = -cw / 2 / vs;
+  App.state.view.y = -ch / 2 / vs;
   App.updateView();
   App.switchTab('lib');
   App.refreshCount();
@@ -444,19 +446,26 @@ App.wireKeyboard = function () {
     /* hideLayers / hideBg / hideOthers：画布右上角三个开关的快捷键。
        需求是「除主页外都生效」→ 主页打开时不触发，按键归主页。
        长按不连续翻转：只在首帧响应（e.repeat 为假）。
-       hideOthers 的按钮只在「编辑图层」状态下出现，所以不在编辑状态时按下不产生任何效果
-       （与按钮可见性保持一致）。 */
+       hideOthers 现在与另外两个同级：全局可用，目标 = 当前选中。 */
     if (A === 'hideLayers' || A === 'hideBg' || A === 'hideOthers') {
       if (App.Home && App.Home.shown) return;
       if (!e.repeat) {
         if (A === 'hideLayers') App.toggleLayersHidden();
         else if (A === 'hideBg') App.toggleBgHidden();
-        else if (App.state.edit && App.state.edit.type !== 'bg') {
-          App.state.hideOthers = !App.state.hideOthers;
-          if (App.state.hideOthers) App.state.layersHidden = false;
-          App.updateHideLayersButton();
-        }
+        else App.toggleHideOthers();
       }
+      return;
+    }
+    /* 两条显示透明度滑条：每次 = 量程的 1/10（0↔100 正好 10 次，两端钳住不溢出）。
+       主页打开时不触发；长按不连发（一次按下 = 一格）。输入态已在上方闸门 return。 */
+    if (A === 'opacityLayersDown' || A === 'opacityLayersUp' || A === 'opacityBgDown' || A === 'opacityBgUp') {
+      if (App.Home && App.Home.shown) return;
+      if (!e.repeat) {
+        const down = (A === 'opacityLayersDown' || A === 'opacityBgDown');
+        if (A === 'opacityLayersDown' || A === 'opacityLayersUp') App.nudgeLayersDisplayOpacity(down ? -1 : 1);
+        else App.nudgeBgDisplayOpacity(down ? -1 : 1);
+      }
+      e.preventDefault();
       return;
     }
   });

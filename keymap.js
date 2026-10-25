@@ -29,6 +29,12 @@ var ACTIONS = [
   /* 「隐藏其他图层」：按钮只在「编辑图层」状态下出现，但键位规则与上面两个一致（global）。
      不在编辑状态时按下不产生任何效果。 */
   { id: 'hideOthers', ctx: 'global', def: ['c'], label: 'km.a.hideOthers' },
+  /* 两条显示透明度滑条（画布右上角）的快捷键：每次 = 量程 1/10（0↔100 正好 10 次）。
+     放在 global：除主页外都生效；- / = / [ / ] 在整张表里原本空闲。 */
+  { id: 'opacityLayersDown', ctx: 'global', def: ['-'], label: 'km.a.opacityLayersDown' },
+  { id: 'opacityLayersUp', ctx: 'global', def: ['='], label: 'km.a.opacityLayersUp' },
+  { id: 'opacityBgDown', ctx: 'global', def: ['['], label: 'km.a.opacityBgDown' },
+  { id: 'opacityBgUp', ctx: 'global', def: [']'], label: 'km.a.opacityBgUp' },
   { id: 'escape', ctx: 'global', def: ['Escape'], label: 'km.a.escape' },
 
   { id: 'up', ctx: 'canvas', def: ['w', 'ArrowUp'], label: 'km.a.up' },

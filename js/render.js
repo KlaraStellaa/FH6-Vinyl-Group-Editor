@@ -46,21 +46,55 @@ App.initRender = function () {
 };
 
 App.buildGridPattern = function () {
-  const p = svgEl('pattern', { id: 'sveGridP', width: 20, height: 20, patternUnits: 'userSpaceOnUse' });
-  App.gridPath = svgEl('path', { d: 'M 20 0 L 0 0 0 20', fill: 'none', stroke: 'rgba(0,0,0,0.20)' });
-  p.appendChild(App.gridPath);
+  /* 格子边长 = App.GRID_STEP（20/3 文档单位）：与初始缩放 3 配起来屏幕上一格仍是 20px。
+     ---- 虚线网格（2026-10-26 用户三条硬指标：细 / 十字 / 均匀）----
+     ① 细：stroke-width=1 且 vector-effect=non-scaling-stroke ⇒ 不管画布缩到多少，
+        屏幕上永远是 1px，不会跟着缩放变粗；
+     ② 十字：**不额外画十字** —— 靠虚线相位让每段虚线正骑在交点上：
+        一个格子正好 N 个周期，dashoffset = dash/2 ⇒ 交点落在某段虚线的正中，
+        横竖两条线各贡献「左右/上下各半个 dash」，四条臂等长，拼出来就是正正经经的「+」；
+     ③ 均匀：周期 P = g/N 能整除格长 ⇒ 跨格相位连续，每格长得一模一样。
+     ④ 疏密：2026-10-26 两轮口径 —— 先「太小像实线」⇒ 降到每格 1 周期；再「中间至少两实线」
+        ⇒ 定为每格 3 周期、实空各 50%：交点十字 + 中间两段，一条边上一眼能数出 4 段墨。 */
+  const g = App.GRID_STEP || 20;
+  /* 每格 3 个周期（2026-10-26 用户口径「中间至少有两实线」）：
+     一条格子边上依次是「半个 dash（与相邻格拼成交点十字）→ 空 → dash → 空 → dash → 空 → 半个 dash」，
+     也就是交点一个十字 + 中间**两段**完整虚线。 */
+  const N = 3;
+  const P = g / N;                    /* 周期（缩放 3、格 20px 时 = 6.67px） */
+  const dash = P * 0.5, gap = P * 0.5;/* 实/空各一半：屏幕上约 3.3px 实 + 3.3px 空 */
+  const off = dash / 2;               /* ★ 相位：让虚线正中压在交点上（十字就是这么长出来的） */
+  const col = 'rgba(0,0,0,0.26)';
+  const base = {
+    fill: 'none', stroke: col, 'stroke-width': 1,
+    'vector-effect': 'non-scaling-stroke',
+    'stroke-dasharray': dash + ' ' + gap,
+    'stroke-dashoffset': off,
+    'stroke-linecap': 'butt'
+  };
+  const p = svgEl('pattern', { id: 'sveGridP', width: g, height: g, patternUnits: 'userSpaceOnUse' });
+  /* 横线：每格画上边（从右往左，端点正好落在两角上）；竖线：每格画左边（从上往下）。 */
+  App.gridPathH = svgEl('path', Object.assign({}, base, { d: 'M ' + g + ' 0 L 0 0' }));
+  App.gridPathV = svgEl('path', Object.assign({}, base, { d: 'M 0 0 L 0 ' + g }));
+  p.appendChild(App.gridPathH);
+  p.appendChild(App.gridPathV);
   App.defs.appendChild(p);
+  App.gridPath = App.gridPathH;   /* 兼容旧引用 */
 };
 App.updateGridStroke = function () {
-  if (!App.gridPath) return;
-  App.gridPath.setAttribute('stroke', App.state.bg.base === 'light' ? 'rgba(0,0,0,0.20)' : 'rgba(255,255,255,0.16)');
-};
-App.updateGridRect = function () {
+  const col = App.state.bg.base === 'light' ? 'rgba(0,0,0,0.26)' : 'rgba(255,255,255,0.20)';
+  if (App.gridPathH) App.gridPathH.setAttribute('stroke', col);
+  if (App.gridPathV) App.gridPathV.setAttribute('stroke', col);
+  if (App.gridCross) { App.gridCross.remove(); App.gridCross = null; }   /* 旧版十字元素：彻底清掉 */
+};App.updateGridRect = function () {
   const v = App.state.view, w = App.wrap.clientWidth, h = App.wrap.clientHeight;
   App.gridRect.setAttribute('x', v.x - 4);
   App.gridRect.setAttribute('y', v.y - 4);
   App.gridRect.setAttribute('width', w / v.scale + 8);
   App.gridRect.setAttribute('height', h / v.scale + 8);
+  /* 视图一变（滚轮缩放/平移）就重算显隐：缩太小自动隐藏、放大回去自动显示。
+     写在 updateGridRect 里是因为 updateView 每帧都会走这里，不需要再加钩子。 */
+  if (App.updateGridVisibility) App.updateGridVisibility();
 };
 App.updateView = function () {
   App.viewRevision = (App.viewRevision || 0) + 1;
@@ -493,6 +527,12 @@ App.beginEditStatic = function () {
   const s = App.state;
   if (!s.edit || s.edit.type === 'bg') return;
   if (App.state.eyeMode) return; // 取色器激活：保持矢量
+  /* 「隐藏其他图层」开启：静态化会把非目标层烘进背景位图 ⇒ 隐藏看起来失效。
+     该模式优先，直接放弃静态化（目标层少、本来就不需要它）。 */
+  if (App.state.hideOthers) {
+    if (App.editStatic.active || App.editStatic.baking) App.endEditStatic();
+    return;
+  }
   const targets = App.editTargets();
   if (App.editStatic.active) {
     /* 退出编辑后静态化保持：当前编辑目标退出背景快照（避免矢量与背景重复显示），
@@ -661,6 +701,9 @@ App.autoStaticEligible = function () {
   if (App.state.edit) return false;            /* 编辑模式由 editStatic 负责 */
   if (App.state.eyeMode) return false;         /* 取色器需要矢量 */
   if (App.state.layersHidden) return false;    /* 用户主动隐藏图层：不干预 */
+  /* 「隐藏其他图层」开启：它靠 display 表达显隐，与位图的 display:none 接管互斥
+     （否则位图里烘着全部图层，隐藏其他图层看起来没生效） */
+  if (App.state.hideOthers) return false;
   if (App.state.batching) return false;        /* 批量建层中 */
   /* 颜色预览/提交期间让位：位图是按【数据色】烘的，接管显示会把预览盖住
      （该工作副本 348 叶子 ≥ 阈值，
@@ -1843,7 +1886,15 @@ App.releaseFlashOverlay = function (rec) {
 };
 
 App.ensureFlashRunning = function (reset) {
-  if (reset && App.state.flashTimer) {
+  /* ★ 重置周期**只在闪动目标真的变了**时才做（2026-10-26 用户报障：点空白画布会把正在播的
+     闪动刷新）。原来任何调用方传 reset=true 都无条件清掉定时器重建 ——
+     而 setSelection / requestFlashRefresh 在「点空白、滚白框、Tab 扫选、点同一层」
+     这些路径上会反复带着同一份目标调用，于是动画被反复从头播。
+     现在按「选中集合 + 是否编辑中」算签名，签名没变就不动定时器。 */
+  const sig = Array.from(App.state.selected).sort((a, b) => a - b).join(',') + '|' + (App.state.edit ? 'E' : '-');
+  const changed = sig !== App._flashRunSig;
+  App._flashRunSig = sig;
+  if (reset && changed && App.state.flashTimer) {
     clearInterval(App.state.flashTimer);
     App.state.flashTimer = null;
   }
@@ -1852,7 +1903,7 @@ App.ensureFlashRunning = function (reset) {
   }
 };
 App.startFlash = function () {
-  /* 新选择先立即闪一次；周期从这次闪动重新起算，避免沿用旧计时器导致间隔忽长忽短。 */
+  /* 新选择先闪一次；周期是否重置交给 ensureFlashRunning 按签名判断（目标没变就不重置） */
   App.ensureFlashRunning(true);
   App.updateFlashOverlays();
 };

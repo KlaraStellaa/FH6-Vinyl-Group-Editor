@@ -202,12 +202,14 @@ App.settings = {
     const main = box.querySelector('#settingsMainView');
     const key = box.querySelector('#settingsKeyView');
     const tv = box.querySelector('#settingsThemeView');
+    const fv = box.querySelector('#settingsFontView');
     const title = box.querySelector('#settingsTitle');
     if (main) main.classList.remove('hidden');
     if (key) key.classList.add('hidden');
     if (tv) tv.classList.add('hidden');
+    if (fv) fv.classList.add('hidden');
     const cb = box.querySelector('.confirm-box');
-    if (cb) cb.classList.remove('tm-mode', 'km-mode');
+    if (cb) cb.classList.remove('tm-mode', 'km-mode', 'ft-mode');
     if (title) { title.setAttribute('data-i18n', 'settings.title'); title.textContent = App.i18n.t('settings.title'); }
   },
 
@@ -240,6 +242,14 @@ App.settings = {
             '<button id="btnTheme" class="settings-change" data-i18n="settings.change">更改</button>' +
           '</span>' +
         '</div>' +
+        /* 更改字体：只对中文开放（非中文整行置灰，见 App.fonts.syncPanel） */
+        '<div class="settings-row" id="settingsFontRow">' +
+          '<label data-i18n="settings.font">更改字体</label>' +
+          '<span class="settings-now">' +
+            '<span id="fontNowName"></span>' +
+            '<button id="btnFont" class="settings-change" data-i18n="settings.change">更改</button>' +
+          '</span>' +
+        '</div>' +
         '<div class="settings-row">' +
           '<label data-i18n="settings.speedWasm">更改编辑速率</label>' +
           '<button id="btnEditSpeed" class="settings-change" data-i18n="settings.change">更改</button>' +
@@ -264,6 +274,7 @@ App.settings = {
         '</div>' +
         '<div id="settingsKeyView" class="hidden"></div>' +
         '<div id="settingsThemeView" class="hidden"></div>' +
+        '<div id="settingsFontView" class="hidden"></div>' +
       '</div>';
     document.body.appendChild(p);
     p.addEventListener('click', e => { if (e.target === p) App.hideOverlay(p); });
@@ -277,6 +288,9 @@ App.settings = {
     /* 主题：点「更改」→ 同一个设置窗切成主题视图（与「自定义快捷键」同一套切法） */
     const btnTheme = p.querySelector('#btnTheme');
     if (btnTheme) btnTheme.addEventListener('click', () => this.openThemeView());
+    /* 更改字体：同一个设置窗切到字体视图（与主题/快捷键同一套切法） */
+    const btnFont = p.querySelector('#btnFont');
+    if (btnFont) btnFont.addEventListener('click', () => { if (App.fonts) App.fonts.open(); });
     /* 编辑速率 / 微调速率：两个入口用同一个窗口组件，各自编辑不同的配置对象 */
     const b1 = p.querySelector('#btnEditSpeed');
     const b2 = p.querySelector('#btnNudgeSpeed');
@@ -309,6 +323,7 @@ App.settings = {
        只改 select.value 不改克隆，面板就会「撒谎」（退出重进后显示默认语言）。 */
     if (App.evDropdownSyncAll) App.evDropdownSyncAll();
     this.syncThemeView();
+    if (App.fonts) App.fonts.syncPanel();
   },
 
   toggle() {
@@ -345,6 +360,7 @@ App.settings = {
       this.applyAutoSave(s.autoSave);
       this.applySpeeds(s);
       this.applyKeymap(s);
+      if (App.fonts) App.fonts.load(s);
     } catch (e) { /* 无 API（异常环境）时用默认 */ }
     /* localStorage 兜底（API 不可用时仍有记忆） */
     try {
@@ -420,7 +436,9 @@ App.settings = {
       },
       editSpeeds: Object.assign({}, App.state.editSpeeds),
       nudgeSpeeds: Object.assign({}, App.state.nudgeSpeeds),
-      keymap: App.keymap ? App.keymap.payload() : undefined
+      keymap: App.keymap ? App.keymap.payload() : undefined,
+      /* 界面字体：当前选择 + 已导入清单（字体文件副本在数据目录 fonts/） */
+      font: App.fonts ? App.fonts.payload() : undefined
     };
     try { localStorage.setItem('sve-settings', JSON.stringify(payload)); } catch (e) { /* ignore */ }
     /* 保存失败不许静默伪装成功：调用方（确定按钮）据此提示用户 */

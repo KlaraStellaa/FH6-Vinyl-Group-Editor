@@ -69,7 +69,7 @@ html[data-theme="light"] {
    弹窗仍是纯白）。删掉这一条，弹窗就跟着主题走了。 */
 html[data-scheme="light"] .confirm-box .anchor-btns { background: transparent; }
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--text); font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; font-size: 13px; user-select: none; }
+html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--ui-font, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif); font-size: 13px; user-select: none; }
 
 button { background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text); padding: 5px 10px; border-radius: var(--btn-radius, 10px); cursor: pointer; font-size: 12px; font-family: inherit; box-shadow: var(--btn-shadow, 0 1px 3px rgba(0,0,0,.3)); transition: background-color .15s ease-out, transform .1s ease-out, box-shadow .15s ease-out; }
 button:hover { background: var(--accent); color: #fff; box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 35%, transparent); }
@@ -1200,7 +1200,7 @@ html[data-scheme="light"] {
 /* ===== 顶部工具栏图标按钮（Fluent 图标 + 悬停显示原文案） =====
    定义见 js/toolbar-icons.js。类名与左侧功能栏的 .sve-icon-btn **刻意分开**：
    左侧功能栏有「全页 .sve-icon-btn 数量固定、且除 #btnGroupBack（画布左下角的返回键）
-   外都不得越出 #selToolbar」的约束（见 开发工具/run-toolbaricons.js 的 C7），
+   外都不得越出 #selToolbar」的约束（见 _forza-src/run-toolbaricons.js 的 C7），
    顶部工具栏若复用那个类名会立刻破坏它。 */
 .tbi-icon-btn {
   padding: 6px;
@@ -1443,6 +1443,56 @@ html[data-scheme="light"] #shortcutPanel .sc-keys kbd { color: var(--text); }
 .settings-now { display: flex; align-items: center; gap: 8px; }
 .settings-now #themeNowName { font-size: 12px; color: var(--dim); }
 
+/* ===== 「检测到更新」窗口 =====
+   左上角标题 / 中间更新说明（可滚） / 右下角两个按键（取消 · 更新）。
+   z-index 拉到最上层：开机自检完成时主页遮罩可能还开着，窗口必须压得住。 */
+.upd-ov { z-index: 300; }
+.upd-box { width: 520px; max-width: calc(100vw - 80px); }
+.settings-box .upd-title, .confirm-box .upd-title { font-size: 15px; font-weight: 600; }
+.upd-notes {
+  margin: 10px 0 4px; padding: 10px 12px;
+  max-height: 46vh; overflow-y: auto;
+  background: var(--input-bg); border: 1px solid var(--btn-border); border-radius: 10px;
+  color: var(--text); font-size: 12px; line-height: 1.65;
+  white-space: pre-wrap; word-break: break-word; user-select: text;
+}
+.upd-hint { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--dim); }
+
+/* ===== 设置窗内的「更改字体」视图（与主题/快捷键视图同一套切法） =====
+   列表：第一项固定「默认字体」；非当前行悬停才冒出 ×（当前使用中的不出现 ×）。
+   底部：左「下载字体」，右「导入」+「确认」。 */
+.settings-box.ft-mode { width: 470px; }
+#settingsFontView { display: flex; flex-direction: column; min-height: 0; }
+.settings-box .ft-scroll {
+  display: flex; flex-direction: column; gap: 4px;
+  overflow-y: auto; max-height: 46vh; min-height: 140px; padding-right: 4px;
+}
+.settings-box .ft-row {
+  position: relative; display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border: 1px solid transparent; border-radius: 10px;
+  cursor: pointer; background: var(--btn-bg); color: var(--text); font-size: 12px;
+  transition: background-color .12s ease-out, border-color .12s ease-out;
+}
+.settings-box .ft-row:hover { background: var(--btn-hover-bg); }
+.settings-box .ft-row.active { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+.settings-box .ft-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-box .ft-del {
+  display: none; flex: none; width: 20px; height: 20px; padding: 0;
+  line-height: 17px; text-align: center; font-size: 13px;
+  background: transparent; border: 1px solid var(--btn-border); border-radius: 50%;
+  color: var(--dim); cursor: pointer; box-shadow: none;
+}
+.settings-box .ft-row:hover .ft-del { display: block; }
+.settings-box .ft-del:hover { color: var(--text); border-color: var(--text); }
+/* 正在使用的那个：永远不出现 × */
+.settings-box .ft-row[data-current="1"] .ft-del { display: none !important; }
+.settings-box .ft-empty { font-size: 12px; line-height: 1.6; color: var(--dim); padding: 14px 4px; }
+.settings-box .ft-foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.settings-box .ft-foot .ft-spacer { flex: 1; }
+.settings-box .ft-del-msg { font-size: 12px; line-height: 1.6; color: var(--text); margin: 6px 0 12px; }
+/* 语言不是中文时：设置里那一行整行置灰 */
+.settings-row.disabled label, .settings-row.disabled .settings-now { opacity: .45; }
+
 /* ===== 设置窗内的「自定义快捷键」视图（与设置主视图同一个窗，互斥切换） ===== */
 .settings-box.km-mode { width: 470px; }#settingsKeyView { display: flex; flex-direction: column; min-height: 0; }
 .settings-box .km-hint { font-size: 11px; color: var(--dim); line-height: 1.5; margin-bottom: 8px; }
@@ -1617,7 +1667,7 @@ body.sve-help-mode, body.sve-help-mode * { cursor: help !important; }
   font-variant-numeric: tabular-nums;
 }
 
-/* ==== 主题配色：由 开发工具/_tools/gen-themes.cjs 生成，勿手改 ==== */
+/* ==== 主题配色：由 _forza-src/_tools/gen-themes.cjs 生成，勿手改 ==== */
 /* 每个主题只给 6 个种子色，其余 21 个变量由推导得出（改配色请改本区上方的 SEEDS 后重跑）。
    明暗族用 data-scheme（dark/light）区分，与具体主题 id 解耦 —— 浅色族专属的那几条
    CSS 规则写的是 html[data-scheme="light"]，所以以后再加浅色主题不用动它们。 */

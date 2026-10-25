@@ -1309,6 +1309,59 @@ App.pointInQuad = function (p, q) {
   return true;
 };
 
+/* ================= 编辑态的「指针落在目标框内 / 框外」判定（唯一一份） =================
+   编辑目标（普通图层 / 合并分组 / 多选 / 背景）的文档包围盒四边形，命中即「框内」。
+   这条规则原本只写在旋转、倾斜两个分支里，移动与缩放各自另有一套（像素命中 / 直接 return），
+   于是「可拖区域」出现三套口径。现在统一走这里：
+     · 框内 → 移动图层（四种模式一致）
+     · 框外 → 旋转 / 倾斜 / 缩放各自的模式动作；移动模式框内外都是移动。
+   判据：矩形四边形用 pointInQuad（与手柄几何、命中判定同一个函数），不另造尺度。 */
+App.editPointerInside = function (clientX, clientY) {
+  const items = App.editTargets();
+  if (!items.length) return false;
+  const pd = App.screenToDoc(clientX, clientY);
+  for (const it of items) {
+    const b = App.getItemDocBBox(it);
+    if (b.corners && b.corners.length >= 4 && App.pointInQuad(pd, b.corners)) return true;
+  }
+  return false;
+};
+
+/* 手柄拖拽手势的起手（手柄命中 / 框外自由缩放共用同一份字段，
+   避免两处各写一遍 20 个字段后慢慢长歪）。
+   h：'nw'|'n'|'ne'|'e'|'se'|'s'|'sw'|'w' 或 'box'（框外自由缩放，见 onEditPointerMove） */
+App.beginHandleDrag = function (h, g, e, items) {
+  App.editHist.checkpoint(); // 手势开始前记录撤回点
+  const _g0 = App.editSession && App.editSession.grp
+    ? { rot: App.editSession.grp.rot, skew: App.editSession.grp.skew, sx: App.editSession.grp.sx, sy: App.editSession.grp.sy } : null;
+  /* 有锚点（仅单目标）：手势开始时记录锚点的当前文档坐标，
+     拖动中据此重算 x/y —— 锚点屏幕位置全程不动（含 Shift 旋转/倾斜） */
+  const _af = (items.length === 1) ? App.anchorFixedLocal(items[0]) : null;
+  const _ad = _af ? App.itemLocalToDoc(items[0], _af.x, _af.y) : null;
+  const _anchorCenter = (items.length === 1 && _ad) ? { x: _ad.x, y: _ad.y } : { x: g.cx, y: g.cy };
+  const hp = (h === 'box') ? { x: g.cx, y: g.cy } : (g[h] || { x: g.cx, y: g.cy });
+  App.drag = {
+    kind: 'edithandle',
+    h,
+    startX: e.clientX, startY: e.clientY,
+    scale: App.state.view.scale,
+    box: g.box,
+    handleDoc: { x: hp.x, y: hp.y }, // 手势起点的手柄文档坐标（跟手换算用，见 onEditPointerMove）
+    center: _anchorCenter,
+    anchorFix: _af,
+    anchorDoc: _ad,
+    groupC: { x: g.cx, y: g.cy }, // 多选整组缩放的组中心
+    g0: _g0, // 多选组矩阵会话在手势起点的组参数快照
+    grabAngle: Math.atan2(hp.y - _anchorCenter.y, hp.x - _anchorCenter.x), // 手柄相对中心的初始角度（Shift 旋转用）
+    rotLock: 0,
+    skewLock: 0, // Shift+上下手柄快捷倾斜的保持值
+    snap: items.map(it => ({ it, x: it.x, y: it.y, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew,
+      flipH: !!it.flipH, flipV: !!it.flipV }))
+  };
+  try { App.svg.setPointerCapture(e.pointerId); } catch (err) { /* 合成事件无活动指针 */ }
+  e.preventDefault();
+};
+
 App.onEditPointerDown = function (e) {
   if (App.state.spaceDown) return;
   /* 编辑中鼠标操作：撤销未点「应用」的颜色预览 */
@@ -1324,31 +1377,13 @@ App.onEditPointerDown = function (e) {
     return;
   }
   if (mode === 'move') {
-    /* 编辑背景图片：背景不在 App.state.layers 里，下面的像素命中扫不到它 ——
-       先单独按几何命中（点落在背景四角四边形内）起手拖动。
-       背景编辑时它是唯一编辑目标，所以拖背景范围内的任意位置都算拖背景。 */
-    const bgHit = App.hitBgImageAt ? App.hitBgImageAt(e.clientX, e.clientY) : null;
-    if (bgHit) {
-      App.editHist.checkpoint(); // 手势开始前记录撤回点（拖动过程中不重复记录）
-      App.drag = {
-        kind: 'editmove',
-        startX: e.clientX, startY: e.clientY,
-        scale: App.state.view.scale,
-        snap: [{ it: bgHit, x: bgHit.x, y: bgHit.y }]
-      };
-      try { App.svg.setPointerCapture(e.pointerId); } catch (err) { /* 合成事件无活动指针 */ }
-      e.preventDefault();
-      return;
-    }
-    /* 像素级命中：半透明边缘不算命中；模拟事件无坐标时退化为 DOM 命中 */
-    const layer = (e.clientX === 0 && e.clientY === 0 && e.target)
-      ? App.hitLayer(e)
-      : App.hitLayerPaintedSync(e.clientX, e.clientY);
-    if (!layer) return;
-    const top = App.topOf(layer);
+    /* 移动模式：**画布上按下哪儿都算**（不再要求咬住图案本身，也不要求落在背景图范围内）。
+       目标 = 当前编辑目标（普通图层 / 合并分组 / 多选 / 背景图片），整组一起走。 */
     const items = App.editTargets();
-    const inTarget = items.some(it => it === top || (it.kind === 'merged' && it.children && it.children.includes(layer)));
-    if (!inTarget) return;
+    if (!items.length) return;
+    /* 隐藏的背景图片仍然拖不动：看不见的东西不该被拖着走（与「拖哪儿都能动」不冲突 ——
+       那条讲的是**可拖区域**，这条讲的是**目标不可见时不响应**）。 */
+    if (App.state.edit.type === 'bg' && App.state.bg.hidden) return;
     App.editHist.checkpoint(); // 手势开始前记录撤回点（拖动过程中不重复记录）
     App.drag = {
       kind: 'editmove',
@@ -1364,14 +1399,10 @@ App.onEditPointerDown = function (e) {
     const hEl = gizmo ? (e.target.closest && e.target.closest('[data-h]')) : null;
     const g = App.handleGeometry();
     if (!g) return;
-    /* 点击位置是否在图案框内：框内且没命中手柄 = 移动图案位置 */
+    /* 点击位置是否在图案框内：框内且没命中手柄 = 移动图案位置。
+       判定走 App.editPointerInside（与旋转/倾斜**同一份**，不再各写一遍）。 */
     const items = App.editTargets();
-    const pd = App.screenToDoc(e.clientX, e.clientY);
-    let inside = false;
-    for (const it of items) {
-      const b = App.getItemDocBBox(it);
-      if (b.corners && b.corners.length >= 4 && App.pointInQuad(pd, b.corners)) { inside = true; break; }
-    }
+    const inside = App.editPointerInside(e.clientX, e.clientY);
     /* 四角手柄**不再**按「框内/框外」一刀切。
        以前是 `if (四角 && inside) h = null` —— 角手柄本来就骑在包围盒角上，
        这条规则把朝内的那一半直接判死，而手柄本身只有 3~9px，实际可点只剩 4~5px；
@@ -1394,39 +1425,11 @@ App.onEditPointerDown = function (e) {
       h = best;
     }
     if (h) {
-      const hp = g[h] || { x: g.cx, y: g.cy };
-      App.editHist.checkpoint(); // 手柄手势开始前记录撤回点
-      const _g0 = App.editSession && App.editSession.grp
-        ? { rot: App.editSession.grp.rot, skew: App.editSession.grp.skew, sx: App.editSession.grp.sx, sy: App.editSession.grp.sy } : null;
-      /* 有锚点（仅单目标）：手势开始时记录锚点的当前文档坐标，
-         拖动中据此重算 x/y —— 锚点屏幕位置全程不动（含 Shift 旋转/倾斜） */
-      const _af = (items.length === 1) ? App.anchorFixedLocal(items[0]) : null;
-      const _ad = _af ? App.itemLocalToDoc(items[0], _af.x, _af.y) : null;
-      const _anchorCenter = (items.length === 1 && _ad) ? { x: _ad.x, y: _ad.y } : { x: g.cx, y: g.cy };
-      App.drag = {
-        kind: 'edithandle',
-        h,
-        startX: e.clientX, startY: e.clientY,
-        scale: App.state.view.scale,
-        box: g.box,
-        handleDoc: { x: hp.x, y: hp.y }, // 手势起点的手柄文档坐标（跟手换算用，见 onEditPointerMove）
-        center: _anchorCenter,
-        anchorFix: _af,
-        anchorDoc: _ad,
-        groupC: { x: g.cx, y: g.cy }, // 多选整组缩放的组中心
-        g0: _g0, // 多选组矩阵会话在手势起点的组参数快照
-        grabAngle: Math.atan2(hp.y - _anchorCenter.y, hp.x - _anchorCenter.x), // 手柄相对中心的初始角度（Shift 旋转用）
-        rotLock: 0,
-        skewLock: 0, // Shift+上下手柄快捷倾斜的保持值
-        snap: App.editTargets().map(it => ({ it, x: it.x, y: it.y, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew,
-          flipH: !!it.flipH, flipV: !!it.flipV }))
-      };
-      try { App.svg.setPointerCapture(e.pointerId); } catch (err) { /* 合成事件无活动指针 */ }
-      e.preventDefault();
-    } else {
+      /* 手柄起手：与「框外自由缩放」共用同一份字段（App.beginHandleDrag） */
+      App.beginHandleDrag(h, g, e, items);
+    } else if (inside) {
       /* 拖动蓝框内部（中心区域）= 移动图案位置（复用移动模式拖拽，中心/大小/旋转不变） */
       if (!items.length) return;
-      if (!inside) return;
       App.editHist.checkpoint(); // 拖蓝框内部移动：开始前记录撤回点
       App.drag = {
         kind: 'editmove',
@@ -1436,6 +1439,12 @@ App.onEditPointerDown = function (e) {
       };
       try { App.svg.setPointerCapture(e.pointerId); } catch (err) { /* 合成事件无活动指针 */ }
       e.preventDefault();
+    } else {
+      /* 框外：自由缩放（h = 'box'）。**不做角、只分上下左右** ——
+         横向位移 ÷ 框宽 = 宽度增量、纵向位移 ÷ 框高 = 高度增量，
+         与拖 e/w、n/s 四条边手柄完全同一口径；等比走同一套 propScalePair。 */
+      if (!items.length) return;
+      App.beginHandleDrag('box', g, e, items);
     }
   } else if (mode === 'rotate') {
     /* 旋转模式鼠标拖拽：拖图案外部任意区域 = 绕中心旋转；
@@ -1445,11 +1454,7 @@ App.onEditPointerDown = function (e) {
     const pd = App.screenToDoc(e.clientX, e.clientY);
     const g = App.handleGeometry();
     if (!g) return;
-    let inside = false;
-    for (const it of items) {
-      const b = App.getItemDocBBox(it);
-      if (b.corners && b.corners.length >= 4 && App.pointInQuad(pd, b.corners)) { inside = true; break; }
-    }
+    const inside = App.editPointerInside(e.clientX, e.clientY);
     App.editHist.checkpoint(); // 手势开始前记录撤回点
     if (inside) {
       App.drag = {
@@ -1481,12 +1486,7 @@ App.onEditPointerDown = function (e) {
        拖图案内部 = 调整位置（与移动模式同一拖拽） */
     const items = App.editTargets();
     if (!items.length) return;
-    const pd = App.screenToDoc(e.clientX, e.clientY);
-    let inside = false;
-    for (const it of items) {
-      const b = App.getItemDocBBox(it);
-      if (b.corners && b.corners.length >= 4 && App.pointInQuad(pd, b.corners)) { inside = true; break; }
-    }
+    const inside = App.editPointerInside(e.clientX, e.clientY);
     App.editHist.checkpoint(); // 手势开始前记录撤回点
     if (inside) {
       App.drag = {
@@ -1602,49 +1602,67 @@ App.onEditPointerMove = function (e) {
         1920 宽的背景图反过来跑 9.6 倍，这就是「手柄移动与鼠标移动距离不一致」。） */
     const _lcs = App.localContentSize(it);
     const _tanS = Math.tan(((it && it.skew) || 0) * D2R);
-    const _hx = (h.includes('e') || h.includes('w')) ? _lcs.w / 2 : 0;
-    const _hy = (h.includes('n') || h.includes('s')) ? _lcs.h / 2 : 0;
-    let _denX = 2 * (_hx + _tanS * _hy);
-    let _denY = 2 * _hy;
-    /* ★ 有锚点（单目标）：缩放的固定点是**锚点**，不是内容中心 —— 分母必须换成
-       「手柄相对锚点」的本地偏移。沿用内容半宽/半高时，锚点越偏离中心倍率越离谱：
-       锚点落在左边缘（偏移 = 整个宽）时，手柄正好走 2 倍鼠标距离
-       （2026-10-02 用户报障「放置锚点后拖手柄，手柄位移与鼠标不一致」）。
-       锚点被 clampToQuad 限制在内容四边形内 ⇒ 同一轴的两个手柄偏移符号相反，
-       取绝对值即可；方向仍由下面 gx/gy 的 ± 累加负责（与无锚点路径同一口径）。 */
-    if (App.drag.anchorFix && App.drag.snap.length === 1) {
-      /* ★ 手柄的**本地坐标**（不是「相对内容中心」的偏移）：
-         普通图层的内容盒就是 [-w/2, w/2]（模型包围盒），中心落在原点上；
-         合并分组的内容盒是**组本地包围盒**（el.getBBox），中心 (lcx,lcy) 一般不在原点上
-         （实测两个偏移图案合并后 lcx=-30、lcy=25，e 手柄的真实本地 x = 124 而不是 w/2 = 154）。
-         少了这个中心偏移，锚点分支的分母就偏大或偏小 —— 手柄走不到位
-         （实测：鼠标拖 30px、手柄只走 25.1px；换到另一条边又变成 37.2px）。
-         无锚点分支不受影响：那里的固定点**就是**内容中心，只用到相对偏移 ±半宽/半高。 */
-      const _hc = (it && it.kind === 'merged') ? App.mergedLocalCenter(it) : { lcx: 0, lcy: 0 };
-      const _hxl = _hc.lcx + (h.includes('e') ? 1 : h.includes('w') ? -1 : 0) * _lcs.w / 2;
-      const _hyl = _hc.lcy + (h.includes('s') ? 1 : h.includes('n') ? -1 : 0) * _lcs.h / 2;
-      const _ox = _hxl - App.drag.anchorFix.x;
-      const _oy = _hyl - App.drag.anchorFix.y;
-      _denX = 2 * Math.abs(_ox + _tanS * _oy);
-      _denY = 2 * Math.abs(_oy);
-    }
-    if (App.drag.snap.length > 1 && App.drag.handleDoc && App.drag.groupC) {
-      /* 多选整组：固定点 = 组内容中心；组参数从手势起点 g0 起算，
-         所以偏移要按 g0.rot 转回组本地轴（skew 在组参数里会与偏移里的项相消）。 */
-      const _th0 = ((App.drag.g0 && App.drag.g0.rot) || 0) * D2R;
-      const _ox = App.drag.handleDoc.x - App.drag.groupC.x;
-      const _oy = App.drag.handleDoc.y - App.drag.groupC.y;
-      _denX = 2 * (_ox * Math.cos(_th0) + _oy * Math.sin(_th0));
-      _denY = 2 * (-_ox * Math.sin(_th0) + _oy * Math.cos(_th0));
-    }
-    /* 退化保护：手柄正好落在固定点上时分母趋零，退回一个安全的等效尺度 */
-    if (!isFinite(_denX) || Math.abs(_denX) < 1e-6) _denX = Math.max(1, _lcs.w);
-    if (!isFinite(_denY) || Math.abs(_denY) < 1e-6) _denY = Math.max(1, _lcs.h);
+    /* ★★ 缩放换算**只有这一份**：给一个（虚拟）手柄的本地偏移，算出它两个分母。
+       上下左右四条边、四个角、以及「框外拖动」，全部调它 —— 不存在第二套公式。
+       手柄直接跟手：被拖的手柄走多远 = 鼠标走多远（都按本地轴投影）。
+       换算分母 = 手柄相对「缩放固定点」的偏移量，在「缩放参数 = 1」的那个尺度上量：
+         · 单个目标（普通图层 / 合并分组 / 背景）：固定点 = 锚点或内容中心，
+           偏移就是内容半宽/半高；角手柄还要带上 skew 引起的水平分量（W + tan(skew)·H）；
+         · 多选整组：组缩放参数从 1 起算，偏移就是「手柄相对组内容中心的旋转后偏移」。
+       分母与 sx/sy、翻转都无关 —— 它们同时出现在「偏移」和「缩放参数」里，正好约掉。
+       （旧实现固定除以 200：手柄只走「本机尺寸/200」倍 —— 128 的图案鼠标拖 100 只走 64，
+        1920 宽的背景图反过来跑 9.6 倍，这就是「手柄移动与鼠标移动距离不一致」。）
+       ★ 有锚点（单目标）：缩放的固定点是**锚点**，不是内容中心 —— 分母必须换成
+       「手柄相对锚点」的本地偏移（2026-10-02 用户报障「放置锚点后拖手柄，手柄位移与鼠标不一致」）。
+       锚点被 clampToQuad 限制在内容四边形内 ⇒ 同一轴的两个手柄偏移符号相反，取绝对值即可。
+       手柄的**本地坐标**要带分组中心偏移：合并分组的内容盒是组本地包围盒（el.getBBox），
+       中心 (lcx,lcy) 一般不在原点上（实测合并后 lcx=-30、lcy=25），少了它手柄走不到位。 */
+    const _hc = (it && it.kind === 'merged') ? App.mergedLocalCenter(it) : { lcx: 0, lcy: 0 };
+    const _denFor = function (hx, hy) {
+      let denX = 2 * (Math.abs(hx) + _tanS * Math.abs(hy));
+      let denY = 2 * Math.abs(hy);
+      if (App.drag.anchorFix && App.drag.snap.length === 1) {
+        const _ox = (_hc.lcx + hx) - App.drag.anchorFix.x;
+        const _oy = (_hc.lcy + hy) - App.drag.anchorFix.y;
+        denX = 2 * Math.abs(_ox + _tanS * _oy);
+        denY = 2 * Math.abs(_oy);
+      }
+      /* 退化保护：手柄正好落在固定点上时分母趋零，退回一个安全的等效尺度 */
+      if (!isFinite(denX) || Math.abs(denX) < 1e-6) denX = Math.max(1, _lcs.w);
+      if (!isFinite(denY) || Math.abs(denY) < 1e-6) denY = Math.max(1, _lcs.h);
+      return { denX: denX, denY: denY };
+    };
     let gx = 0, gy = 0;
-    if (h.includes('e')) gx += lx / _denX;
-    if (h.includes('w')) gx -= lx / _denX;
-    if (h.includes('n')) gy -= ly / _denY;
-    if (h.includes('s')) gy += ly / _denY;
+    if (h === 'box') {
+      /* 框外拖动：**不做角，只做上下左右判定**，且两侧固定取同一条边（用户口径 2026-10-26）：
+           · 左右缩放固定用**左手柄（w）**的判定：分母 = _denFor(-半宽, 0)，方向也照 w —— 往左拖变大；
+           · 竖直缩放固定用**上手柄（n）**的判定：分母 = _denFor(0, -半高)，方向也照 n —— 往上拖变大。
+         也就是「左上角跟着鼠标走」，与拖左上角手柄逐位一致（判据 D9/D12 比对）。
+         固定取边的好处：与指针落在框外的哪个方位无关，也随锚点位置走同一套换算。 */
+      const _bw = (App.drag.snap.length > 1) ? Math.max(1, App.drag.box.w || 1) : _lcs.w;
+      const _bh = (App.drag.snap.length > 1) ? Math.max(1, App.drag.box.h || 1) : _lcs.h;
+      gx = -lx / _denFor(-_bw / 2, 0).denX;
+      gy = -ly / _denFor(0, -_bh / 2).denY;
+    } else {
+      const _sx = h.includes('e') ? 1 : h.includes('w') ? -1 : 0;
+      const _sy = h.includes('s') ? 1 : h.includes('n') ? -1 : 0;
+      const _d = _denFor(_sx * _lcs.w / 2, _sy * _lcs.h / 2);
+      if (App.drag.snap.length > 1 && App.drag.handleDoc && App.drag.groupC) {
+        /* 多选整组：固定点 = 组内容中心；组参数从手势起点 g0 起算，
+           所以偏移要按 g0.rot 转回组本地轴（skew 在组参数里会与偏移里的项相消）。 */
+        const _th0 = ((App.drag.g0 && App.drag.g0.rot) || 0) * D2R;
+        const _ox = App.drag.handleDoc.x - App.drag.groupC.x;
+        const _oy = App.drag.handleDoc.y - App.drag.groupC.y;
+        _d.denX = 2 * (_ox * Math.cos(_th0) + _oy * Math.sin(_th0));
+        _d.denY = 2 * (-_ox * Math.sin(_th0) + _oy * Math.cos(_th0));
+        if (!isFinite(_d.denX) || Math.abs(_d.denX) < 1e-6) _d.denX = Math.max(1, _lcs.w);
+        if (!isFinite(_d.denY) || Math.abs(_d.denY) < 1e-6) _d.denY = Math.max(1, _lcs.h);
+      }
+      if (_sx > 0) gx += lx / _d.denX;
+      if (_sx < 0) gx -= lx / _d.denX;
+      if (_sy > 0) gy += ly / _d.denY;
+      if (_sy < 0) gy -= ly / _d.denY;
+    }
     if (App.state.sizeMode === 'prop') {
       if (App.drag.snap.length === 1 && it) {
         /* 单图层「等比」= 保持长宽比：被拖的那根轴沿用原来的等量增量手感，
@@ -1655,7 +1673,10 @@ App.onEditPointerMove = function (e) {
         const p = App.propScalePair(gx, gy);
         gx = p[0]; gy = p[1];
       } else {
-        const g = (h.includes('e') || h.includes('w')) ? gx : gy;
+        /* 多选整组：组参数起点 sx/sy = 1，两轴取**同一个增量**即等比。
+           框外拖动没有“抓的是哪条边”，取位移更大的那一轴当主导（两轴接近时数值也接近，不会抖）。 */
+        const g = (h === 'box') ? (Math.abs(gx) >= Math.abs(gy) ? gx : gy)
+          : ((h.includes('e') || h.includes('w')) ? gx : gy);
         gx = g; gy = g;
       }
     }

@@ -552,9 +552,9 @@ App.placePatternAt = function (spec, x, y) {
   App.history.markDiscrete();
   /* 初始大小按当前画布缩放调整：拖入时屏幕视觉大小恒定，
      画布放大多少倍、初始缩放就缩小多少倍（缩放 100% 时即为原始尺寸）。
-     上下限必须覆盖缩放范围 [0.005, 32] 的倒数 [0.03125, 200]，否则画布缩到很小时
+     上下限必须覆盖缩放范围 [0.005, 512] 的倒数 [0.00195, 200]，否则画布缩到很小时
      拖入的图案初始大小会被钳制（2026-10-03 随最小缩放一起调整）。 */
-  const inv = clamp(1 / (App.state.view.scale || 1), 0.005, 200);
+  const inv = clamp(1 / (App.state.view.scale || 1), 1 / (App.MAX_VIEW_SCALE || 512), 200);
   let l = null;
   if (spec.kind === 'symbol') {
     const sym = App.symbolMap.get(spec.key);
@@ -1009,9 +1009,13 @@ App.restoreWorkCopy = function (data) {
     if (App.updateHideBgButton) App.updateHideBgButton();
   }
   if (data.view && isFinite(data.view.x)) {
-    App.state.view.x = data.view.x;
-    App.state.view.y = data.view.y;
-    App.state.view.scale = clamp(data.view.scale || 1, 0.005, 32);   // 与 main.js/tabs.js 的缩放范围保持一致
+    /* 2026-10-26 用户口径「都要同步更改」：打开旧工作进程时把存下来的缩放一并换到默认值，
+       视口中心对应的文档点保持不变（否则缩放变大后内容会跑出画面）。
+       旧文件里的 scale=1 就是从这里被同步成 3 的。 */
+    const nv = App.normalizeViewScale(data.view);
+    App.state.view.x = nv.x;
+    App.state.view.y = nv.y;
+    App.state.view.scale = nv.scale;
   }
   App.updateView();
   if (App.Tabs && App.Tabs.clearDirty) App.Tabs.clearDirty(); // 打开工作进程=干净状态

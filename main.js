@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, protocol, net, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, protocol, net, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -43,6 +43,40 @@ function appDataDir() {
     _dataDirs.__base = base;
   }
   return _dataDirs.__base;
+}
+
+/* ---------- 自动更新用：下载到文件（走 Electron net，自动处理系统代理/证书） ----------
+   带进度回调（0~100）。失败一律删掉半截文件，绝不留一个坏的 exe 在数据目录里。 */
+function downloadToFile(url, dest, onPct) {
+  return new Promise((resolve, reject) => {
+    let out;
+    try { out = fs.createWriteStream(dest); } catch (e) { reject(e); return; }
+    let req;
+    try { req = net.request({ method: 'GET', url: String(url), redirect: 'follow' }); }
+    catch (e) { try { out.close(); } catch (e2) { /* ignore */ } reject(e); return; }
+    try { req.setHeader('User-Agent', 'VinylFH6-Updater'); } catch (e) { /* ignore */ }
+    const fail = (err) => {
+      try { out.close(); } catch (e) { /* ignore */ }
+      try { fs.unlinkSync(dest); } catch (e) { /* ignore */ }
+      reject(err);
+    };
+    req.on('response', res => {
+      if (res.statusCode !== 200) { fail(new Error('HTTP ' + res.statusCode)); return; }
+      const total = Number((res.headers && res.headers['content-length']) || 0);
+      let got = 0;
+      res.on('data', chunk => {
+        got += chunk.length;
+        try { out.write(chunk); } catch (e) { /* ignore */ }
+        if (total && typeof onPct === 'function') onPct(Math.min(99, Math.round(got / total * 100)));
+      });
+      res.on('end', () => {
+        out.end(() => { if (typeof onPct === 'function') onPct(100); resolve(dest); });
+      });
+      res.on('error', fail);
+    });
+    req.on('error', fail);
+    req.end();
+  });
 }
 
 /* 单实例锁：重复启动时聚焦已有窗口，避免共享缓存冲突导致界面异常。
@@ -672,13 +706,41 @@ function createWindow() {
 app.whenReady().then(() => {
   /* 启动后异步检查 GitHub 有没有新版本（内部延迟 8s + 全程静默失败，绝不打扰用户；
      package.json 没配 repository 就自动跳过）。见 update-check.js */
-  try { require('./update-check').check({ onLog: appendLog, t: dt });   /* t: 让更新弹窗随界面语言 */ }
+  try {
+    require('./update-check').check({
+      onLog: appendLog,
+      t: dt,
+      /* 发现新版本：交给渲染层的软件窗口展示（不再用系统原生弹窗）。
+         窗口还没建好就等一小会儿重试，避免开机那一下把通知丢了。 */
+      onAvailable: function (info) {
+        const push = (tries) => {
+          const w = BrowserWindow.getAllWindows().find(x => !x.isDestroyed());
+          if (w && w.webContents && !w.webContents.isLoading()) {
+            try { w.webContents.send('update-available', info); return; } catch (e) { /* ignore */ }
+          }
+          if (tries > 0) setTimeout(() => push(tries - 1), 1000);
+        };
+        push(20);
+      }
+    });
+  }
   catch (e) { appendLog('warn', '更新检查模块加载失败（已忽略）', { message: String(e && e.message || e).slice(0, 160) }); }
 
   /* 便携式：启动时确保 exe 目录下所需文件夹存在（仅首次创建，之后直接复用） */
   try {
     /* 「已保存彩绘」目录无任何入口写入，不创建也不引用 */
 [DATA_DIRS.history, DATA_DIRS.logs, DATA_DIRS.workcopy, DATA_DIRS.svg].forEach(n => ensureDataDir(n));
+  } catch (e) { /* ignore */ }
+  /* 上次自动更新把旧 exe 改名成 *.old.exe 留在原地：那时它还在运行，删不掉；
+     现在新进程起来了，顺手清掉（删不掉也不影响使用）。 */
+  try {
+    const exePath = process.env.PORTABLE_EXECUTABLE_FILE || (app.isPackaged ? app.getPath('exe') : '');
+    if (exePath) {
+      const dir = path.dirname(exePath);
+      fs.readdirSync(dir).forEach(n => {
+        if (/\.old\.exe$/i.test(n)) { try { fs.unlinkSync(path.join(dir, n)); } catch (e) { /* ignore */ } }
+      });
+    }
   } catch (e) { /* ignore */ }
   protocol.handle('app', (request) => {
     const u = new URL(request.url);
@@ -698,6 +760,29 @@ app.whenReady().then(() => {
         appendLog('warn', '缩略图缓存文件读取失败', { name: rel, message: String(err && err.message || err).slice(0, 200) });
         return new Response('not found', { status: 404 });
       });
+    }
+    /* 用户导入的界面字体：存在数据目录（便携版 = exe 目录）的 fonts/ 下，
+       不在 app 根里，所以单独一条路由（形状严格校验，防目录穿越）。 */
+    if (u.hostname === 'fonts') {
+      const rel = decodeURIComponent(u.pathname).replace(/^\/+/, '');
+      if (!/^[a-z0-9_-]{1,40}\.(ttf|otf|ttc|woff2?)$/i.test(rel)) return new Response('forbidden', { status: 403 });
+      const fp = path.join(appDataDir(), 'fonts', rel);
+      /* 字体是 CORS 受限资源（跨 host 的 @font-face 必须带 ACAO，否则加载被拒）。
+         这里直接读字节返回，顺便给出正确的 Content-Type —— 用 net.fetch 转发拿不到这两个头。 */
+      const types = { '.ttf': 'font/ttf', '.otf': 'font/otf', '.ttc': 'font/collection', '.woff': 'font/woff', '.woff2': 'font/woff2' };
+      try {
+        const buf = fs.readFileSync(fp);
+        return new Response(buf, {
+          status: 200,
+          headers: {
+            'Content-Type': types[path.extname(rel).toLowerCase()] || 'application/octet-stream',
+            'Access-Control-Allow-Origin': '*',
+            'Cache-Control': 'no-cache'
+          }
+        });
+      } catch (err) {
+        return new Response('not found', { status: 404 });
+      }
     }
     let p = decodeURIComponent(u.pathname);
     if (!p || p === '/') p = '/index.html';
@@ -884,6 +969,90 @@ app.whenReady().then(() => {
     } catch (err) {
       return { ok: false, error: String(err && err.message || err) };
     }
+  });
+  /* ---------- 自动更新：下载新 exe 并覆盖自己 ----------
+     关键事实：Windows **不允许覆盖正在运行的 exe，但允许给它改名**。
+     所以流程是「下载到同目录 → 旧 exe 改名 .old.exe → 新 exe 落位 → relaunch」，
+     全程只动这一个 exe 文件；用户数据（SVGImages / WorkCopies / WorkCopiesHistory /
+     已保存彩绘 / fonts / settings.json）都在 exe 旁边，**一个字节都不碰**。
+     开发模式（npm start）没有 exe 可覆盖 ⇒ 直接回 error:'dev'，由窗口提示手动更新。 */
+  ipcMain.handle('update-install', async (e, payload) => {
+    const url = payload && payload.exeUrl;
+    if (!url) return { ok: false, error: 'no-asset' };
+    if (!app.isPackaged) return { ok: false, error: 'dev' };
+    const sender = e.sender;
+    const sendPct = (pct) => { try { if (sender && !sender.isDestroyed()) sender.send('update-progress', { pct: pct }); } catch (err) { /* ignore */ } };
+    try {
+      /* 便携版的真实 exe 路径在 PORTABLE_EXECUTABLE_FILE；app.getPath('exe') 是 %TEMP% 里的解压副本 */
+      const exePath = process.env.PORTABLE_EXECUTABLE_FILE || app.getPath('exe');
+      const dir = path.dirname(exePath);
+      const tmp = path.join(dir, 'update-' + Date.now() + '.exe');
+      appendLog('info', '自动更新：开始下载', { url: String(url).slice(0, 120), to: tmp });
+      await downloadToFile(url, tmp, sendPct);
+      const oldPath = exePath.replace(/\.exe$/i, '') + '.old.exe';
+      try { if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath); } catch (err) { /* 旧残留删不掉就算了 */ }
+      fs.renameSync(exePath, oldPath);          /* 运行中的 exe 允许改名 */
+      try {
+        fs.renameSync(tmp, exePath);            /* 新 exe 落位 */
+      } catch (err) {
+        try { fs.renameSync(oldPath, exePath); } catch (err2) { /* ignore */ }
+        throw err;
+      }
+      appendLog('info', '自动更新：已替换，准备重启', { exe: exePath });
+      setTimeout(() => { app.relaunch(); app.exit(0); }, 400);
+      return { ok: true };
+    } catch (err) {
+      appendLog('warn', '自动更新失败', { message: String(err && err.message || err).slice(0, 200) });
+      return { ok: false, error: String(err && err.message || err) };
+    }
+  });
+
+  /* ---------- 界面字体（设置 → 更改字体）----------
+     导入 = 选文件 → 复制进 <数据目录>/fonts/ → 解析 name 表拿真实家族名（读不出退文件名）；
+     删除 = 只删数据目录里的副本，绝不动用户原文件；
+     下载 = 交给系统浏览器（本机没有内置浏览器视图）。 */
+  const FONT_RE = /^[a-z0-9_-]{1,40}\.(ttf|otf|ttc|woff2?)$/i;
+  ipcMain.handle('font-import', async (e) => {
+    try {
+      const win = BrowserWindow.fromWebContents(e.sender);
+      const r = await dialog.showOpenDialog(win, {
+        title: '导入字体包',
+        properties: ['openFile', 'multiSelections'],
+        filters: [{ name: 'Fonts', extensions: ['ttf', 'otf', 'ttc', 'woff', 'woff2'] }]
+      });
+      if (!r || r.canceled || !r.filePaths || !r.filePaths.length) return { ok: false, canceled: true };
+      const dir = path.join(appDataDir(), 'fonts');
+      fs.mkdirSync(dir, { recursive: true });
+      const items = [];
+      for (const src of r.filePaths) {
+        const ext = path.extname(src).toLowerCase();
+        if (!/^\.(ttf|otf|ttc|woff2?)$/.test(ext)) continue;
+        const id = 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        const file = id + ext;
+        try { fs.copyFileSync(src, path.join(dir, file)); }
+        catch (err) { appendLog('warn', '字体导入复制失败', { name: path.basename(src), message: String(err && err.message || err).slice(0, 160) }); continue; }
+        let family = null;
+        try { family = require('./font-name').readFamilyName(fs.readFileSync(src)); } catch (err) { family = null; }
+        items.push({ id: id, file: file, family: family || path.basename(src, ext), srcName: path.basename(src) });
+      }
+      return { ok: items.length > 0, items: items };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message || err) };
+    }
+  });
+  ipcMain.handle('font-delete', async (e, payload) => {
+    const file = payload && payload.file;
+    if (!file || !FONT_RE.test(file)) return { ok: false, error: 'bad-name' };
+    try {
+      fs.unlinkSync(path.join(appDataDir(), 'fonts', file));
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message || err) };
+    }
+  });
+  ipcMain.handle('font-open-download', async () => {
+    try { await shell.openExternal('https://www.100font.com/'); return { ok: true }; }
+    catch (err) { return { ok: false, error: String(err && err.message || err) }; }
   });
   /* 工作进程使用打开时签发的来源句柄回写；没有来源时才创建新文件。 */
   ipcMain.handle('file-save-work', async (e, payload) => {

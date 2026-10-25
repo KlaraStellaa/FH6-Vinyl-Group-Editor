@@ -366,7 +366,8 @@ App.Tabs = {
     /* 目标若是从未激活过（无 data），从空白建立数据骨架 */
     if (!d.data) {
       d.data = {
-        layers: [], view: { x: App.state.view.x, y: App.state.view.y, scale: 1 },
+        /* 新标签：沿用当前视口中心，但缩放统一到默认值（坐标系变细 3 倍，见 model.js 文件头） */
+        layers: [], view: App.normalizeViewScale({ x: App.state.view.x, y: App.state.view.y, scale: App.state.view.scale }),
         clipboard: [], selIndexes: [], selectedByTab: false, selBarDismissed: false,
         /* 新建文档的颜色必须是**默认色**，不能继承当前标签的 lastColor：
            否则新建画布一进来就带着上一个标签的颜色（颜色栏看着像「各标签没隔离」）。
@@ -449,7 +450,7 @@ App.Tabs = {
     if (data.view && isFinite(data.view.x)) {
       App.state.view.x = data.view.x;
       App.state.view.y = data.view.y;
-      App.state.view.scale = clamp(data.view.scale || 1, 0.005, 32);   // 与 main.js/io.js 的缩放范围保持一致
+      App.state.view.scale = clamp(data.view.scale || 1, App.MIN_VIEW_SCALE, App.MAX_VIEW_SCALE);   // 与 main.js/io.js 同一对常量
     }
     App.updateView();
     App.ensureMaskIndDef();
@@ -648,7 +649,7 @@ App.Tabs = {
 };
 
 // 浮层计算定位：画布区底部可能被布局顶出窗口，贴底浮层按【画布与窗口的交集】重算位置
-// （右下角粘贴板等贴底浮层），每秒与 resize 时各重算一次，保证始终在可见区内。
+// （右下角粘贴板靠右、左下角原图案预览靠左），每秒与 resize 时各重算一次，保证始终在可见区内。
 App.layoutFloatingBoxes = function () {
   const wrap = document.getElementById('canvasWrap');
   if (!wrap) return;
@@ -668,6 +669,7 @@ App.layoutFloatingBoxes = function () {
     el.style.top = Math.max(0, bottom - h - 10) + 'px';
   };
   place(document.getElementById('clipboardPanel'), 200, 122, 'right');
+  place(document.getElementById('origPreview'), 132, 170, 'left');
 };
 (function () {
   if (App.__floatBoxTimer) return;

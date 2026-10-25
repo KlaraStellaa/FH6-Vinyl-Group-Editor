@@ -100,7 +100,8 @@ App.setPlusAnchor = function (on) {
 /* 点击它 = 与「注入选 SVG」一致的窗口（列表 + 导入 SVG 文件…）→ 选完走同一注入流程 */
 /* 点「+」栏 = 把 SVG 打开到当前画布（与画布内「打开 SVG 文件」同一条路径：App.importSVGContent，
    追加导入并平移到当前视野中心）。
-   弹窗只列软件内 SVGImages 目录里的 SVG（开源版不含游戏存档相关来源）。 */
+   注意：这里【不再】走注入（proceedInject）——注入入口保留在主页 Forza 功能坞的「将 SVG 导入存档」。
+   弹窗内可在「软件内彩绘」与「游戏内彩绘」之间切换；后者解码后直接进画布，不新建任何 svg 文件。 */
 App.openPlusPicker = async function () {
   const text = await App.fzaPickSvgLibrary();
   if (text === null) return;
@@ -630,6 +631,9 @@ App.syncPanelSelectionClasses = function () {
       tri.remove();
     }
   });
+  /* 「隐藏其他图层」开着时：选中 / 白框一变，显示集合必须同一帧跟上
+     （差集：只改「刚露出的」与「刚落选的」两个元素，千层文档也不掉帧） */
+  if (App.state.hideOthers && App.syncHideOthersSelection) App.syncHideOthersSelection();
 };
 
 App.refreshCount = function () {

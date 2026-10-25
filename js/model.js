@@ -1,6 +1,33 @@
 'use strict';
 const App = window.App = window.App || {};
 
+/* ================= 画布坐标系口径（2026-10-26 用户口径）=================
+   目的：让「屏幕上同样大」的图案占**更少的文档单位** —— 注入游戏后组更小，
+   游戏内的编辑精度才不会被大坐标吃掉。
+   做法：网格与初始缩放同步改，屏幕观感不变：
+     · 网格一格 20 → 20/3 文档单位（细 3 倍）；
+     · 初始视图 scale 1 → 3（画布看起来放大 3 倍）；
+     · 20/3 × 3 = 20px ⇒ 屏幕上一格还是 20px，跟以前一模一样。
+   导出画布（js/forza.js 的 1920×1080 / viewBox "-960 -540 1920 1080"）**一个字都不动**。 */
+App.GRID_STEP = 20 / 3;
+App.DEFAULT_VIEW_SCALE = 3;
+/* 画布缩放范围：下限 0.005（2026-10-03 用户口径「可以缩得更小」），
+   上限 32 → 128 → **512**（2026-10-26 两轮用户口径「提高放大限制」「再大一些」）。
+   三处钳制（滚轮 / 新标签 / 恢复视图）全部读这两个常量，不许再写字面量。 */
+App.MIN_VIEW_SCALE = 0.005;
+App.MAX_VIEW_SCALE = 512;   /* 2026-10-26 第二轮：用户口径「再大一些」，128 → 512 */
+/* 把「已保存的视图」换到默认缩放：保持**视口中心对应的文档点**不变，
+   否则打开旧工作进程会因为缩放变大而跑到画面外。 */
+App.normalizeViewScale = function (v, cw, ch) {
+  const s = App.DEFAULT_VIEW_SCALE;
+  const s0 = clamp((v && v.scale) || 1, App.MIN_VIEW_SCALE, App.MAX_VIEW_SCALE);
+  const w = cw || (App.wrap ? App.wrap.clientWidth : 0) || 1200;
+  const h = ch || (App.wrap ? App.wrap.clientHeight : 0) || 800;
+  const cx = ((v && v.x) || 0) + (w / s0) / 2;
+  const cy = ((v && v.y) || 0) + (h / s0) / 2;
+  return { x: cx - (w / s) / 2, y: cy - (h / s) / 2, scale: s };
+};
+
 App.state = {
   layers: [],               // 顶层图层（文档顺序，后面的在上层）
   layerMap: new Map(),      // id -> layer（含合并图层内部子图层）
@@ -30,7 +57,7 @@ App.state = {
      文档坐标每次由当前变换矩阵现算，画布缩放/视图变化不会让锚点失效 */
   anchor: null,
   anchorPlacing: false,
-  view: { x: 0, y: 0, scale: 1 },
+  view: { x: 0, y: 0, scale: 3 },   /* 初始缩放 = App.DEFAULT_VIEW_SCALE（见文件头） */
   replacing: false,
   keys: new Set(),
   spaceDown: false,

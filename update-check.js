@@ -6,7 +6,8 @@
  *   - 网络不通 / 超时 / 404 → 静默跳过（只写日志）
  *   - 已是最新              → 静默跳过
  *   - 用户选过「跳过此版本」→ 静默跳过
- *   只有「确实有新版本」才弹一次窗。
+ *   只有「确实有新版本」才通知渲染层弹**软件自己的窗口**（不再用系统原生弹窗）。
+ *   Release 的更新说明（body）与 exe 附件地址一并交给渲染层展示/下载。
  *
  * 检测方式：GET https://api.github.com/repos/<owner>/<repo>/releases/latest
  *   - 未认证调用有速率限制（每小时 60 次/IP）。一天启动几次完全够用，
@@ -65,7 +66,7 @@ function fetchLatestRelease(owner, repo) {
       });
     } catch (e) { reject(e); return; }
     try {
-      req.setHeader('User-Agent', 'GroupFH6-UpdateCheck');
+      req.setHeader('User-Agent', 'VinylFH6-UpdateCheck');
       req.setHeader('Accept', 'application/vnd.github+json');
     } catch (e) { /* 某些版本不允许改 header，忽略 */ }
 
@@ -116,6 +117,7 @@ function writeSkipped(v) {
 /* 入口。onLog 可选：传 appendLog 就能把过程记进软件日志 */
 function check(opts) {
   const onLog = (opts && opts.onLog) || null;
+  const onAvailable = (opts && opts.onAvailable) || null;
   /* 弹窗文案由 main.js 传入的主进程翻译函数 dt() 提供（主进程没有渲染层的 App.i18n）。 */
   const t = (opts && opts.t) || function (k, prm) { return prm ? k : k; };
   const log = (level, msg, data) => {
@@ -147,47 +149,24 @@ function check(opts) {
       log('info', '更新检查：已是最新版本', { local, remote });
       return;
     }
-    if (readSkipped() === remote) {
-      log('info', '更新检查：该版本已被用户跳过', { remote });
-      return;
-    }
-
-    const notes = String(rel.name || '').trim();
-    const detail = [
-      t('dlg.updCurrent', { v: local }),
-      t('dlg.updLatest', { v: remote }),
-      notes ? '\n' + t('dlg.updNotes') + '\n' + notes.slice(0, 600) : ''
-    ].filter(Boolean).join('\n');
-
-    let choice = 1;
-    try {
-      const r = await dialog.showMessageBox({
-        type: 'info',
-        title: t('dlg.updTitle'),
-        message: t('dlg.updMessage', { v: remote }),
-        detail,
-        buttons: [t('dlg.updDownload'), t('dlg.updLater'), t('dlg.updSkip')],
-        defaultId: 0,
-        cancelId: 1,
-        noLink: true
-      });
-      choice = r.response;
-    } catch (e) {
-      log('warn', '更新提示弹窗失败', { message: String(e && e.message || e).slice(0, 160) });
-      return;
-    }
-
-    if (choice === 0) {
-      const url = String(rel.html_url || ('https://github.com/' + target.owner + '/' + target.repo + '/releases/latest'));
-      try { await shell.openExternal(url); }
-      catch (e) { log('warn', '打开下载页失败', { message: String(e && e.message || e).slice(0, 160) }); }
-      log('info', '更新检查：用户前往下载', { remote, url });
-    } else if (choice === 2) {
-      writeSkipped(remote);
-      log('info', '更新检查：用户选择跳过此版本', { remote });
-    } else {
-      log('info', '更新检查：用户选择以后再说', { remote });
-    }
+    /* 更新说明：Release 的 body（不是 name —— name 只是标题）。
+       附件：优先 .exe（便携版可直接覆盖自己），没有就交给渲染层只显示说明。 */
+    const notes = String(rel.body || rel.name || '').trim();
+    const assets = Array.isArray(rel.assets) ? rel.assets : [];
+    const exeAsset = assets.find(a => /\.exe$/i.test(String(a && a.name || ''))) || null;
+    const info = {
+      current: local,
+      remote: remote,
+      notes: notes.slice(0, 8000),
+      htmlUrl: String(rel.html_url || ('https://github.com/' + target.owner + '/' + target.repo + '/releases/latest')),
+      exeUrl: exeAsset ? String(exeAsset.browser_download_url || '') : '',
+      exeName: exeAsset ? String(exeAsset.name || '') : '',
+      exeSize: exeAsset ? Number(exeAsset.size || 0) : 0,
+      isDev: !app.isPackaged
+    };
+    log('info', '更新检查：发现新版本，交给窗口展示', { local: local, remote: remote, hasExe: !!exeAsset });
+    try { if (typeof onAvailable === 'function') onAvailable(info); }
+    catch (e) { log('warn', '更新窗口通知失败', { message: String(e && e.message || e).slice(0, 160) }); }
   }, CHECK_DELAY_MS);
 }
 

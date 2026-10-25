@@ -7,12 +7,19 @@ App.setSelection = function (ids, opts) {
      Tab 扫选等选择变化不会把功能栏顶出来 */
   App.syncPanelSelectionClasses();
   App.drawOutlines();
-  App.startFlash();
+  /* 有选中才启动闪动；**清空选中（点空白画布 / Esc）只停止**，不重启定时器 ——
+     否则「点一下空白」会让正在播的闪动被重置（2026-10-26 用户报障）。 */
+  if (App.state.selected.size) App.startFlash();
+  else if (App.stopFlash) App.stopFlash();
   App.updateSelToolbar();
   if (opts.scrollPanel && ids.length === 1) {
     const l = App.findLayer(ids[0]);
     if (l) App.scrollItemToTop(l);
   }
+  /* 「隐藏其他图层」：必须放在 scrollPanel **之后** —— 白框定位是在 syncPanelSelectionClasses
+     之后才发生的，早刷会拿到「上一个白框图层」⇒ 显示集合慢一拍（实测：切选中后仍显示旧层）。
+     这里补一次差集刷新，syncPanelSelectionClasses 里那次留给滚轮路径。 */
+  if (App.state.hideOthers && App.syncHideOthersSelection) App.syncHideOthersSelection();
 };
 
 App.toggleLayerSelection = function (layer) {

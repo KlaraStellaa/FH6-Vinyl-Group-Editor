@@ -140,8 +140,8 @@
     </div>
 
     <div id="bgButtons">
-      <!-- 隐藏其他图层：平时 .hidden，仅进入「编辑图层」后显示；只显示当前正在编辑的图层 -->
-      <button id="btnHideOthers" data-i18n="canvas.hideOthers" class="hidden">隐藏其他图层</button>
+      <!-- 隐藏其他图层：全局开关（与另外两个按钮同级），只显示当前选中的图层 -->
+      <button id="btnHideOthers" data-i18n="canvas.hideOthers">隐藏其他图层</button>
       <button id="btnHideLayers" data-i18n="canvas.hideLayers">隐藏图层</button>
       <button id="btnHideBg" data-i18n="canvas.hideBg">隐藏背景</button>
       <div class="bg-opacity-col">
@@ -306,6 +306,10 @@
 <script src="js/keymap.js"></script>
 <script src="js/theme.js"></script>
 <script src="js/settings.js"></script>
+<!-- 界面字体（设置 → 更改字体）：词条先并入 i18n.dicts，再挂 App.fonts。
+     settings.load() 是异步的（等 settingsGet），所以它恢复字体配置时本文件已就绪。 -->
+<script src="js/fonts-i18n.js"></script>
+<script src="js/fonts.js"></script>
 <script src="js/model.js"></script>
 <script src="js/thumb-render-core.js"></script>
 <script src="js/render.js"></script>
@@ -320,6 +324,12 @@
 <script src="js/colorpanel.js"></script>
 <script src="js/background.js"></script>
 <script src="js/editmode.js"></script>
+<!-- 手柄（Xbox 布局）：数字键一律派发真实 KeyboardEvent 走 keymap 查表，
+     只有「移动模式左摇杆」走模拟量直调 applyEditMove（两条通道互斥）。 -->
+<script src="js/gamepad.js"></script>
+<!-- 检测到更新的窗口（软件自己的窗口，不用系统原生弹窗）：
+     词条与窗口一起在本文件里，必须晚于 js/i18n.js 与 js/util.js（showOverlay）。 -->
+<script src="js/updatedlg.js"></script>
 <script src="js/io.js"></script>
 <script src="js/forza.js"></script>
 <script src="js/history.js"></script>
