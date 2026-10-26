@@ -33,6 +33,7 @@ App.initIO = function () {
     rd.readAsText(f);
   });
   $('#btnSave').addEventListener('click', function () { App.exportForzaSVG(); });
+  $('#btnSaveAs').addEventListener('click', function () { App.exportSvgAs(); });
   $('#btnSaveWork').addEventListener('click', function () { App.saveWorkCopy(); });
   /* 「导入工作进程文件」按键（顶栏，位于「保存工作进程」与「恢复工作进程」之间）：
      从磁盘任选一个 .svework 整体恢复当前文档（首页「最近工作进程」列表是另一条入口） */
@@ -172,6 +173,51 @@ App.exportForzaSVG = async function (layersOverride) {
     } else if (!sourceDoc) {
       App.currentSvgSource = final;
     }
+  }
+  if (App.Home && App.Home.refresh) App.Home.refresh();
+};
+
+/* 「另存为」：把整份文档写成一个**新文件**，绝不覆盖从主页点进来的那份。
+   与「保存 SVG」的唯一区别就是第三参 sourceName 恒为 null ——
+   main 那边只有「要盖掉的文件 === 当前文件的来源」才静默覆写，传 null 就等于
+   「这份文件和磁盘上任何已有文件都没有关系」⇒ 撞名会弹覆盖确认，不会被静默覆盖。
+   存完把当前文档改绑到新文件（标签名、来源、脏标记），后续「保存 SVG」写的是新文件，
+   原文件从此不再被这条文档碰。 */
+App.exportSvgAs = async function () {
+  const __t0 = performance.now();
+  const sourceDoc = App.Tabs && App.Tabs.current ? App.Tabs.current : null;
+  const sourceDocId = sourceDoc ? sourceDoc.id : null;
+  const sourceRevision = sourceDoc ? (sourceDoc.contentRevision || 0) : 0;
+  const built = App.buildForzaExportString(false);
+  blurActiveButton();
+  if (!built) return;
+  const srcName = sourceDoc ? (sourceDoc.svgSource || null) : (App.currentSvgSource || null);
+  const base = String(srcName || '').replace(/\.svg$/i, '')
+    || (App.autoNamePrefix() + (Number(built.layers) || 0));
+  /* 默认名 = 原名 + 「副本」，避免一按下去就撞上原文件（撞了也不会覆盖，但要多点一次确认） */
+  const defName = base + '-' + App.i18n.t('dlg.saveAsSuffix');
+  const inp = await App.fzaTextPrompt(App.i18n.t('dlg.saveAsTitle'),
+    App.i18n.t('dlg.saveAsMsg'), defName);
+  if (inp === null) { showToast(App.i18n.t('toast.io.saveCancelled')); return; }
+  let nm = String(inp || defName).trim();
+  nm = nm.replace(/\.svg$/i, '');
+  if (!nm || nm.indexOf('/') >= 0 || nm.indexOf('\\') >= 0 || nm.indexOf('..') >= 0) {
+    showToast(App.i18n.t('toast.home.badName')); return;
+  }
+  const final = nm + '.svg';
+  const r = await window.sveApi.fileSaveSvg(final, built.str, null);
+  if (r && r.canceled) { showToast(App.i18n.t('toast.io.saveCancelled')); return; }
+  try { App.log('info', '另存为SVG', { ms: Math.round(performance.now() - __t0), kb: Math.round(built.str.length / 1024), name: final, exists: !!(r && r.exists) }); } catch (e) { /* ignore */ }
+  if (!r || !r.ok) { showToast(App.i18n.tf('toast.io.saveFail', { v: ((r && r.error) || '') })); return; }
+  showToast(App.i18n.tf('toast.io.saved', { ov: (r.exists ? App.i18n.t('toast.io.overwrite') : ''), v: r.name }));
+  /* 改绑到新文件：只归属发起保存的那个标签，等待期间切标签不会误改新标签 */
+  if (sourceDoc && App.Tabs && App.Tabs.docs && App.Tabs.docs.includes(sourceDoc)) {
+    sourceDoc.svgSource = final;
+    if (App.Tabs.setDocLabel) App.Tabs.setDocLabel(sourceDocId, nm);
+    else { sourceDoc.label = nm; if (App.Tabs.renderBar) App.Tabs.renderBar(); }
+    if ((sourceDoc.contentRevision || 0) === sourceRevision) sourceDoc.dirty = false;
+  } else if (!sourceDoc) {
+    App.currentSvgSource = final;
   }
   if (App.Home && App.Home.refresh) App.Home.refresh();
 };

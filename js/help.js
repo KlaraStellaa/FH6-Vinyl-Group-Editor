@@ -25,7 +25,7 @@
   /* ---------- 按钮 → 帮助词条 ---------- */
   var MAP = [
     /* --- 顶部工具栏 --- */
-    ['#btnOpen', 'btnOpen'], ['#btnSave', 'btnSave'], ['#btnSaveWork', 'btnSaveWork'],
+    ['#btnOpen', 'btnOpen'], ['#btnSave', 'btnSave'], ['#btnSaveAs', 'btnSaveAs'], ['#btnSaveWork', 'btnSaveWork'],
     ['#btnOpenWork', 'btnOpenWork'],
     ['#btnHistAnchor', 'btnHistAnchor'], ['#btnBase', 'btnBase'], ['#btnGrid', 'btnGrid'],
     ['#btnZoomWheel', 'btnZoomWheel'], ['#btnShortcuts', 'btnShortcuts'],
@@ -74,6 +74,7 @@
     ['#btnApplyColor', 'btnApplyColor'], ['#btnFav', 'btnFav'],
     /* --- 主页 --- */
     ['[data-home-act="new"]', 'homeNew'], ['[data-home-act="open"]', 'homeOpen'],
+    ['#forzaAccountSel', 'forzaAccountSel'],
     ['#btnFzaGeo', 'btnFzaGeo'], ['#btnFzaVinyl', 'btnFzaVinyl'], ['#btnFzaBackup', 'btnFzaBackup'],
     ['#btnFzaInject', 'btnFzaInject'], ['#btnFzaExport', 'btnFzaExport'],
     ['#homeSearch', 'homeSearch'], ['#homeSort', 'homeSort'],
