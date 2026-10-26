@@ -11,6 +11,13 @@ sve-logs/
 *.svework
 *.log
 
+# Closed-source: 彩绘纹饰导入功能（Klara 2026-10-27 明确）
+# 这几个文件只在主仓/打包产物里存在，开源树一律不收。
+# 用 git add -u / 明确列文件，禁止 git add -A，否则会连它们一起提交。
+js/fza.js
+forza-cgroup.js
+forza-save.js
+
 # Secrets and credentials
 .env
 .env.*
