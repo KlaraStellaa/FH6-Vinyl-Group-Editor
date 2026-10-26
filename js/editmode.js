@@ -1327,9 +1327,10 @@ App.editPointerInside = function (clientX, clientY) {
   return false;
 };
 
-/* 拖动速率（2026-10-26）：只给「四种模式里拖动图层外区域」那一条路径用。
+/* 拖动速率：**四种模式里所有鼠标拖动**都走这里 —— 框外拖动、拖图层本身、拖手柄。
+   （2026-10-27 用户口径由「只管框外」改为全局。）
    state.dragSpeeds 存的是**倍率**（1 = 跟手原速）；坏值/缺失一律回 1，坏值绝不进编辑循环。
-   硬边界：拖图层本身（editmove 且框内起手）与拖真手柄（h 不是 'box'）不读这个值。 */
+   ★ 边界：**画布平移（pan）不走这里** —— 它不是编辑手势，拖动速率影响不到它。 */
 App.dragSpeed = function (mode) {
   const d = (App.state && App.state.dragSpeeds) || {};
   const v = Number(d[mode]);
@@ -1364,9 +1365,9 @@ App.beginHandleDrag = function (h, g, e, items) {
     grabAngle: Math.atan2(hp.y - _anchorCenter.y, hp.x - _anchorCenter.x), // 手柄相对中心的初始角度（Shift 旋转用）
     rotLock: 0,
     skewLock: 0, // Shift+上下手柄快捷倾斜的保持值
-    /* 拖动速率：**只有框外自由缩放**（h === 'box'）吃倍率；
-       真手柄（nw/n/e/…）恒为 1 → 拖手柄的手感一点不动 */
-    speed: (h === 'box') ? App.dragSpeed('size') : 1,
+    /* 拖动速率（2026-10-27 改回全局）：size 模式下**所有**手柄拖动
+       （四个角、四条边，以及框外自由缩放 h === 'box'）都吃 dragSpeeds.size */
+    speed: App.dragSpeed('size'),
     snap: items.map(it => ({ it, x: it.x, y: it.y, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew,
       flipH: !!it.flipH, flipV: !!it.flipV }))
   };
@@ -1397,15 +1398,13 @@ App.onEditPointerDown = function (e) {
        那条讲的是**可拖区域**，这条讲的是**目标不可见时不响应**）。 */
     if (App.state.edit.type === 'bg' && App.state.bg.hidden) return;
     App.editHist.checkpoint(); // 手势开始前记录撤回点（拖动过程中不重复记录）
-    /* 拖动速率：按下点落在图案框内 = 拖图层本身（恒 1 倍，手感不变）；
-       落在框外 = 吃 dragSpeeds.move 那一档。move 模式本来不判内外（哪儿都能拖），
-       这里补这一次判定**只用来选速率**，不改变「画布上按下哪儿都能拖」的行为。 */
-    const _inside = App.editPointerInside(e.clientX, e.clientY);
+    /* 拖动速率（2026-10-27 改回全局）：move 模式下**所有**拖动都吃 dragSpeeds.move，
+       不再区分框内 / 框外 —— 拖图层本身也受速率影响。 */
     App.drag = {
       kind: 'editmove',
       startX: e.clientX, startY: e.clientY,
       scale: App.state.view.scale,
-      speed: _inside ? 1 : App.dragSpeed('move'),
+      speed: App.dragSpeed('move'),
       snap: items.map(it => ({ it, x: it.x, y: it.y }))
     };
     try { App.svg.setPointerCapture(e.pointerId); } catch (err) { /* 合成事件无活动指针 */ }
@@ -1445,13 +1444,15 @@ App.onEditPointerDown = function (e) {
       /* 手柄起手：与「框外自由缩放」共用同一份字段（App.beginHandleDrag） */
       App.beginHandleDrag(h, g, e, items);
     } else if (inside) {
-      /* 拖动蓝框内部（中心区域）= 移动图案位置（复用移动模式拖拽，中心/大小/旋转不变） */
+      /* 拖动蓝框内部（中心区域）= 移动图案位置（复用移动模式拖拽，中心/大小/旋转不变）
+         拖动速率（全局）：size 模式下拖图层本身也吃 dragSpeeds.size */
       if (!items.length) return;
       App.editHist.checkpoint(); // 拖蓝框内部移动：开始前记录撤回点
       App.drag = {
         kind: 'editmove',
         startX: e.clientX, startY: e.clientY,
         scale: App.state.view.scale,
+        speed: App.dragSpeed('size'),
         snap: items.map(it => ({ it, x: it.x, y: it.y }))
       };
       try { App.svg.setPointerCapture(e.pointerId); } catch (err) { /* 合成事件无活动指针 */ }
@@ -1474,10 +1475,12 @@ App.onEditPointerDown = function (e) {
     const inside = App.editPointerInside(e.clientX, e.clientY);
     App.editHist.checkpoint(); // 手势开始前记录撤回点
     if (inside) {
+      /* 拖动速率（全局）：rotate 模式下拖图层本身也吃 dragSpeeds.rotate */
       App.drag = {
         kind: 'editmove',
         startX: e.clientX, startY: e.clientY,
         scale: App.state.view.scale,
+        speed: App.dragSpeed('rotate'),
         snap: items.map(it => ({ it, x: it.x, y: it.y }))
       };
     } else {
@@ -1508,10 +1511,12 @@ App.onEditPointerDown = function (e) {
     const inside = App.editPointerInside(e.clientX, e.clientY);
     App.editHist.checkpoint(); // 手势开始前记录撤回点
     if (inside) {
+      /* 拖动速率（全局）：skew 模式下拖图层本身也吃 dragSpeeds.skew */
       App.drag = {
         kind: 'editmove',
         startX: e.clientX, startY: e.clientY,
         scale: App.state.view.scale,
+        speed: App.dragSpeed('skew'),
         snap: items.map(it => ({ it, x: it.x, y: it.y }))
       };
     } else {
@@ -1541,8 +1546,7 @@ App.onEditPointerMove = function (e) {
   if (!App.drag) return;
   const apply = fn => App.withTransformBatch ? App.withTransformBatch(fn) : fn();
   if (App.drag.kind === 'editmove') {
-    /* 拖动速率：只有 move 模式的**框外**起手才带 speed；框内起手、以及 size/rotate/skew
-       的框内拖动（起手不写这个字段）→ 缺省 1，位移与改前逐位相同 */
+    /* 拖动速率（全局）：四种模式的 editmove 起手都会写 speed（各自模式的倍率） */
     const _sp = (App.drag.speed > 0) ? App.drag.speed : 1;
     const dx = (e.clientX - App.drag.startX) / App.drag.scale * _sp;
     const dy = (e.clientY - App.drag.startY) / App.drag.scale * _sp;
@@ -1604,8 +1608,7 @@ App.onEditPointerMove = function (e) {
     if (App.scheduleFrameUpdate) App.scheduleFrameUpdate('edit');
     else { App.drawOutlines(); App.updateEditValue(); }
   } else if (App.drag.kind === 'edithandle') {
-    /* 拖动速率：框外自由缩放（speed = dragSpeeds.size）按倍率放大/缩小位移；
-       真手柄起手时 speed 恒 1 → 拖手柄的手感逐位不变 */
+    /* 拖动速率（全局）：手柄（四个角/四条边）与框外自由缩放都按 dragSpeeds.size 缩放位移 */
     const _hsp = (App.drag.speed > 0) ? App.drag.speed : 1;
     const dx = (e.clientX - App.drag.startX) / App.drag.scale * _hsp;
     const dy = (e.clientY - App.drag.startY) / App.drag.scale * _hsp;
