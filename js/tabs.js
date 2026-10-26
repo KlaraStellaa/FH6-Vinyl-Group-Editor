@@ -387,6 +387,8 @@ App.Tabs = {
     /* 切换标签/关闭文档：速率设置窗口执行取消逻辑（A 标签的临时速率不带进 B 标签；
        编辑速率是应用级设置，只有「确定」才写进持久化配置） */
     if (App.speedEditor) App.speedEditor.cancel();
+    /* 三档总览窗同理：切标签时不留着（纯导航窗，直接关） */
+    if (App.speedOverview) App.speedOverview.close();
     this.blankInto(d);
     if (App.state.edit) { try { App.exitEdit(false); } catch (e) { /* ignore */ } }
     if (App.cancelColorPreview) { try { App.cancelColorPreview(); } catch (e) { /* ignore */ } }

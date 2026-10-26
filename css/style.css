@@ -303,6 +303,12 @@ html[data-scheme="light"] {
 #editValueBox { display: flex; align-items: center; gap: 6px; }
 #editValueBox label { color: var(--dim); font-size: 12px; white-space: nowrap; }
 #editValueInput { width: 74px; }
+/* 旋转 / 倾斜 / 透明度 的数值框：去掉右侧原生上下箭头（2026-10-27 用户口径）。
+   这三个模式共用 #editValueBox 这一个输入框（见 editmode.js 的 isRotSkewOp），
+   所以这一条正好只命中它们，不碰颜色面板的 H/S/B 与速率窗。
+   只隐藏 spinner、不改 type —— 键盘上下键、数值校验、Number() 解析全部照旧。 */
+#editValueInput::-webkit-inner-spin-button,
+#editValueInput::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 #editValueUnit { color: var(--dim); }
 #editValueRange { width: 110px; accent-color: var(--accent); }
 /* 编辑透明度滑条：自定义轨道，圆钮可贴到两端（去掉原生长出的一段） */

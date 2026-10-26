@@ -166,6 +166,17 @@
         <div id="homeRail">
           <button data-home-act="new" data-i18n="home.new">新建</button>
           <button data-home-act="open" data-i18n="home.open">打开…</button>
+          <div class="home-account-box">
+            <label for="forzaAccountSel" data-i18n="home.account">账户</label>
+            <select id="forzaAccountSel" data-i18n="home.accountTitle" data-i18n-attr="title" title="当前账户（存档操作作用于该账户）"></select>
+          </div>
+          <div id="fzaDock">
+            <button id="btnFzaGeo" data-i18n="fza.geo">从 Geometrize JSON 生成</button>
+            <button id="btnFzaVinyl" data-i18n="fza.vinyl">从 Vinylizer JSON 生成</button>
+            <button id="btnFzaBackup" data-i18n="fza.backup">备份当前账户存档</button>
+            <button id="btnFzaInject" data-i18n="fza.inject">将 SVG 导入存档</button>
+            <button id="btnFzaExport" data-i18n="fza.export">从存档导出 SVG</button>
+          </div>
         </div>
         <div id="homeContent">
           <div id="homeHead">

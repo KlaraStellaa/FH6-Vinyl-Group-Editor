@@ -86,7 +86,7 @@ const ISOLATE = process.env.SVGBIANJI_ISOLATE === '1';
 if (ISOLATE) {
   /* SVGBIANJI_ISOLATE_DIR：可指定固定的隔离目录（自动化测试用）——
      默认按 pid 生成，每次都换；指定固定值后跨次保留，才能测「启动守卫」的连续失败计数。 */
-  const isoDir = process.env.SVGBIANJI_ISOLATE_DIR || path.join(os.tmpdir(), 'groupfh6-cdp-' + process.pid);
+  const isoDir = process.env.SVGBIANJI_ISOLATE_DIR || path.join(os.tmpdir(), 'svgbianji-cdp-' + process.pid);
   app.setPath('userData', isoDir);
 } else {
   /* ★ C 盘零占用：Chromium 的 userData（Cache / GPUCache / Local Storage / Cookies /
@@ -125,7 +125,7 @@ app.commandLine.appendSwitch('disable-gpu-sandbox');
 app.commandLine.appendSwitch('force-high-performance-gpu');
 
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }
+  { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
 ]);
 
 /* 关闭确认：是否已决定退出（跳过二次确认） */
@@ -421,7 +421,7 @@ let logSavedPath = null;
 /* 设置文件（语言 / 主题 / WASD 与方向键速率 / 收藏 / 快捷键）也跟随 exe，
    与 SVGImages / WorkCopies 同一约定。
    以前放 app.getPath('userData') = %APPDATA%\<app.getName()>：包名一改
-   （开发期在 dev-build / vinylfh6 / fh6-vinyl-group-editor 之间换过好几次）
+   （开发期在 svgbianji / vinylfh6 / fh6-vinyl-group-editor 之间换过好几次）
    目录就换一个，用户看到的现象是「语言、主题、速率、收藏全部回到默认」；
    而 js/settings.js 的 localStorage 兜底也在同一个 userData 里，所以兜不住。
    放 exe 旁边后，包名随便改、整个文件夹拷走，设置都跟着走。 */
@@ -935,6 +935,38 @@ app.whenReady().then(() => {
     }
   });
 
+  /* ---------- Forza 游戏存档整合（Inkscape2Forza 功能；写入前需经渲染层确认+风险提示） ---------- */
+  const fzaSave = require('./forza-save');
+  const fzaCgroup = require('./forza-cgroup');
+  const FZA_SYMBOLS = path.join(__dirname, 'assets', 'FH6_Vinyl_Symbols.svg');
+  ipcMain.handle('forza-accounts', async () => {
+    try {
+      const accounts = fzaSave.listAccounts(fzaSave.DEFAULT_GAMESAVE_DIR);
+      const labels = fzaSave.accountLabels(accounts);
+      return { ok: true, accounts: labels, defaultDir: fzaSave.DEFAULT_GAMESAVE_DIR };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message || err) };
+    }
+  });
+  ipcMain.handle('forza-groups', async (e, payload) => {
+    try {
+      const groups = fzaSave.listLayerGroups(String(payload && payload.containersRoot || ''));
+      return { ok: true, groups };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message || err) };
+    }
+  });
+  ipcMain.handle('forza-thumb', async (e, payload) => {
+    try {
+      const p = String(payload && payload.path || '');
+      if (!fs.existsSync(p)) return { ok: false };
+      const buf = fs.readFileSync(p);
+      if (buf.length > 400 * 1024) return { ok: false, error: 'too large' };
+      return { ok: true, dataUrl: 'data:image/webp;base64,' + buf.toString('base64') };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message || err) };
+    }
+  });
   /* 标签页关闭确认(同一原生窗):渲染层传入文件名 → 返回 save/dont/cancel */
   ipcMain.handle('confirm-close-doc', async (e, payload) => {
     try {
@@ -947,6 +979,268 @@ app.whenReady().then(() => {
       return { action: 'dont', error: String(err && err.message || err) };
     }
   });
+  /* 写入/替换缩略图：渲染层生成 256x256 webp(游戏同款规则)，覆写组目录 thumb.webp。
+     仅限文件名 thumb.webp，防止路径穿越。
+     用**就地覆写**（openSync(p,'r+')，不换 inode）而不是「写临时文件 + rename 替换」：
+     创建时间 / inode / ACL / 文件属性天然保留，写后恢复 atime/mtime，失败用内存原文回滚。
+     另外**只覆写已存在的 thumb.webp**，不新建 —— 组目录原本没有它时不该凭空造一个。 */
+  ipcMain.handle('forza-thumb-write', async (e, payload) => {
+    try {
+      const p = String(payload && payload.path || '');
+      const dataUrl = String(payload && payload.dataUrl || '');
+      if (!/\bthumb\.webp$/i.test(p)) return { ok: false, error: 'not a thumb.webp path' };
+      const m = /^data:image\/webp;base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+      if (!m) return { ok: false, error: 'bad dataUrl' };
+      const buf = Buffer.from(m[1], 'base64');
+      if (!buf.length || buf.length > 400 * 1024) return { ok: false, error: 'bad size' };
+      const dir = path.dirname(p);
+      if (!fs.existsSync(dir)) return { ok: false, error: 'group dir missing' };
+      if (!fs.existsSync(p)) return { ok: false, error: 'thumb.webp 不存在（只覆写既有文件，不新建）' };
+      /* 必须在 readFileSync **之前**存时间戳：读文件会把 atime 刷成当前时间，
+         晚一步取到就是被污染的值。 */
+      const st0 = fs.statSync(p, { bigint: true });
+      const tSaved = { atimeNs: st0.atimeNs, mtimeNs: st0.mtimeNs, birthtimeNs: st0.birthtimeNs };
+      const prev = fs.readFileSync(p);
+      try {
+        fzaCgroup.writeFileInPlace(p, buf, tSaved);
+      } catch (err) {
+        try { fzaCgroup.writeFileInPlace(p, prev, tSaved); } catch (e2) { /* 尽力回滚 */ }
+        return { ok: false, error: '写入失败已回滚：' + String(err && err.message || err) };
+      }
+      return { ok: true, bytes: buf.length };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message || err) };
+    }
+  });
+  /* 注入：把画布模型写入指定占位组（就地覆写 + header 层数同步 + 属性/时间戳保留 + 失败回滚） */
+  ipcMain.handle('forza-inject', async (e, payload) => {
+    try {
+      const cgroup = String(payload && payload.cgroup || '');
+      const header = String(payload && payload.header || cgroup.replace(/C_group$/, 'header'));
+      if (!fs.existsSync(cgroup) || !fs.existsSync(header)) return { ok: false, error: '占位组文件不存在' };
+      const model = payload && payload.model;
+      if (!model || model.kind !== 'group') return { ok: false, error: '模型无效' };
+      const r = fzaCgroup.writeCgroupFile(cgroup, model, fzaCgroup.loadShapeHalfExtents(FZA_SYMBOLS));
+      appendLog('info', 'Forza 注入完成', { layers: r.layers, cgroup });
+      return { ok: true, layers: r.layers };
+    } catch (err) {
+      appendLog('error', 'Forza 注入失败', { message: String(err && err.message || err) });
+      return { ok: false, error: String(err && err.message || err) };
+    }
+  });
+  /* 导出：解码某占位组为模型（渲染层转 SVG 图层），附标题/作者 */
+  ipcMain.handle('forza-export', async (e, payload) => {
+    try {
+      const cgroup = String(payload && payload.cgroup || '');
+      const header = String(payload && payload.header || cgroup.replace(/C_group$/, 'header'));
+      if (!fs.existsSync(cgroup)) return { ok: false, error: '文件不存在' };
+      const model = fzaCgroup.decodeCgroupPayload(fzaCgroup.unwrapCgroupFile(cgroup));
+      let title = '', author = '';
+      if (fs.existsSync(header)) {
+        const h = fzaCgroup.parseHeader(header);
+        title = h.title; author = h.author;
+      }
+      return { ok: true, model, title, author };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message || err) };
+    }
+  });
+  /* 账户存档整包备份：先让用户选保存位置，再压缩 */
+  ipcMain.handle('forza-backup', async (e, payload) => {
+    try {
+      const uDir = String(payload && payload.uDir || '');
+      if (!fs.existsSync(uDir)) return { ok: false, error: '账户目录不存在' };
+      const xuid = /^u_(\d+)_16D460$/.exec(path.basename(uDir));
+      const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, '');
+      const dlg = await dialog.showSaveDialog({
+        title: dt('dlg.backupSave'),
+        defaultPath: 'backup_' + (xuid ? xuid[1] : 'account') + '_' + ts + '.zip',
+        filters: [{ name: dt('dlg.filterZip'), extensions: ['zip'] }]
+      });
+      if (dlg.canceled || !dlg.filePath) return { canceled: true };
+      const out = fzaSave.backupAccount(uDir, dlg.filePath);
+      return { ok: true, path: out };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message || err) };
+    }
+  });
+
+  /* ---------- 注入撤销备份（InjectUndo）----------
+     每次注入**写盘之前**，把被覆盖分组的原模型 + 原缩略图存成一条记录；
+     只保留最近 UNDO_KEEP 条，超出的最早一条**永久删除**。
+     一次注入 = 一条记录（多选同时注入的 N 个分组合并成同一条）。
+     目录结构（InjectUndo 下每条记录一个目录）：
+       rec-<yyyyMMdd-HHmmss-SSS>/
+         meta.json       记录元数据（时间/账户/各分组的目标路径与标题作者）
+         <i>.model.json  第 i 个分组注入前的模型（还原用，不经 SVG 往返，保真）
+         <i>.thumb.webp  第 i 个分组注入前的缩略图副本（还原时一并写回）
+     不主动删用户数据：只删自己创建的 rec-* 目录。 */
+  const UNDO_KEEP = 3;
+  const undoRoot = () => ensureDataDir(DATA_DIRS.injectundo);
+  const undoPad = (n, w) => String(n).padStart(w || 2, '0');
+  function undoStamp(d) {
+    return d.getFullYear() + undoPad(d.getMonth() + 1) + undoPad(d.getDate()) + '-' +
+      undoPad(d.getHours()) + undoPad(d.getMinutes()) + undoPad(d.getSeconds()) + '-' + undoPad(d.getMilliseconds(), 3);
+  }
+  function undoFmtTime(d) {
+    return d.getFullYear() + '-' + undoPad(d.getMonth() + 1) + '-' + undoPad(d.getDate()) + ' ' +
+      undoPad(d.getHours()) + ':' + undoPad(d.getMinutes()) + ':' + undoPad(d.getSeconds());
+  }
+  const UNDO_ID_RE = /^rec-\d{8}-\d{6}-\d{3}(-[a-z0-9]{4})?$/;
+  function undoListDirs() {
+    const root = undoRoot();
+    let names = [];
+    try { names = fs.readdirSync(root); } catch (e) { return []; }
+    return names.filter(n => UNDO_ID_RE.test(n))
+      .map(n => {
+        let meta = null;
+        try { meta = JSON.parse(fs.readFileSync(path.join(root, n, 'meta.json'), 'utf8')); } catch (e) { meta = null; }
+        return { id: n, meta };
+      })
+      .filter(r => r.meta && typeof r.meta.ts === 'number')
+      .sort((a, b) => b.meta.ts - a.meta.ts);
+  }
+  /* 裁剪：只保留最新 UNDO_KEEP 条，其余目录永久删除 */
+  function undoPrune() {
+    for (const r of undoListDirs().slice(UNDO_KEEP)) {
+      try {
+        fs.rmSync(path.join(undoRoot(), r.id), { recursive: true, force: true });
+        appendLog('info', '注入撤销备份已裁剪（超出保留条数，永久删除）', { id: r.id });
+      } catch (e) { appendLog('warn', '注入撤销备份裁剪失败', { id: r.id, message: String(e && e.message || e) }); }
+    }
+  }
+  ipcMain.handle('undo-save', async (e, payload) => {
+    try {
+      const groups = Array.isArray(payload && payload.groups) ? payload.groups : [];
+      if (!groups.length) return { ok: false, error: 'no groups' };
+      const now = new Date();
+      let id = 'rec-' + undoStamp(now);
+      const root = undoRoot();
+      if (fs.existsSync(path.join(root, id))) id += '-' + Math.random().toString(36).slice(2, 6);
+      const dir = path.join(root, id);
+      fs.mkdirSync(dir, { recursive: true });
+      const metas = [];
+      for (let i = 0; i < groups.length; i++) {
+        const g = groups[i] || {};
+        if (!g.model) throw new Error('模型缺失：' + (g.title || g.cgroup || ('#' + i)));
+        fs.writeFileSync(path.join(dir, i + '.model.json'), JSON.stringify(g.model), 'utf8');
+        let hasThumb = false;
+        const src = String(g.thumbPath || '');
+        if (src && fs.existsSync(src)) {
+          try { fs.copyFileSync(src, path.join(dir, i + '.thumb.webp')); hasThumb = true; }
+          catch (err) { appendLog('warn', '注入撤销：缩略图备份失败', { file: src, message: String(err && err.message || err) }); }
+        }
+        metas.push({
+          cgroup: String(g.cgroup || ''), header: String(g.header || ''), folder: String(g.folder || ''),
+          title: String(g.title || ''), author: String(g.author || ''), thumbPath: src, hasThumb
+        });
+      }
+      const meta = {
+        id, ts: now.getTime(), time: undoFmtTime(now),
+        account: payload && payload.account ? payload.account : null,
+        groups: metas
+      };
+      fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf8');
+      undoPrune();
+      appendLog('info', '注入撤销备份已保存', { id, groups: metas.length });
+      return { ok: true, id, count: metas.length };
+    } catch (err) {
+      appendLog('error', '注入撤销备份失败', { message: String(err && err.message || err) });
+      return { ok: false, error: String(err && err.message || err) };
+    }
+  });
+  ipcMain.handle('undo-list', async () => {
+    try {
+      return {
+        ok: true,
+        records: undoListDirs().map(r => ({
+          id: r.id, ts: r.meta.ts, time: r.meta.time,
+          account: r.meta.account || null,
+          count: (r.meta.groups || []).length,
+          titles: (r.meta.groups || []).map(g => g.title || g.folder || '')
+        }))
+      };
+    } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
+  });
+  ipcMain.handle('undo-read', async (e, payload) => {
+    try {
+      const id = String(payload && payload.id || '');
+      if (!UNDO_ID_RE.test(id)) return { ok: false, error: 'bad id' };
+      const dir = path.join(undoRoot(), id);
+      const meta = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'));
+      const groups = (meta.groups || []).map((g, i) => {
+        const out = Object.assign({}, g, {
+          index: i,
+          targetExists: !!(g.cgroup && fs.existsSync(g.cgroup) && g.header && fs.existsSync(g.header))
+        });
+        out.thumbDataUrl = '';
+        try {
+          const tp = path.join(dir, i + '.thumb.webp');
+          if (fs.existsSync(tp)) {
+            const buf = fs.readFileSync(tp);
+            if (buf.length && buf.length <= 400 * 1024) out.thumbDataUrl = 'data:image/webp;base64,' + buf.toString('base64');
+          }
+        } catch (err) { /* 缩略图读失败不影响列表 */ }
+        return out;
+      });
+      return { ok: true, meta: { id: meta.id, ts: meta.ts, time: meta.time, account: meta.account || null }, groups };
+    } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
+  });
+  ipcMain.handle('undo-read-model', async (e, payload) => {
+    try {
+      const id = String(payload && payload.id || '');
+      const i = Number(payload && payload.index);
+      if (!UNDO_ID_RE.test(id) || !(i >= 0)) return { ok: false, error: 'bad args' };
+      const p = path.join(undoRoot(), id, i + '.model.json');
+      return { ok: true, model: JSON.parse(fs.readFileSync(p, 'utf8')) };
+    } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
+  });
+  /* 恢复：逐个校验原位置 → 写回模型 → 还原缩略图。
+     原位置已不存在（C_group 或 header 缺失）的跳过并上报，由渲染层询问是否导出为 SVG。 */
+  ipcMain.handle('undo-restore', async (e, payload) => {
+    const id = String(payload && payload.id || '');
+    const results = [];
+    try {
+      if (!UNDO_ID_RE.test(id)) return { ok: false, error: 'bad id' };
+      const dir = path.join(undoRoot(), id);
+      const meta = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'));
+      const halfExtents = fzaCgroup.loadShapeHalfExtents(FZA_SYMBOLS);
+      (meta.groups || []).forEach((g, i) => {
+        const rec = { index: i, title: g.title || '', folder: g.folder || '' };
+        try {
+          if (!g.cgroup || !fs.existsSync(g.cgroup) || !g.header || !fs.existsSync(g.header)) {
+            results.push(Object.assign(rec, { ok: false, missing: true, error: '原位置已不存在' }));
+            return;
+          }
+          const model = JSON.parse(fs.readFileSync(path.join(dir, i + '.model.json'), 'utf8'));
+          const r = fzaCgroup.writeCgroupFile(g.cgroup, model, halfExtents);
+          /* 缩略图一并还原（否则内容恢复了、图还是注入后的样子）。
+             与 forza-thumb-write 同一套规则：只覆写**已存在**的 thumb.webp，不新建。 */
+          const tp = path.join(dir, i + '.thumb.webp');
+          let thumbOk = false;
+          const dst = String(g.thumbPath || path.join(path.dirname(g.cgroup), 'thumb.webp'));
+          if (fs.existsSync(tp) && dst && fs.existsSync(dst)) {
+            try {
+              const t0 = fs.statSync(dst, { bigint: true });
+              fzaCgroup.writeFileInPlace(dst, fs.readFileSync(tp), { atimeNs: t0.atimeNs, mtimeNs: t0.mtimeNs, birthtimeNs: t0.birthtimeNs });
+              thumbOk = true;
+            } catch (err) { appendLog('warn', '注入撤销：缩略图还原失败', { file: dst, message: String(err && err.message || err) }); }
+          }
+          results.push(Object.assign(rec, { ok: true, layers: r.layers, thumbOk }));
+        } catch (err) {
+          results.push(Object.assign(rec, { ok: false, error: String(err && err.message || err) }));
+        }
+      });
+      const restored = results.filter(r => r.ok).length;
+      const missing = results.filter(r => r.missing).map(r => r.index);
+      appendLog('info', '注入撤销执行完成', { id, restored, missing });
+      return { ok: true, results, restored, missing };
+    } catch (err) {
+      appendLog('error', '注入撤销失败', { id, message: String(err && err.message || err) });
+      return { ok: false, error: String(err && err.message || err) };
+    }
+  });
+
   /* 日志：渲染器写入内存缓冲 / 查询保存路径 / 读取缓冲 / 保存到文件 / 打开文件夹 */
   ipcMain.handle('app-flags', async () => ({
     testMode: !!process.env.SVGBIANJI_TEST,

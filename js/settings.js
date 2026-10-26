@@ -250,13 +250,10 @@ App.settings = {
             '<button id="btnFont" class="settings-change" data-i18n="settings.change">更改</button>' +
           '</span>' +
         '</div>' +
+        /* 速率三档（基础 / 微调 / 拖动）合并成一个入口：点「更改」进总览窗，见 App.speedOverview */
         '<div class="settings-row">' +
-          '<label data-i18n="settings.speedWasm">更改编辑速率</label>' +
-          '<button id="btnEditSpeed" class="settings-change" data-i18n="settings.change">更改</button>' +
-        '</div>' +
-        '<div class="settings-row">' +
-          '<label data-i18n="settings.speedNudge">更改微调编辑速率</label>' +
-          '<button id="btnNudgeSpeed" class="settings-change" data-i18n="settings.change">更改</button>' +
+          '<label data-i18n="settings.speedAll">调整编辑速率</label>' +
+          '<button id="btnSpeedAll" class="settings-change" data-i18n="settings.change">更改</button>' +
         '</div>' +
         '<div class="settings-row">' +
           '<label data-i18n="settings.keymap">自定义快捷键</label>' +
@@ -291,11 +288,10 @@ App.settings = {
     /* 更改字体：同一个设置窗切到字体视图（与主题/快捷键同一套切法） */
     const btnFont = p.querySelector('#btnFont');
     if (btnFont) btnFont.addEventListener('click', () => { if (App.fonts) App.fonts.open(); });
-    /* 编辑速率 / 微调速率：两个入口用同一个窗口组件，各自编辑不同的配置对象 */
-    const b1 = p.querySelector('#btnEditSpeed');
-    const b2 = p.querySelector('#btnNudgeSpeed');
-    if (b1) b1.addEventListener('click', () => { App.hideOverlay(p); App.speedEditor.open('wasm'); });
-    if (b2) b2.addEventListener('click', () => { App.hideOverlay(p); App.speedEditor.open('nudge'); });
+    /* 调整编辑速率：关掉设置窗 → 打开三档总览窗（基础 / 微调 / 拖动），
+       三行各自再进对应的速率窗（同一个 App.speedEditor，只换配置对象） */
+    const b1 = p.querySelector('#btnSpeedAll');
+    if (b1) b1.addEventListener('click', () => { App.hideOverlay(p); App.speedOverview.open(); });
     /* 自定义快捷键：**不关窗**，把同一个设置窗切成快捷键视图 */
     const bk = p.querySelector('#btnKeymap');
     if (bk && App.keymapUI) bk.addEventListener('click', () => App.keymapUI.open());
@@ -406,12 +402,14 @@ App.settings = {
     const put = (kind, key, store) => {
       if (!store) return;
       App.state[key] = App.state[key] || {};
-      App.speedFields.forEach(f => {
+      App.speedFieldsByKind[kind].forEach(f => {
         App.state[key][f] = App.normalizeSpeed(kind, f, store[f], App.state[key][f]);
       });
     };
     put('wasm', 'editSpeeds', s.editSpeeds);
     put('nudge', 'nudgeSpeeds', s.nudgeSpeeds);
+    /* 老 settings.json 没有这一段 → put 直接跳过，state 里保留 model.js 的默认倍率 1 */
+    put('drag', 'dragSpeeds', s.dragSpeeds);
   },
 
   /* 快捷键绑定表：只存与默认值不同的动作（默认值将来调整时，没动过的项能跟着更新）。
@@ -436,6 +434,8 @@ App.settings = {
       },
       editSpeeds: Object.assign({}, App.state.editSpeeds),
       nudgeSpeeds: Object.assign({}, App.state.nudgeSpeeds),
+      /* 拖动速率（框外拖动的倍率）：四档各自独立 */
+      dragSpeeds: Object.assign({}, App.state.dragSpeeds),
       keymap: App.keymap ? App.keymap.payload() : undefined,
       /* 界面字体：当前选择 + 已导入清单（字体文件副本在数据目录 fonts/） */
       font: App.fonts ? App.fonts.payload() : undefined
@@ -463,19 +463,29 @@ App.settings = {
   }
 };
 
-/* ---------- 编辑速率 / 微调速率窗口 ----------
-   两个入口共用一个窗口组件，分别编辑 [editSpeeds]（WASD 连续调整）与
-   [nudgeSpeeds]（方向键单步）；两套配置互不覆盖（不同配置键、不同默认值）。
-   打开时保存完整快照：input 事件立即写入临时配置（用户可马上按 WASD / 方向键试），
+/* ---------- 速率窗口（基础 / 微调 / 拖动 三档共用同一个组件） ----------
+   三个入口共用一个窗口组件，分别编辑 [editSpeeds]（WASD 连续调整）、
+   [nudgeSpeeds]（方向键单步）、[dragSpeeds]（鼠标拖图层外区域的倍率）。
+   三套配置互不覆盖：不同配置键、不同默认值、不同字段集（拖动档没有 opacity）。
+   打开时保存完整快照：input 事件立即写入临时配置（用户可马上试），
    取消 → 恢复快照并关闭；确定 → 保留临时配置并写入持久化设置。 */
-App.speedFields = ['move', 'size', 'rotate', 'skew', 'opacity'];
+App.speedFieldsByKind = {
+  wasm: ['move', 'size', 'rotate', 'skew', 'opacity'],
+  nudge: ['move', 'size', 'rotate', 'skew', 'opacity'],
+  /* 拖动速率只有四档：opacity 模式没有鼠标拖动路径（见 editmode.js 的起手分支） */
+  drag: ['move', 'size', 'rotate', 'skew']
+};
+App.speedFields = App.speedFieldsByKind.wasm;   // 旧引用兼容（= 基础速率的字段集）
 App.speedDefaults = {
   wasm: { move: 70, size: 95, rotate: 70, skew: 32, opacity: 30 },
-  nudge: { move: 0.5, size: 1, rotate: 0.2, skew: 2, opacity: 1 }
+  nudge: { move: 0.5, size: 1, rotate: 0.2, skew: 2, opacity: 1 },
+  drag: { move: 1, size: 1, rotate: 1, skew: 1 }
 };
 App.speedRanges = {
   wasm: { move: [1, 5000], size: [1, 5000], rotate: [1, 5000], skew: [1, 5000], opacity: [1, 5000] },
-  nudge: { move: [0.001, 200], size: [0.001, 200], rotate: [0.001, 180], skew: [0.001, 180], opacity: [0.001, 100] }
+  nudge: { move: [0.001, 200], size: [0.001, 200], rotate: [0.001, 180], skew: [0.001, 180], opacity: [0.001, 100] },
+  /* 倍率：1 = 跟手原速；0.01 = 几乎不动，20 = 快 20 倍 */
+  drag: { move: [0.01, 20], size: [0.01, 20], rotate: [0.01, 20], skew: [0.01, 20] }
 };
 /* 有限数字 + 合理范围校验：空值/NaN/Infinity/负数/极端值一律不写入，回退 fallback */
 App.normalizeSpeed = function (kind, field, v, fallback) {
@@ -485,7 +495,9 @@ App.normalizeSpeed = function (kind, field, v, fallback) {
   return n;
 };
 App.speedConfig = function (kind) {
-  return kind === 'nudge' ? App.state.nudgeSpeeds : App.state.editSpeeds;
+  if (kind === 'nudge') return App.state.nudgeSpeeds;
+  if (kind === 'drag') return App.state.dragSpeeds;
+  return App.state.editSpeeds;
 };
 
 App.speedEditor = {
@@ -500,9 +512,12 @@ App.speedEditor = {
     w.id = 'speedPanel';
     w.className = 'hidden';
     const cells = App.speedFields.map(f =>
-      '<div class="speed-cell">' +
+      '<div class="speed-cell" data-f="' + f + '">' +
         '<label class="speed-label" data-i18n="speed.' + f + '"></label>' +
-        '<input class="speed-input" type="number" step="any" data-speed="' + f + '">' +
+        /* step=0.1：上下箭头（原生 spinner）每次 ±0.1（2026-10-27 用户口径）。
+           只影响箭头与原生校验，**不限制手输** —— 用户照样可以敲 0.05 这种值。
+           三档速率共用这一处（自动保存窗的输入框是另一段字符串，step=1，不受影响）。 */
+        '<input class="speed-input" type="number" step="0.1" data-speed="' + f + '">' +
       '</div>').join('');
     w.innerHTML = '<div class="speed-box">' +
       '<div class="speed-title" id="speedTitle"></div>' +
@@ -528,8 +543,8 @@ App.speedEditor = {
       if (bad) return;
       cfg[f] = n;
     });
-    w.querySelector('.speed-cancel').addEventListener('click', () => this.cancel());
-    w.querySelector('.speed-ok').addEventListener('click', () => this.commit());
+    w.querySelector('.speed-cancel').addEventListener('click', () => this.cancel({ back: true }));
+    w.querySelector('.speed-ok').addEventListener('click', () => this.commit({ back: true }));
     /* 重置：临时配置回到默认值（输入框同步）—— 仍然要点「确定」才写入持久化设置；
        点「重置」后再点「取消」，一切照旧（配置回到打开窗口前的快照，默认值不留痕） */
     w.querySelector('.speed-reset').addEventListener('click', () => this.resetToDefaults());
@@ -537,7 +552,7 @@ App.speedEditor = {
        Enter = 只结束输入（值在 input 事件里已即时写入临时配置），绝不提交/关闭窗口 ——
        与全局 keydown 的输入态闸门配合，回车时窗口和编辑模式都不受影响 */
     w.addEventListener('keydown', e => {
-      if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); this.cancel(); return; }
+      if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); this.cancel({ back: true }); return; }
       if (e.key === 'Enter') {
         const inp = e.target && e.target.closest ? e.target.closest('.speed-input') : null;
         if (inp) { e.stopPropagation(); e.preventDefault(); inp.blur(); }
@@ -545,21 +560,31 @@ App.speedEditor = {
     });
     /* 右上角 ×：必须走 cancel() 而不是 hideOverlay —— 速率窗里输入的数字是即时写进
        临时配置的，直接隐藏会把没确认的值静默留下。 */
-    App.attachDlgClose(w.querySelector('.speed-box'), () => this.cancel());
+    App.attachDlgClose(w.querySelector('.speed-box'), () => this.cancel({ back: true }));
     this.el = w;
     return w;
   },
 
-  open(kind) {
-    if (kind !== 'wasm' && kind !== 'nudge') return false;
-    if (this.kind) this.cancel();       // 另一个窗口开着：先按取消回滚，临时值不串台
+  open(kind, opts) {
+    if (!App.speedFieldsByKind[kind]) return false;
+    /* 另一个窗口开着：先按取消回滚，临时值不串台。
+       先清 backTo，避免这次内部取消又把总览窗弹出来 */
+    if (this.kind) { this.backTo = null; this.cancel(); }
     const w = this.build();
     this.kind = kind;
+    this.backTo = (opts && opts.backTo) || null;
+    const fields = App.speedFieldsByKind[kind];
     const cfg = App.speedConfig(kind);
     this.snapshot = {};
-    App.speedFields.forEach(f => { this.snapshot[f] = App.normalizeSpeed(kind, f, cfg[f], App.speedDefaults[kind][f]); });
-    /* 输入框显示当前真实配置（不是写死的默认值） */
+    /* 字段集按档切换：拖动档没有 opacity → 那一格整格隐藏。
+       DOM 只建一次（5 格都在），只切 display，样式与间距跟另两档完全同源。 */
     App.speedFields.forEach(f => {
+      const cell = w.querySelector('.speed-cell[data-f="' + f + '"]');
+      if (cell) cell.style.display = fields.indexOf(f) >= 0 ? '' : 'none';
+    });
+    fields.forEach(f => { this.snapshot[f] = App.normalizeSpeed(kind, f, cfg[f], App.speedDefaults[kind][f]); });
+    /* 输入框显示当前真实配置（不是写死的默认值） */
+    fields.forEach(f => {
       const inp = w.querySelector('.speed-input[data-speed="' + f + '"]');
       if (inp) { inp.value = String(this.snapshot[f]); inp.classList.remove('speed-bad'); }
     });
@@ -578,7 +603,7 @@ App.speedEditor = {
     if (!w) return false;
     const kind = this.kind;
     const cfg = App.speedConfig(kind);
-    App.speedFields.forEach(f => {
+    App.speedFieldsByKind[kind].forEach(f => {
       const v = App.speedDefaults[kind][f];
       cfg[f] = v;
       const inp = w.querySelector('.speed-input[data-speed="' + f + '"]');
@@ -587,23 +612,31 @@ App.speedEditor = {
     return true;
   },
 
-  /* 取消：恢复打开窗口前的完整配置并关闭（切主页/切标签/关文档也走这里） */
-  cancel() {
+  /* 取消：恢复打开窗口前的完整配置并关闭（切主页/切标签/关文档也走这里）。
+     opts.back 只有窗口自己的「取消 / × / Esc」才传 —— 外部（切页/切标签）不传，
+     所以那些路径不会莫名其妙弹出总览窗。 */
+  cancel(opts) {
     if (!this.kind) return false;
     const cfg = App.speedConfig(this.kind);
     if (this.snapshot) Object.keys(this.snapshot).forEach(f => { cfg[f] = this.snapshot[f]; });
     this.kind = null;
     this.snapshot = null;
     if (this.el) App.hideOverlay(this.el);
+    const back = (opts && opts.back) ? this.backTo : null;
+    this.backTo = null;
+    if (back && App.speedOverview) App.speedOverview.open();
     return true;
   },
 
   /* 确定：保留临时配置并写入持久化设置；保存失败要提示，不静默伪装成功 */
-  commit() {
+  commit(opts) {
     if (!this.kind) return false;
     this.kind = null;
     this.snapshot = null;
     if (this.el) App.hideOverlay(this.el);
+    const back = (opts && opts.back) ? this.backTo : null;
+    this.backTo = null;
+    if (back && App.speedOverview) App.speedOverview.open();
     const p = App.settings.save();
     if (p && p.then) {
       p.then(r => {
@@ -615,6 +648,77 @@ App.speedEditor = {
   },
 
   isOpen() { return !!this.kind; }
+};
+
+/* ---------- 「调整编辑速率」总览窗（2026-10-26 三档合并入口） ----------
+   设置面板里只剩一行入口；点「更改」先到这里，再按行进各自的速率窗。
+   外壳与行样式**完全照抄设置面板**（.confirm-box.settings-box + .settings-row +
+   .settings-change），三行按钮右缘天然对齐，摆一起看不出是两处代码写的。 */
+App.speedOverview = {
+  el: null,
+
+  build() {
+    if (this.el && this.el.isConnected) return this.el;
+    const p = document.createElement('div');
+    p.id = 'speedOverviewPanel';
+    p.className = 'confirm-overlay hidden';
+    const row = (kind, labelKey) =>
+      '<div class="settings-row">' +
+        '<label data-i18n="' + labelKey + '"></label>' +
+        '<button class="settings-change" data-speed-open="' + kind + '" data-i18n="settings.change"></button>' +
+      '</div>';
+    p.innerHTML = '<div class="confirm-box settings-box">' +
+      '<div class="anchor-title" data-i18n="speed.overview.title"></div>' +
+      row('wasm', 'speed.overview.base') +
+      row('nudge', 'speed.overview.nudge') +
+      row('drag', 'speed.overview.drag') +
+      '<div class="anchor-btns"><button class="speed-ov-close" data-i18n="settings.close"></button></div>' +
+      '</div>';
+    document.body.appendChild(p);
+    if (App.i18n && App.i18n.apply) App.i18n.apply(p);
+    p.addEventListener('click', e => { if (e.target === p) this.close(); });
+    p.querySelector('.speed-ov-close').addEventListener('click', () => this.close());
+    p.querySelectorAll('[data-speed-open]').forEach(b => {
+      b.addEventListener('click', () => {
+        const kind = b.getAttribute('data-speed-open');
+        this.close();
+        /* backTo:'overview' —— 速率窗确定/取消后回到这里，连改三档不用重进设置 */
+        App.speedEditor.open(kind, { backTo: 'overview' });
+      });
+    });
+    App.attachDlgClose(p.querySelector('.confirm-box'), () => { this.close(); return true; });
+    this.el = p;
+    return p;
+  },
+
+  open() {
+    const p = this.build();
+    /* 每次打开刷一次词典：语言可能刚被切过 */
+    if (App.i18n && App.i18n.apply) App.i18n.apply(p);
+    App.showOverlay(p);
+    /* Esc = 关闭（与速率窗「Esc = 取消」同一套手感）。
+       capture 阶段拦下，不冒泡给全局 Esc（否则会顺手退出编辑模式） */
+    if (!this._esc) {
+      this._esc = e => {
+        if (e.key === 'Escape' && this.isOpen()) {
+          e.stopPropagation(); e.preventDefault(); this.close();
+        }
+      };
+      document.addEventListener('keydown', this._esc, true);
+    }
+    return true;
+  },
+
+  /* 关窗：切页面 / 切标签 / 关文档也走这里（与 App.speedEditor.cancel 的调用点对齐） */
+  close() {
+    if (this.el) App.hideOverlay(this.el);
+    if (this._esc) { document.removeEventListener('keydown', this._esc, true); this._esc = null; }
+    return true;
+  },
+
+  isOpen() {
+    return !!(this.el && this.el.isConnected && !this.el.classList.contains('hidden'));
+  }
 };
 
 /* ---------- 自动保存「工作进程」设置窗口 ----------

@@ -16,8 +16,22 @@ contextBridge.exposeInMainWorld('sveApi', Object.assign({
   histAnchorSave: (content) => ipcRenderer.invoke('hist-anchor-save', { content }),
   histAnchorList: () => ipcRenderer.invoke('hist-anchor-list'),
   histAnchorRead: (name) => ipcRenderer.invoke('hist-anchor-read', { name }),
+  /* Forza 游戏存档（Inkscape2Forza 整合） */
+  forzaAccounts: () => ipcRenderer.invoke('forza-accounts'),
+  forzaGroups: (containersRoot) => ipcRenderer.invoke('forza-groups', { containersRoot }),
+  forzaThumb: (path) => ipcRenderer.invoke('forza-thumb', { path }),
+  forzaThumbWrite: (path, dataUrl) => ipcRenderer.invoke('forza-thumb-write', { path, dataUrl }),
   /* 关闭确认(标签页/软件共用同一原生窗):返回 {action:'save'|'dont'|'cancel'} */
   confirmCloseDoc: (name) => ipcRenderer.invoke('confirm-close-doc', { name }),
+  forzaInject: (cgroup, header, model) => ipcRenderer.invoke('forza-inject', { cgroup, header, model }),
+  forzaExport: (cgroup, header) => ipcRenderer.invoke('forza-export', { cgroup, header }),
+  forzaBackup: (uDir) => ipcRenderer.invoke('forza-backup', { uDir }),
+  /* 注入撤销备份（最近 3 次注入前被覆盖的分组原文件，落在 InjectUndo 目录） */
+  undoSave: (payload) => ipcRenderer.invoke('undo-save', payload),
+  undoList: () => ipcRenderer.invoke('undo-list'),
+  undoRead: (id) => ipcRenderer.invoke('undo-read', { id }),
+  undoReadModel: (id, index) => ipcRenderer.invoke('undo-read-model', { id, index }),
+  undoRestore: (id) => ipcRenderer.invoke('undo-restore', { id }),
   /* 首页：自动目录（工作副本/SVG图像）与最近列表 */
   appFlags: () => ipcRenderer.invoke('app-flags'),
   fileAutoSave: (kind, content, fileName) => ipcRenderer.invoke('file-auto-save', { kind, content, fileName }),

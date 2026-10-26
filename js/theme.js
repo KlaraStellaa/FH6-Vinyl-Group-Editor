@@ -4,9 +4,9 @@
    所以只让用户（和预设）给 6 个种子色，其余按统一比例从「面板 ↔ 正文色」插值出来 ——
    同一组比例对深色族（提亮）和浅色族（压暗）都成立。
 
-   ★ 这套比例与 开发工具/_tools/gen-themes.cjs（生成 css/style.css 里 6 套扩展主题的
+   ★ 这套比例与 _forza-src/_tools/gen-themes.cjs（生成 css/style.css 里 6 套扩展主题的
      变量块）是**同一套公式**。两边若不一致，"预览里的自定义色"与"预设色"就会长得不像一家人 ——
-     判据 开发工具/run-themes.js 的 T8 拿 CSS 块里的种子回灌 derive() 逐个变量比对，守着这一点。
+     判据 _forza-src/run-themes.js 的 T8 拿 CSS 块里的种子回灌 derive() 逐个变量比对，守着这一点。
 
    应用方式：
      · 预设 → 只写 data-theme（用 CSS 里预先算好的变量块，首屏无闪动）

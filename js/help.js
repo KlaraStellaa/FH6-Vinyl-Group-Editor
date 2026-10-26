@@ -87,7 +87,9 @@
     /* --- 快捷键一览窗 --- */
     ['#btnShortcutClose', 'btnShortcutClose'],
     /* --- 设置窗 --- */
-    ['#btnEditSpeed', 'btnEditSpeed'], ['#btnNudgeSpeed', 'btnNudgeSpeed'],
+    /* 2026-10-26 三档合并：设置里只剩「调整编辑速率」一个入口，点进去是三行总览 */
+    ['#btnSpeedAll', 'btnSpeedAll'],
+    ['#speedOverviewPanel [data-speed-open]', 'btnSpeedAll'],
     ['#btnKeymap', 'btnKeymap'], ['#btnLogInSettings', 'btnLogInSettings'],
     ['#btnSettingsClose', 'btnSettingsClose'],
     /* --- 速率窗 / 快捷键窗 自己的按钮 ---

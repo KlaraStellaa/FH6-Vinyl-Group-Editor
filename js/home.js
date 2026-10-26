@@ -73,7 +73,7 @@ App.Home = {
        原先这里有一份**重复实现**，它不会在切语言时重建克隆 → 首页排序下拉的
        选项文字永远停在旧语言。合并成一份后由 App.evDropdownSyncAll 统一刷新。 */
     this.__evDropdownsInit = true;
-    document.querySelectorAll('#homeSort').forEach(sel => {
+    document.querySelectorAll('#homeSort, #forzaAccountSel').forEach(sel => {
       if (App.evDropdown) App.evDropdown(sel);
     });
 
@@ -91,6 +91,8 @@ App.Home = {
     this.shown = true;
     /* 进入不显示画布的页面：速率设置窗口执行取消逻辑（临时速率回滚，不跨页面带走） */
     if (App.speedEditor) App.speedEditor.cancel();
+    /* 三档总览窗同理：不带走（它是纯导航窗，直接关） */
+    if (App.speedOverview) App.speedOverview.close();
     this.refresh();
     /* 先把画布区「停靠」再显示主页（切主页后标签页还在下方渲染，图层多时很卡）。
        顺序有讲究：先挂 parked（跳渲染），主页遮罩的 blur(24px) 下面就没东西可模糊了。
@@ -479,7 +481,7 @@ App.Home = {
    （画布上可以平移/缩小看到，完全正常），固定画布框会把超出的部分**整块丢掉** ——
    光栅化后只剩画布内的那部分，缩略图就成了「显示图案显示不完全」（2026-09-25 用户报障）。
    这里用与 `mergedThumbGeometry` 同一套模型矩阵算内容包围盒，只改写根节点三个属性。
-   判据：`开发工具/run-wcthumbframe.js`。 */
+   判据：`_forza-src/run-wcthumbframe.js`。 */
 App.thumbFrameToContent = function (svg, layers) {
   try {
     if (!svg || !layers || !layers.length) return svg;

@@ -1327,6 +1327,15 @@ App.editPointerInside = function (clientX, clientY) {
   return false;
 };
 
+/* 拖动速率（2026-10-26）：只给「四种模式里拖动图层外区域」那一条路径用。
+   state.dragSpeeds 存的是**倍率**（1 = 跟手原速）；坏值/缺失一律回 1，坏值绝不进编辑循环。
+   硬边界：拖图层本身（editmove 且框内起手）与拖真手柄（h 不是 'box'）不读这个值。 */
+App.dragSpeed = function (mode) {
+  const d = (App.state && App.state.dragSpeeds) || {};
+  const v = Number(d[mode]);
+  return (isFinite(v) && v > 0) ? v : 1;
+};
+
 /* 手柄拖拽手势的起手（手柄命中 / 框外自由缩放共用同一份字段，
    避免两处各写一遍 20 个字段后慢慢长歪）。
    h：'nw'|'n'|'ne'|'e'|'se'|'s'|'sw'|'w' 或 'box'（框外自由缩放，见 onEditPointerMove） */
@@ -1355,6 +1364,9 @@ App.beginHandleDrag = function (h, g, e, items) {
     grabAngle: Math.atan2(hp.y - _anchorCenter.y, hp.x - _anchorCenter.x), // 手柄相对中心的初始角度（Shift 旋转用）
     rotLock: 0,
     skewLock: 0, // Shift+上下手柄快捷倾斜的保持值
+    /* 拖动速率：**只有框外自由缩放**（h === 'box'）吃倍率；
+       真手柄（nw/n/e/…）恒为 1 → 拖手柄的手感一点不动 */
+    speed: (h === 'box') ? App.dragSpeed('size') : 1,
     snap: items.map(it => ({ it, x: it.x, y: it.y, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew,
       flipH: !!it.flipH, flipV: !!it.flipV }))
   };
@@ -1385,10 +1397,15 @@ App.onEditPointerDown = function (e) {
        那条讲的是**可拖区域**，这条讲的是**目标不可见时不响应**）。 */
     if (App.state.edit.type === 'bg' && App.state.bg.hidden) return;
     App.editHist.checkpoint(); // 手势开始前记录撤回点（拖动过程中不重复记录）
+    /* 拖动速率：按下点落在图案框内 = 拖图层本身（恒 1 倍，手感不变）；
+       落在框外 = 吃 dragSpeeds.move 那一档。move 模式本来不判内外（哪儿都能拖），
+       这里补这一次判定**只用来选速率**，不改变「画布上按下哪儿都能拖」的行为。 */
+    const _inside = App.editPointerInside(e.clientX, e.clientY);
     App.drag = {
       kind: 'editmove',
       startX: e.clientX, startY: e.clientY,
       scale: App.state.view.scale,
+      speed: _inside ? 1 : App.dragSpeed('move'),
       snap: items.map(it => ({ it, x: it.x, y: it.y }))
     };
     try { App.svg.setPointerCapture(e.pointerId); } catch (err) { /* 合成事件无活动指针 */ }
@@ -1473,6 +1490,8 @@ App.onEditPointerDown = function (e) {
         center: _rc,
         anchorFix: _af,
         anchorDoc: _ad,
+        /* 拖动速率：旋转档（只在框外起手才走到这里，框内是 editmove） */
+        speed: App.dragSpeed('rotate'),
         grabAngle: Math.atan2(pd.y - _rc.y, pd.x - _rc.x), // 指针相对中心的初始角度
         g0: App.editSession && App.editSession.grp
           ? { rot: App.editSession.grp.rot, skew: App.editSession.grp.skew, sx: App.editSession.grp.sx, sy: App.editSession.grp.sy } : null,
@@ -1504,6 +1523,8 @@ App.onEditPointerDown = function (e) {
         kind: 'editskew',
         startX: e.clientX, startY: e.clientY,
         scale: App.state.view.scale,
+        /* 拖动速率：倾斜档（只在框外起手才走到这里，框内是 editmove） */
+        speed: App.dragSpeed('skew'),
         anchorFix: _af,
         anchorDoc: _ad,
         g0: App.editSession && App.editSession.grp
@@ -1520,8 +1541,11 @@ App.onEditPointerMove = function (e) {
   if (!App.drag) return;
   const apply = fn => App.withTransformBatch ? App.withTransformBatch(fn) : fn();
   if (App.drag.kind === 'editmove') {
-    const dx = (e.clientX - App.drag.startX) / App.drag.scale;
-    const dy = (e.clientY - App.drag.startY) / App.drag.scale;
+    /* 拖动速率：只有 move 模式的**框外**起手才带 speed；框内起手、以及 size/rotate/skew
+       的框内拖动（起手不写这个字段）→ 缺省 1，位移与改前逐位相同 */
+    const _sp = (App.drag.speed > 0) ? App.drag.speed : 1;
+    const dx = (e.clientX - App.drag.startX) / App.drag.scale * _sp;
+    const dy = (e.clientY - App.drag.startY) / App.drag.scale * _sp;
     apply(() => App.drag.snap.forEach(s => {
       s.it.x = s.x + dx; s.it.y = s.y + dy;
       App.applyItemTransform(s.it);
@@ -1531,7 +1555,9 @@ App.onEditPointerMove = function (e) {
   } else if (App.drag.kind === 'editrotate') {
     /* 旋转模式拖图案外：指针绕中心的角度变化 = 旋转量（快照 + 增量，与方向键/WASD 共用撤回点） */
     const pd = App.screenToDoc(e.clientX, e.clientY);
-    const rotD = (Math.atan2(pd.y - App.drag.center.y, pd.x - App.drag.center.x) - App.drag.grabAngle) * 180 / Math.PI;
+    /* 拖动速率：只在框外起手带 speed（框内是 editmove，走不到这里） */
+    const _rsp = (App.drag.speed > 0) ? App.drag.speed : 1;
+    const rotD = (Math.atan2(pd.y - App.drag.center.y, pd.x - App.drag.center.x) - App.drag.grabAngle) * 180 / Math.PI * _rsp;
     if (App.drag.snap.length > 1) {
       /* 多选：组矩阵模型——组旋转 = 手势起点 + 指针总角（每个内容点同矩阵旋转，与合并分组一致） */
       const g0 = App.drag.g0;
@@ -1555,7 +1581,9 @@ App.onEditPointerMove = function (e) {
     /* 倾斜模式拖图案外：水平位移 → 倾斜角（每拖 200 文档单位 = 60°）。
        方向与 WASD/Shift 快捷一致：左拖（dx<0）→ 倾斜角增大，右拖（dx>0）→ 减小 */
     const dx = (e.clientX - App.drag.startX) / App.drag.scale;
-    const skewD = -(dx / 200) * 60;
+    /* 拖动速率：只在框外起手带 speed（框内是 editmove，走不到这里） */
+    const _ksp = (App.drag.speed > 0) ? App.drag.speed : 1;
+    const skewD = -(dx / 200) * 60 * _ksp;
     if (App.drag.snap.length > 1) {
       /* 多选：组矩阵模型——组倾斜 = 手势起点 + 拖动总量（旋转层变形方向与合并分组一致） */
       const g0 = App.drag.g0;
@@ -1576,8 +1604,11 @@ App.onEditPointerMove = function (e) {
     if (App.scheduleFrameUpdate) App.scheduleFrameUpdate('edit');
     else { App.drawOutlines(); App.updateEditValue(); }
   } else if (App.drag.kind === 'edithandle') {
-    const dx = (e.clientX - App.drag.startX) / App.drag.scale;
-    const dy = (e.clientY - App.drag.startY) / App.drag.scale;
+    /* 拖动速率：框外自由缩放（speed = dragSpeeds.size）按倍率放大/缩小位移；
+       真手柄起手时 speed 恒 1 → 拖手柄的手感逐位不变 */
+    const _hsp = (App.drag.speed > 0) ? App.drag.speed : 1;
+    const dx = (e.clientX - App.drag.startX) / App.drag.scale * _hsp;
+    const dy = (e.clientY - App.drag.startY) / App.drag.scale * _hsp;
     const h = App.drag.h;
     /* 把画布位移投影到图层本地轴（只按旋转转动；翻转不参与投影——
        手柄在 AABB 边缘 = 视觉方向，拖拽方向与内容镜像无关。

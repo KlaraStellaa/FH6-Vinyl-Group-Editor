@@ -52,6 +52,11 @@ App.state = {
      opacity 的单位 = 透明度/秒（WASD）与 透明度%/次（方向键），默认值与改造前的硬编码一致 */
   editSpeeds: { move: 70, size: 95, rotate: 70, skew: 32, opacity: 30 },
   nudgeSpeeds: { move: 0.5, size: 1, rotate: 0.2, skew: 2, opacity: 1 },
+  /* 拖动速率（2026-10-26 新增）：**倍率**，1 = 原速跟手。
+     只作用于「四种模式里拖动图层外区域」那一条路径（move/size/rotate/skew 各一档，互不串台）；
+     拖图层本身（editmove）与拖手柄（edithandle 真手柄）恒按 1 倍走，不受这里影响。
+     opacity 模式没有鼠标拖动路径，所以没有这一档。 */
+  dragSpeeds: { move: 1, size: 1, rotate: 1, skew: 1 },
   /* 缩放锚点（仅单个普通图案可用）：null = 未放置（沿用中心固定）。
      { layerId, lx, ly, placed } —— lx/ly 是目标图层本地坐标（内容中心为原点），
      文档坐标每次由当前变换矩阵现算，画布缩放/视图变化不会让锚点失效 */
