@@ -1,1 +1,1 @@
-Optimized some features
+Fixed known issues
