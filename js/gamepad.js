@@ -8,7 +8,8 @@
      左摇杆判 WASD 的角度区域必须有明确边界（上推偏 10° 也算 W）；
      移动模式的摇杆与 WASD 判定**绝不许打架**。
 
-   实现原则：**不新造一套动作**。数字按键一律派发真实 KeyboardEvent，
+   功能栏获得焦点后：A 激活按钮、B 返回图层、十字键/左摇杆移动按钮焦点。
+   实现原则：画布数字按键派发 KeyboardEvent，
    走 App.keymap 查表 → 自动继承自定义键位、上下文、输入框闸门、帮助模式拦截。
    只有「移动模式的模拟量」这一条不走按键，直接调 App.applyEditMove（并把摇杆的
    虚拟 WASD 键全部松开，保证两条通道不并存）。
@@ -40,10 +41,69 @@ App.gamepad = {
   MODES: ['move', 'size', 'rotate', 'skew', 'opacity'],
 
   send(type, key) {
+    // 合成 KeyboardEvent 不会执行浏览器的按钮默认动作，功能栏需要显式导航/点击。
+    if (type === 'keydown' && this.handleToolbarKey(key)) return;
     const ev = new KeyboardEvent(type, {
       key: key, code: this.CODE[key] || '', bubbles: true, cancelable: true
     });
     window.dispatchEvent(ev);
+  },
+  toolbar() {
+    if (App.state.edit || App.state.selBarDismissed || (App.Home && App.Home.shown)) return null;
+    if (document.querySelector('.confirm-overlay:not(.hidden)')) return null;
+    const bar = document.getElementById('selToolbar');
+    if (!bar || bar.classList.contains('hidden') || bar.classList.contains('sve-bar-out')) return null;
+    return bar.contains(document.activeElement) ? bar : null;
+  },
+  toolbarButtons(container) {
+    return Array.from(container.querySelectorAll('button:not(:disabled)'))
+      .filter(button => button.getClientRects().length);
+  },
+  handleToolbarKey(key) {
+    const bar = this.toolbar();
+    if (!bar) return false;
+    const current = document.activeElement;
+    if (key === 'Enter') {
+      if (current.tagName === 'BUTTON' && !current.disabled) current.click();
+    } else if (key === 'Escape') {
+      App.lastEnterTime = 0;
+      App.state.selBarDismissed = true;
+      App.updateSelToolbar();
+    } else if (key === 'Tab') {
+      const buttons = this.toolbarButtons(bar);
+      const next = buttons[(buttons.indexOf(current) + 1) % buttons.length];
+      if (next) next.focus({ preventScroll: true });
+    } else {
+      const direction = {
+        ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down',
+        ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right'
+      }[key];
+      if (direction) this.moveToolbarFocus(bar, current, direction);
+    }
+    // X/Y 等画布快捷键也不能穿透功能栏去修改图层。
+    return true;
+  },
+  moveToolbarFocus(bar, current, direction) {
+    const columns = Array.from(bar.querySelectorAll('.st-col'));
+    const column = current.closest('.st-col');
+    let target;
+    if (direction === 'up' || direction === 'down') {
+      const buttons = this.toolbarButtons(column || bar);
+      const index = buttons.indexOf(current);
+      target = buttons[index + (direction === 'up' ? -1 : 1)];
+    } else {
+      const adjacent = columns[columns.indexOf(column) + (direction === 'left' ? -1 : 1)];
+      if (adjacent) {
+        const centerY = button => { const r = button.getBoundingClientRect(); return r.top + r.height / 2; };
+        const y = centerY(current);
+        target = this.toolbarButtons(adjacent)
+          .sort((a, b) => Math.abs(centerY(a) - y) - Math.abs(centerY(b) - y))[0];
+      }
+    }
+    if (target) {
+      target.focus({ preventScroll: true });
+      target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
   },
   press(key) {
     if (this._pressed.has(key)) return;

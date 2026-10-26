@@ -4,6 +4,8 @@ release/
 dist/
 
 # Runtime data (created on first launch)
+/_userdata/
+/settings.json
 SVGImages/
 WorkCopies/
 WorkCopiesHistory/

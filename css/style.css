@@ -275,6 +275,7 @@ html[data-scheme="light"] {
    保持原高度后，放不下时由 #selToolbar 正常出滚动条。 */
 #selToolbar .st-col { display: flex; flex-direction: column; gap: 6px; align-items: stretch; flex: none; }
 #selToolbar button { white-space: nowrap; }
+#selToolbar button:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* 窗口偏矮时自动收紧键间距：两列后最长一列 12 键，
    间距 6->4 每列省 22px（按钮尺寸仍 34px 不变）。 */
 @media (max-height: 812px) { #selToolbar, #selToolbar .st-col, #selToolbar .btn-group { gap: 4px; } }
