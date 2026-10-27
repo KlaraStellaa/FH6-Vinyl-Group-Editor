@@ -12,7 +12,7 @@ App.initIO = function () {
      键盘 Tab 聚焦不受影响(仅鼠标点击路径 blur) */
   document.addEventListener('click', e => {
     const b = e.target && e.target.closest && e.target.closest('button');
-    if (b) setTimeout(() => b.blur(), 0);
+    if (b && !(e.detail === 0 && b.closest('#selToolbar'))) setTimeout(() => b.blur(), 0);
   });
   /* 拖入 .svg 文件:读取文本 → 导入当前标签(保留原文件名) */
   window.addEventListener('dragover', e => {

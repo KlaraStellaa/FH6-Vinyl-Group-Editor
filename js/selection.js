@@ -403,6 +403,7 @@ App.setSelToolbarVisible = function (show) {
     setTimeout(() => bar.classList.remove('sve-bar-in'), 260);
   } else {
     if (bar.classList.contains('hidden')) return;
+    if (bar.contains(document.activeElement)) document.activeElement.blur();
     bar.classList.add('sve-bar-out');
     setTimeout(() => { bar.classList.add('hidden'); bar.classList.remove('sve-bar-out'); }, 180);
   }

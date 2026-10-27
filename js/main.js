@@ -243,12 +243,11 @@ App.wirePointer = function () {
 };
 
 App.wireKeyboard = function () {
-  /* 点击任意按钮/拖动条后立即失焦：防止残留焦点导致之后按 Enter/空格/方向键再次触发
-     （工具栏/右侧面板/页签/滑条等所有 button 与 input[type=range] 统一处理） */
+  /* 鼠标点击按钮/拖动条后失焦，避免残留焦点重复触发；功能栏的键盘激活保留焦点。 */
   document.addEventListener('click', e => {
     const t = e.target;
     const b = t && t.closest ? t.closest('button, input[type="range"]') : null;
-    if (b) b.blur();
+    if (b && !(e.detail === 0 && b.closest('#selToolbar'))) b.blur();
   }, true);
   /* 所有按键都经 App.keymap 查表（绑定表见根目录 keymap.js，用户可在设置窗里改）：
      同一个键在不同上下文可以绑不同动作——先查当前上下文，再查通用。
@@ -261,6 +260,32 @@ App.wireKeyboard = function () {
     /* 设置窗（含「自定义快捷键」视图）开着时，全局快捷键一律不生效：
        窗口里的按键属于窗口自己（Esc 由 keymap.js 的捕获监听处理成「取消」） */
     if (App.keymapUI && App.keymapUI.isOpen()) return;
+
+    /* 功能栏内的键盘操作属于按钮，不再触发画布的扫选/平移/图层移动。 */
+    const selBar = t && t.closest && t.closest('#selToolbar');
+    if (selBar && !selBar.classList.contains('hidden')) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        t.blur();
+        App.lastEnterTime = 0;
+        App.state.selBarDismissed = true;
+        App.updateSelToolbar();
+        return;
+      }
+      if (e.key === 'Tab') {
+        const buttons = Array.from(selBar.querySelectorAll('button:not(:disabled)'))
+          .filter(b => b.getClientRects().length);
+        const index = buttons.indexOf(t);
+        if (buttons.length) buttons[(index + (e.shiftKey ? -1 : 1) + buttons.length) % buttons.length].focus();
+        e.preventDefault();
+        return;
+      }
+      if (e.key === 'Enter' || e.key === ' ') {
+        if (e.repeat) e.preventDefault();
+        return; // 原生按钮负责 Enter/Space 激活。
+      }
+      if (e.key.startsWith('Arrow')) { e.preventDefault(); return; }
+    }
 
     /* 输入态隔离：只要焦点在可输入元素里，**任何按键都不许泄漏给全局快捷键**。
        闸门放在动作分发之前：
@@ -414,6 +439,7 @@ App.wireKeyboard = function () {
     } else {
       /* toolbar：单击 Enter=呼出白框图层的功能界面；双击=进入编辑画面 */
       if (A === 'toolbar' && !e.repeat) {
+        e.preventDefault();
         const box = App.whiteBoxLayer();
         if (!box) return;
         const now = Date.now();
@@ -430,6 +456,13 @@ App.wireKeyboard = function () {
           App.state.selectedByTab = false;
           App.state.selBarDismissed = false;
           App.setSelection([box.id], { scrollPanel: true });
+        }
+        if (!App.state.edit) {
+          const bar = $('#selToolbar');
+          const button = $('#btnEditPos');
+          if (bar && !bar.classList.contains('hidden') && button && !button.disabled) {
+            button.focus({ preventScroll: true });
+          }
         }
         return;
       }
