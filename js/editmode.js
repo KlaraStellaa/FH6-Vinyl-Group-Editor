@@ -305,6 +305,21 @@ App.exitEdit = function (cancel) {
   App.switchTab('lib');
 };
 
+/* 编辑模式左右移一格（手柄 LB/RB 与 keymap 的 modePrev / modeNext 共用这一个入口）：
+   · 只在**图层编辑**里生效（编辑背景图片时不响应，与既有口径一致）；
+   · **两端不响应、不循环** —— 已经在「移动」再按左、已经在「透明度」再按右，什么都不发生。 */
+App.stepEditMode = function (dir) {
+  const e = App.state && App.state.edit;
+  if (!e || e.type === 'bg') return false;
+  const MODES = ['move', 'size', 'rotate', 'skew', 'opacity'];
+  const i = MODES.indexOf(App.state.editMode);
+  if (i < 0) return false;
+  const j = i + dir;
+  if (j < 0 || j >= MODES.length) return false;   /* 边界：不响应，不循环 */
+  App.setEditMode(MODES[j]);
+  return true;
+};
+
 App.setEditMode = function (mode) {
   /* 编辑背景图片没有「透明度」模式（模式键已收起，这里挡住快捷键 5 的直达） */
   if (mode === 'opacity' && App.state.edit && App.state.edit.type === 'bg') return;

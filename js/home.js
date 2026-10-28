@@ -43,6 +43,16 @@ App.Home = {
       requestAnimationFrame(posGlider);
       window.addEventListener('resize', () => requestAnimationFrame(posGlider));
     }
+    /* 收藏变化 → 主页立刻重渲（收藏页签的内容要马上跟上），操作条上的收藏按钮同步状态 */
+    if (App.Favorites && App.Favorites.onChange) {
+      App.Favorites.onChange(() => {
+        if (this.shown) this.render();
+        this.syncFavBtn(this.selectedItem);
+      });
+    }
+    /* 切语言：收藏按钮的文案是 JS 按状态拼的（收藏/取消收藏），data-i18n 扫描管不到，
+       必须在 apply() 末尾按当前状态重刷一次 */
+    if (App.i18n && App.i18n.onApply) App.i18n.onApply(() => this.syncFavBtn(this.selectedItem));
     const sort = document.getElementById('homeSort');
     sort.addEventListener('change', () => { this.sort = sort.value; this.render(); });
     const search = document.getElementById('homeSearch');
@@ -53,6 +63,8 @@ App.Home = {
       const it = this.selectedItem;
       if (it) this.openItem(it);
     });
+    const favBtn = document.getElementById('btnHomeFav');
+    if (favBtn) favBtn.addEventListener('click', () => this.toggleFavSelected());
     const reBtn = document.getElementById('btnHomeRename');
     if (reBtn) reBtn.addEventListener('click', () => this.renameSelected());
     const exBtn = document.getElementById('btnHomeExportAs');
@@ -161,6 +173,8 @@ App.Home = {
     let list = this.items.slice();
     if (this.tab === 'workcopy') list = list.filter(i => i.type === 'workcopy');
     else if (this.tab === 'svg') list = list.filter(i => i.type === 'svg');
+    /* 收藏页签：只看被收藏的 SVG 文件（收藏以文件名为准，见 js/favorites.js） */
+    else if (this.tab === 'favorites') list = list.filter(i => i.type === 'svg' && App.Favorites && App.Favorites.has(i.name));
     if (this.query) list = list.filter(i => i.name.toLowerCase().indexOf(this.query) >= 0);
     const name = a => a.name.toLowerCase();
     if (this.sort === 'name') list.sort((a, b) => name(a) < name(b) ? -1 : name(a) > name(b) ? 1 : b.mtime - a.mtime);
@@ -351,6 +365,29 @@ App.Home = {
       const b = document.getElementById(id);
       if (b) b.disabled = !it;
     });
+    /* 收藏按钮走自己的可用性（只对 SVG 文件有意义），所以放在上面那条统一置灰之后 */
+    this.syncFavBtn(it);
+  },
+  /* 收藏按钮：只对 SVG 文件有意义（收藏以文件名为准，见 js/favorites.js）。
+     主仓的操作条是**常驻**的，所以不可用时置灰、不隐藏；
+     已收藏时文案/选中态一起变，给明确的反馈。 */
+  syncFavBtn(it) {
+    const b = document.getElementById('btnHomeFav');
+    if (!b) return;
+    const usable = !!(it && it.type === 'svg' && App.Favorites);
+    b.disabled = !usable;
+    const on = usable && App.Favorites.has(it.name);
+    b.textContent = App.i18n.t(on ? 'fav.remove' : 'fav.add');
+    b.classList.toggle('active', on);
+    b.title = App.i18n.t(on ? 'fav.remove' : 'fav.add');
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  },
+  toggleFavSelected() {
+    const it = this.selectedItem;
+    if (!it || it.type !== 'svg' || !App.Favorites) return;
+    const on = App.Favorites.toggle(it.name);
+    this.syncFavBtn(it);
+    if (typeof showToast === 'function') showToast(App.i18n.tf(on ? 'fav.added' : 'fav.removed', { name: it.name }));
   },
   selectItem(it) {
     this.selectedItem = it;

@@ -36,6 +36,14 @@ var ACTIONS = [
   { id: 'opacityBgDown', ctx: 'global', def: ['['], label: 'km.a.opacityBgDown' },
   { id: 'opacityBgUp', ctx: 'global', def: [']'], label: 'km.a.opacityBgUp' },
   { id: 'escape', ctx: 'global', def: ['Escape'], label: 'km.a.escape' },
+  /* 标签页左右切：**默认不绑任何键**（2026-10-29 03:35 用户口径）——
+     当初为了给手柄 LT/RT 用，给了键盘 ctrl+shift+Tab / ctrl+Tab，
+     结果把「LT/RT = Tab（高亮扫选 / 翻转循环）」这个与键盘完全一致的实现顶掉了。
+     现在 LT/RT 回到 Tab 语义（见 js/gpmap.js 的 highlight / editFlip 默认绑定），
+     这两个动作**保留为空绑定的「待绑定按键」**：设置窗里给一个「+」让用户自己绑，
+     不占任何默认快捷键。 */
+  { id: 'tabPrev', ctx: 'global', def: [], label: 'km.a.tabPrev' },
+  { id: 'tabNext', ctx: 'global', def: [], label: 'km.a.tabNext' },
 
   { id: 'up', ctx: 'canvas', def: ['w', 'ArrowUp'], label: 'km.a.up' },
   { id: 'down', ctx: 'canvas', def: ['s', 'ArrowDown'], label: 'km.a.down' },
@@ -57,6 +65,11 @@ var ACTIONS = [
   { id: 'mode3', ctx: 'edit', def: ['3'], label: 'km.a.mode3' },
   { id: 'mode4', ctx: 'edit', def: ['4'], label: 'km.a.mode4' },
   { id: 'mode5', ctx: 'edit', def: ['5'], label: 'km.a.mode5' },
+  /* 编辑模式左右移一格（手柄 LB/RB 的默认绑定）。
+     ★ 键盘默认**空数组**（原先只有手柄有这条路）；空绑定是合法状态，
+       设置窗里给一条「+」让用户自己加，resolve 对空 def 原样返回 []。 */
+  { id: 'modePrev', ctx: 'edit', def: [], label: 'km.a.modePrev' },
+  { id: 'modeNext', ctx: 'edit', def: [], label: 'km.a.modeNext' },
   { id: 'nudgeUp', ctx: 'edit', def: ['ArrowUp'], label: 'km.a.nudgeUp' },
   { id: 'nudgeDown', ctx: 'edit', def: ['ArrowDown'], label: 'km.a.nudgeDown' },
   { id: 'nudgeLeft', ctx: 'edit', def: ['ArrowLeft'], label: 'km.a.nudgeLeft' },

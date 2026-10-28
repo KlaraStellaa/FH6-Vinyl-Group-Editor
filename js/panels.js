@@ -676,8 +676,18 @@ App.updateBaseButtons = function () {
 App.switchTab = function (name) {
   const radio = document.querySelector('#panelTabs input[value="' + name + '"]');
   if (radio) radio.checked = true;
-  $('#libTab').classList.toggle('hidden', name !== 'lib');
-  $('#colorTab').classList.toggle('hidden', name !== 'color');
+  const libEl = $('#libTab'), colorEl = $('#colorTab');
+  /* ★ 切换动画的方向跟着页签在栏里的左右位置走（2026-10-29 用户口径）：
+       进「颜色」（右侧页签）→ 内容从右滑入（右 → 左，即改造前的那个动画）；
+       进「彩绘纹饰形状」（左侧页签）→ 内容从左滑入（左 → 右）。
+     方向类加在**将要显示**的那个容器上：同一元素从 display:none 变回显示时浏览器会重放动画，
+     所以类挂上去之后不用反复摘挂；只在「这一次真的要显示」时才挂，避免开机/重复调用时白跑一次动画。 */
+  const target = name === 'lib' ? libEl : (name === 'color' ? colorEl : null);
+  const willShow = !!(target && target.classList.contains('hidden'));
+  [libEl, colorEl].forEach(el => { if (el) el.classList.remove('sve-tab-from-left', 'sve-tab-from-right'); });
+  if (willShow) target.classList.add(name === 'lib' ? 'sve-tab-from-left' : 'sve-tab-from-right');
+  if (libEl) libEl.classList.toggle('hidden', name !== 'lib');
+  if (colorEl) colorEl.classList.toggle('hidden', name !== 'color');
   /* EvolveUI glider 定位 */
   const track = document.querySelector('#panelTabs .ev-tabs-track');
   if (track) {

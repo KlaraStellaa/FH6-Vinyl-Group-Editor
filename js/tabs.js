@@ -311,6 +311,36 @@ App.Tabs = {
     this.renderBar();
   },
 
+  /* 标签页左右切（手柄 LT/RT 与 keymap 的 tabPrev / tabNext 共用这一个入口）。
+     标签栏的物理顺序 = [主页, doc1, doc2, …]，所以：
+       · 第一个标签往左 → 进主页
+       · 主页往右        → 进第一个标签
+       · 主页往左        → 无响应
+       · 最后一个标签往右 → 无响应
+     边界死，不循环。返回是否真的切了（「无响应」返回 false）。 */
+  stepTab(dir) {
+    const atHome = !!(App.Home && App.Home.shown) || !this.current;
+    if (atHome) {
+      if (dir > 0) {
+        const first = this.docs[0];
+        if (!first) return false;
+        this.switchTo(first.id);
+        return true;
+      }
+      return false;
+    }
+    const i = this.docs.indexOf(this.current);
+    if (i < 0) return false;
+    if (dir < 0) {
+      if (i === 0) { this.showHome(); return true; }
+      this.switchTo(this.docs[i - 1].id);
+      return true;
+    }
+    if (i === this.docs.length - 1) return false;
+    this.switchTo(this.docs[i + 1].id);
+    return true;
+  },
+
   /* 新建一个文档并切换过去 */
   addDoc(opts) {
     opts = opts || {};

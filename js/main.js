@@ -242,6 +242,242 @@ App.wirePointer = function () {
   });
 };
 
+/* 动作分发（键盘与手柄共用）：
+   A = 动作 id；e = 事件对象。
+   ★ 手柄解耦后**不再派发 KeyboardEvent**，而是构造伪事件直接调这里：
+     { repeat: false, key: '', shiftKey: false, preventDefault(){} }
+   所以这段逻辑必须与「真实键盘事件」完全解耦 —— 只读 repeat/key/shiftKey 并调 preventDefault。
+   键盘路径：wireKeyboard 里的 keydown → 这里（行为与重构前逐字相同）。 */
+App.dispatchAction = function (A, e) {
+  /* inSpeedWin 原本是 wireKeyboard 的局部变量；抽出来后在这里重算，语义完全相同
+     （焦点在速率窗内时，Tab/Esc/空格 归窗口自己）。
+     手柄传的伪事件没有 target → 恒为 false，符合预期。 */
+  const inSpeedWin = !!(e && e.target && e.target.closest && e.target.closest('#speedPanel'));
+  /* pan：按住空格平移视图 */
+  if (A === 'pan') {
+    if (inSpeedWin) return;
+    App.state.spaceDown = true; e.preventDefault(); return;
+  }
+  /* highlight：按住/单击 Tab 扫选高亮（画布）；editFlip：编辑模式内 Tab 翻转循环 */
+  if (A === 'highlight' || A === 'editFlip') {
+    if (inSpeedWin) return;   // 窗口内 Tab = 切换输入框焦点
+    if (A === 'editFlip') {
+      if (!e.repeat) App.editFlipCycle();
+      e.preventDefault();
+      return;
+    }
+    if (!e.repeat) {
+      App.state.tabGestureUsed = false;
+      App.state.sweepMode = null;
+      App.state.sweepDir = 0;
+      /* 按住/单击 Tab：白框内图层立即响应（选定或取消），滚轮再继续扫 */
+      App.actOnWhiteBoxLayer();
+    }
+    App.state.tabDown = true;
+    App.syncPanelSelectionClasses();
+    e.preventDefault();
+    return;
+  }
+  if (e.key === 'Shift') { App.state.shiftDown = true; return; }
+  if (A === 'escape') {
+    if (inSpeedWin) return;   // 窗口内 Esc = 交给窗口（取消并关闭）
+    /* 编辑+取色器并存时：先退取色器再退编辑（避免取色器残留激活） */
+    if (App.state.eyeMode) { App.setEyedropper(null); }
+    else if (App.state.edit) { App.exitEdit(true); }
+    else if (App.state.replacing) { App.setReplacing(false); }
+    else if (App.groupEditActive && App.groupEditActive()) {
+      /* 分组内编辑：Esc 逐层退出——按一次退一层（范围内图层真合并回一个分组 + 弹栈），
+         再按就继续往上退，直到完全退出到所有分组之外（栈空）。
+         必须放在编辑态 / 取色器 / 替换态之后：那三种各有自己的 Esc 语义，先让它们退干净，
+         下一次 Esc 才轮到分组内编辑（原有交互逻辑不变）。
+         栈空后本分支不成立，Esc 回到原来的「关功能栏 / 清空选择」语义。 */
+      App.exitGroupEdit();
+    }
+    else {
+      /* 白框保持原位，绝不跳到第一个图层 */
+      const box = App.whiteBoxLayer();
+      if (box) {
+        const ids = App.panelLayers().map(l => l.id);
+        const i = ids.indexOf(box.id);
+        if (i >= 0) App.lastWheelIdx = i;
+      }
+      if (App.state.selected.size > 1) {
+        /* 多选状态：Esc 只关闭功能栏，绝不清空多选 */
+        App.state.selBarDismissed = true;
+        App.updateSelToolbar();
+      } else {
+        /* 单选/无选中：清空选择 */
+        App.state.selBarDismissed = true;
+        App.setSelection([]);
+      }
+    }
+    return;
+  }
+  /* editFinish：编辑模式内 Enter 完成编辑（输入态已在上面闸门 return，这里只处理画布焦点） */
+  if (A === 'editFinish' && !e.repeat) {
+    App.exitEdit(false);
+    return;
+  }
+
+  /* 撤销 / 重做（放在输入框判断之前，输入框聚焦时也能响应） */
+  if (A === 'undo') {
+    e.preventDefault();
+    if (App.state.edit) {
+      /* 编辑模式内独立撤回（每个手势一步，不退出编辑） */
+      showToast(App.editHist.undo() ? App.i18n.t('toast.main.undone') : App.i18n.t('toast.main.nothingToUndo'));
+    } else {
+      showToast(App.history.undo() ? App.i18n.t('toast.main.undone') : App.i18n.t('toast.main.nothingToUndo'));
+    }
+    return;
+  }
+  if (A === 'redo') {
+    e.preventDefault();
+    if (App.state.edit) {
+      showToast(App.editHist.redo() ? App.i18n.t('toast.main.redone') : App.i18n.t('toast.main.nothingToRedo'));
+    } else {
+      showToast(App.history.redo() ? App.i18n.t('toast.main.redone') : App.i18n.t('toast.main.nothingToRedo'));
+    }
+    return;
+  }
+  /* 标签页左右切（手柄 LT/RT 的默认动作；键盘默认 ctrl+shift+Tab / ctrl+Tab）。
+     画布/编辑/主页都生效；主页在标签栏最左端，边界死、不循环（见 App.Tabs.stepTab）。 */
+  if (A === 'tabPrev' || A === 'tabNext') {
+    if (App.Tabs && App.Tabs.stepTab) App.Tabs.stepTab(A === 'tabPrev' ? -1 : 1);
+    e.preventDefault();
+    return;
+  }
+
+  if (App.state.edit) {
+    /* 编辑中做任何键盘操作：撤销未点「应用」的颜色预览 */
+    if (App.cancelColorPreview) App.cancelColorPreview();
+    /* sizeMode：大小模式内 Backspace 切换等比/自由（非大小模式时无动作，与改造前一致） */
+    if (A === 'sizeMode') {
+      if (!e.repeat && App.state.editMode === 'size') {
+        App.state.sizeMode = App.state.sizeMode === 'prop' ? 'free' : 'prop';
+        App.updateEditBar();
+        showToast(App.state.sizeMode === 'prop' ? App.i18n.t('toast.main.propMode') : App.i18n.t('toast.main.freeMode'));
+      }
+      return;
+    }
+    /* editDelete：编辑模式内 Delete 删除当前编辑的图层（Backspace 只切换等比/自由） */
+    if (A === 'editDelete' && !e.repeat) {
+      const items = App.editTargets().filter(it => it.kind !== 'bg');
+      App.exitEdit(false);
+      if (items.length) {
+        App.history.markDiscrete();
+        items.forEach(it => {
+          const l = App.findLayer(it.id);
+          if (l && App.state.layers.includes(l)) App.removeTopLayer(l);
+        });
+        showToast(App.i18n.tf('toast.sel.deleted', { n: items.length }));
+      }
+      return;
+    }
+    if (A === 'editDup') { if (!e.repeat) App.duplicateEditing(); return; }
+    /* anchor：放置/清除缩放锚点（仅在编辑单个普通图案时生效；
+       焦点在输入框时上面已 return，不会拦截） */
+    if (A === 'anchor') { if (!e.repeat) App.toggleAnchor(); return; }
+    if (A === 'mode1' || A === 'mode2' || A === 'mode3' || A === 'mode4' || A === 'mode5') {
+      App.setEditMode(['move', 'size', 'rotate', 'skew', 'opacity'][parseInt(A.slice(4), 10) - 1]);
+      return;
+    }
+    /* modePrev / modeNext：编辑模式左右移一格（手柄 LB/RB 的默认动作，到两端不响应） */
+    if (A === 'modePrev' || A === 'modeNext') {
+      if (!e.repeat) App.stepEditMode(A === 'modePrev' ? -1 : 1);
+      return;
+    }
+    if (A === 'nudgeUp' || A === 'nudgeDown' || A === 'nudgeLeft' || A === 'nudgeRight') {
+      App.arrowStep(A.slice(5).toLowerCase());
+      e.preventDefault();
+      return;
+    }
+    if (A === 'moveUp' || A === 'moveDown' || A === 'moveLeft' || A === 'moveRight') {
+      /* 连续调整按住期间 = 一次手势：按下第一帧记录撤回点，松开后结束手势。
+         App.state.keys 存的是**方向**（up/down/left/right）而不是字母，改键后依旧成立。 */
+      if (!e.repeat && !App.state.keys.size) App.editHist.checkpoint();
+      App.state.keys.add(A.slice(4).toLowerCase());
+      return;
+    }
+  } else {
+    /* toolbar：单击 Enter=呼出白框图层的功能界面；双击=进入编辑画面 */
+    if (A === 'toolbar' && !e.repeat) {
+      const box = App.whiteBoxLayer();
+      if (!box) return;
+      const now = Date.now();
+      if (now - (App.lastEnterTime || 0) < 400) {
+        App.lastEnterTime = 0;
+        App.enterEdit({ type: 'layer', id: box.id });
+      } else if (App.state.selected.size > 1 || (App.state.selectedByTab && App.state.selected.size >= 1)) {
+        /* 多选（含 Tab 遗留单选）状态下单击 Enter：呼出功能栏操作整个多选集合，绝不取消多选 */
+        App.lastEnterTime = now;
+        App.state.selBarDismissed = false;
+        App.updateSelToolbar();
+      } else {
+        App.lastEnterTime = now;
+        App.state.selectedByTab = false;
+        App.state.selBarDismissed = false;
+        App.setSelection([box.id], { scrollPanel: true });
+      }
+      return;
+    }
+    /* up / down：白框上下移一个图层（按住 Tab 时同样扫选） */
+    if (A === 'up') { App.stepWhiteBox(-1); e.preventDefault(); return; }
+    if (A === 'down') { App.stepWhiteBox(1); e.preventDefault(); return; }
+    if (A === 'cut') { App.cutSelection(); return; }
+    if (A === 'paste') { App.pasteClipboard(); return; }
+    /* delete：删除选中图层 */
+    if (A === 'delete') { App.deleteSelection(); return; }
+  }
+  /* base：切换灰白/灰黑画布底色（画布与编辑模式都生效） */
+  if (A === 'base') { App.toggleBase(); e.preventDefault(); return; }
+  /* hideLayers / hideBg / hideOthers：画布右上角三个开关的快捷键。
+     需求是「除主页外都生效」→ 主页打开时不触发，按键归主页。
+     长按不连续翻转：只在首帧响应（e.repeat 为假）。
+     hideOthers 现在与另外两个同级：全局可用，目标 = 当前选中。 */
+  if (A === 'hideLayers' || A === 'hideBg' || A === 'hideOthers') {
+    if (App.Home && App.Home.shown) return;
+    if (!e.repeat) {
+      if (A === 'hideLayers') App.toggleLayersHidden();
+      else if (A === 'hideBg') App.toggleBgHidden();
+      else App.toggleHideOthers();
+    }
+    return;
+  }
+  /* 两条显示透明度滑条：每次 = 量程的 1/10（0↔100 正好 10 次，两端钳住不溢出）。
+     主页打开时不触发；长按不连发（一次按下 = 一格）。输入态已在上方闸门 return。 */
+  if (A === 'opacityLayersDown' || A === 'opacityLayersUp' || A === 'opacityBgDown' || A === 'opacityBgUp') {
+    if (App.Home && App.Home.shown) return;
+    if (!e.repeat) {
+      const down = (A === 'opacityLayersDown' || A === 'opacityBgDown');
+      if (A === 'opacityLayersDown' || A === 'opacityLayersUp') App.nudgeLayersDisplayOpacity(down ? -1 : 1);
+      else App.nudgeBgDisplayOpacity(down ? -1 : 1);
+    }
+    e.preventDefault();
+    return;
+  }
+};
+
+/* 松开动作（键盘 keyup 与手柄共用同一份）：
+   只回退「按住态」的状态（空格平移 / Tab 高亮扫选 / 连续调整的方向键）；
+   一次性动作（撤销/删除/切模式/呼出功能栏…）在 dispatchAction 里就做完了，这里不重复。 */
+App.releaseAction = function (A, e) {
+  if (A === 'pan') { App.state.spaceDown = false; return; }
+  if (A === 'highlight' || A === 'editFlip') {
+    App.state.tabDown = false;
+    App.state.sweepMode = null;
+    App.state.sweepDir = 0;
+    App.state.tabGestureUsed = false;
+    App.state.tabAutoSel = null; // Tab 手势结束：不再回滚
+    App.syncPanelSelectionClasses();
+    return;
+  }
+  const dirs = { moveUp: 'up', moveDown: 'down', moveLeft: 'left', moveRight: 'right' };
+  const dir = dirs[A];
+  if (!dir) return;
+  App.state.keys.delete(dir);
+  if (!App.state.keys.size && App.state.edit) App.editHist.endGesture(); // 全部松开：手势结束
+};
+
 App.wireKeyboard = function () {
   /* 点击任意按钮/拖动条后立即失焦：防止残留焦点导致之后按 Enter/空格/方向键再次触发
      （工具栏/右侧面板/页签/滑条等所有 button 与 input[type=range] 统一处理） */
@@ -277,213 +513,15 @@ App.wireKeyboard = function () {
     }
 
     const A = App.keymap.actionFor(e, App.state.edit ? 'edit' : 'canvas');
-
-    /* pan：按住空格平移视图 */
-    if (A === 'pan') {
-      if (inSpeedWin) return;
-      App.state.spaceDown = true; e.preventDefault(); return;
-    }
-    /* highlight：按住/单击 Tab 扫选高亮（画布）；editFlip：编辑模式内 Tab 翻转循环 */
-    if (A === 'highlight' || A === 'editFlip') {
-      if (inSpeedWin) return;   // 窗口内 Tab = 切换输入框焦点
-      if (A === 'editFlip') {
-        if (!e.repeat) App.editFlipCycle();
-        e.preventDefault();
-        return;
-      }
-      if (!e.repeat) {
-        App.state.tabGestureUsed = false;
-        App.state.sweepMode = null;
-        App.state.sweepDir = 0;
-        /* 按住/单击 Tab：白框内图层立即响应（选定或取消），滚轮再继续扫 */
-        App.actOnWhiteBoxLayer();
-      }
-      App.state.tabDown = true;
-      App.syncPanelSelectionClasses();
-      e.preventDefault();
-      return;
-    }
-    if (e.key === 'Shift') { App.state.shiftDown = true; return; }
-    if (A === 'escape') {
-      if (inSpeedWin) return;   // 窗口内 Esc = 交给窗口（取消并关闭）
-      /* 编辑+取色器并存时：先退取色器再退编辑（避免取色器残留激活） */
-      if (App.state.eyeMode) { App.setEyedropper(null); }
-      else if (App.state.edit) { App.exitEdit(true); }
-      else if (App.state.replacing) { App.setReplacing(false); }
-      else if (App.groupEditActive && App.groupEditActive()) {
-        /* 分组内编辑：Esc 逐层退出——按一次退一层（范围内图层真合并回一个分组 + 弹栈），
-           再按就继续往上退，直到完全退出到所有分组之外（栈空）。
-           必须放在编辑态 / 取色器 / 替换态之后：那三种各有自己的 Esc 语义，先让它们退干净，
-           下一次 Esc 才轮到分组内编辑（原有交互逻辑不变）。
-           栈空后本分支不成立，Esc 回到原来的「关功能栏 / 清空选择」语义。 */
-        App.exitGroupEdit();
-      }
-      else {
-        /* 白框保持原位，绝不跳到第一个图层 */
-        const box = App.whiteBoxLayer();
-        if (box) {
-          const ids = App.panelLayers().map(l => l.id);
-          const i = ids.indexOf(box.id);
-          if (i >= 0) App.lastWheelIdx = i;
-        }
-        if (App.state.selected.size > 1) {
-          /* 多选状态：Esc 只关闭功能栏，绝不清空多选 */
-          App.state.selBarDismissed = true;
-          App.updateSelToolbar();
-        } else {
-          /* 单选/无选中：清空选择 */
-          App.state.selBarDismissed = true;
-          App.setSelection([]);
-        }
-      }
-      return;
-    }
-    /* editFinish：编辑模式内 Enter 完成编辑（输入态已在上面闸门 return，这里只处理画布焦点） */
-    if (A === 'editFinish' && !e.repeat) {
-      App.exitEdit(false);
-      return;
-    }
-
-    /* 撤销 / 重做（放在输入框判断之前，输入框聚焦时也能响应） */
-    if (A === 'undo') {
-      e.preventDefault();
-      if (App.state.edit) {
-        /* 编辑模式内独立撤回（每个手势一步，不退出编辑） */
-        showToast(App.editHist.undo() ? App.i18n.t('toast.main.undone') : App.i18n.t('toast.main.nothingToUndo'));
-      } else {
-        showToast(App.history.undo() ? App.i18n.t('toast.main.undone') : App.i18n.t('toast.main.nothingToUndo'));
-      }
-      return;
-    }
-    if (A === 'redo') {
-      e.preventDefault();
-      if (App.state.edit) {
-        showToast(App.editHist.redo() ? App.i18n.t('toast.main.redone') : App.i18n.t('toast.main.nothingToRedo'));
-      } else {
-        showToast(App.history.redo() ? App.i18n.t('toast.main.redone') : App.i18n.t('toast.main.nothingToRedo'));
-      }
-      return;
-    }
-
-    if (App.state.edit) {
-      /* 编辑中做任何键盘操作：撤销未点「应用」的颜色预览 */
-      if (App.cancelColorPreview) App.cancelColorPreview();
-      /* sizeMode：大小模式内 Backspace 切换等比/自由（非大小模式时无动作，与改造前一致） */
-      if (A === 'sizeMode') {
-        if (!e.repeat && App.state.editMode === 'size') {
-          App.state.sizeMode = App.state.sizeMode === 'prop' ? 'free' : 'prop';
-          App.updateEditBar();
-          showToast(App.state.sizeMode === 'prop' ? App.i18n.t('toast.main.propMode') : App.i18n.t('toast.main.freeMode'));
-        }
-        return;
-      }
-      /* editDelete：编辑模式内 Delete 删除当前编辑的图层（Backspace 只切换等比/自由） */
-      if (A === 'editDelete' && !e.repeat) {
-        const items = App.editTargets().filter(it => it.kind !== 'bg');
-        App.exitEdit(false);
-        if (items.length) {
-          App.history.markDiscrete();
-          items.forEach(it => {
-            const l = App.findLayer(it.id);
-            if (l && App.state.layers.includes(l)) App.removeTopLayer(l);
-          });
-          showToast(App.i18n.tf('toast.sel.deleted', { n: items.length }));
-        }
-        return;
-      }
-      if (A === 'editDup') { if (!e.repeat) App.duplicateEditing(); return; }
-      /* anchor：放置/清除缩放锚点（仅在编辑单个普通图案时生效；
-         焦点在输入框时上面已 return，不会拦截） */
-      if (A === 'anchor') { if (!e.repeat) App.toggleAnchor(); return; }
-      if (A === 'mode1' || A === 'mode2' || A === 'mode3' || A === 'mode4' || A === 'mode5') {
-        App.setEditMode(['move', 'size', 'rotate', 'skew', 'opacity'][parseInt(A.slice(4), 10) - 1]);
-        return;
-      }
-      if (A === 'nudgeUp' || A === 'nudgeDown' || A === 'nudgeLeft' || A === 'nudgeRight') {
-        App.arrowStep(A.slice(5).toLowerCase());
-        e.preventDefault();
-        return;
-      }
-      if (A === 'moveUp' || A === 'moveDown' || A === 'moveLeft' || A === 'moveRight') {
-        /* 连续调整按住期间 = 一次手势：按下第一帧记录撤回点，松开后结束手势。
-           App.state.keys 存的是**方向**（up/down/left/right）而不是字母，改键后依旧成立。 */
-        if (!e.repeat && !App.state.keys.size) App.editHist.checkpoint();
-        App.state.keys.add(A.slice(4).toLowerCase());
-        return;
-      }
-    } else {
-      /* toolbar：单击 Enter=呼出白框图层的功能界面；双击=进入编辑画面 */
-      if (A === 'toolbar' && !e.repeat) {
-        const box = App.whiteBoxLayer();
-        if (!box) return;
-        const now = Date.now();
-        if (now - (App.lastEnterTime || 0) < 400) {
-          App.lastEnterTime = 0;
-          App.enterEdit({ type: 'layer', id: box.id });
-        } else if (App.state.selected.size > 1 || (App.state.selectedByTab && App.state.selected.size >= 1)) {
-          /* 多选（含 Tab 遗留单选）状态下单击 Enter：呼出功能栏操作整个多选集合，绝不取消多选 */
-          App.lastEnterTime = now;
-          App.state.selBarDismissed = false;
-          App.updateSelToolbar();
-        } else {
-          App.lastEnterTime = now;
-          App.state.selectedByTab = false;
-          App.state.selBarDismissed = false;
-          App.setSelection([box.id], { scrollPanel: true });
-        }
-        return;
-      }
-      /* up / down：白框上下移一个图层（按住 Tab 时同样扫选） */
-      if (A === 'up') { App.stepWhiteBox(-1); e.preventDefault(); return; }
-      if (A === 'down') { App.stepWhiteBox(1); e.preventDefault(); return; }
-      if (A === 'cut') { App.cutSelection(); return; }
-      if (A === 'paste') { App.pasteClipboard(); return; }
-      /* delete：删除选中图层 */
-      if (A === 'delete') { App.deleteSelection(); return; }
-    }
-    /* base：切换灰白/灰黑画布底色（画布与编辑模式都生效） */
-    if (A === 'base') { App.toggleBase(); e.preventDefault(); return; }
-    /* hideLayers / hideBg / hideOthers：画布右上角三个开关的快捷键。
-       需求是「除主页外都生效」→ 主页打开时不触发，按键归主页。
-       长按不连续翻转：只在首帧响应（e.repeat 为假）。
-       hideOthers 现在与另外两个同级：全局可用，目标 = 当前选中。 */
-    if (A === 'hideLayers' || A === 'hideBg' || A === 'hideOthers') {
-      if (App.Home && App.Home.shown) return;
-      if (!e.repeat) {
-        if (A === 'hideLayers') App.toggleLayersHidden();
-        else if (A === 'hideBg') App.toggleBgHidden();
-        else App.toggleHideOthers();
-      }
-      return;
-    }
-    /* 两条显示透明度滑条：每次 = 量程的 1/10（0↔100 正好 10 次，两端钳住不溢出）。
-       主页打开时不触发；长按不连发（一次按下 = 一格）。输入态已在上方闸门 return。 */
-    if (A === 'opacityLayersDown' || A === 'opacityLayersUp' || A === 'opacityBgDown' || A === 'opacityBgUp') {
-      if (App.Home && App.Home.shown) return;
-      if (!e.repeat) {
-        const down = (A === 'opacityLayersDown' || A === 'opacityBgDown');
-        if (A === 'opacityLayersDown' || A === 'opacityLayersUp') App.nudgeLayersDisplayOpacity(down ? -1 : 1);
-        else App.nudgeBgDisplayOpacity(down ? -1 : 1);
-      }
-      e.preventDefault();
-      return;
-    }
+    App.dispatchAction(A, e);
   });
-  /* 松开：手势状态按**当前绑定**回退（改键后仍然对得上） */
+  /* 松开：手势状态按**当前绑定**回退（改键后仍然对得上）。
+     具体回退语义在 App.releaseAction 里（手柄松开走的是同一个函数）。 */
   const anyMatch = (id, e) => App.keymap.combos(id).some(c => window.SVE_KEYMAP.matchesEvent(c, e));
   window.addEventListener('keyup', e => {
-    if (anyMatch('pan', e)) App.state.spaceDown = false;
-    if (anyMatch('highlight', e) || anyMatch('editFlip', e)) {
-      App.state.tabDown = false;
-      App.state.sweepMode = null;
-      App.state.sweepDir = 0;
-      App.state.tabGestureUsed = false;
-      App.state.tabAutoSel = null; // Tab 手势结束：不再回滚
-      App.syncPanelSelectionClasses();
-    }
+    ['pan', 'highlight', 'editFlip', 'moveUp', 'moveDown', 'moveLeft', 'moveRight']
+      .forEach(id => { if (anyMatch(id, e)) App.releaseAction(id, e); });
     if (e.key === 'Shift') App.state.shiftDown = false;
-    const dirs = { moveUp: 'up', moveDown: 'down', moveLeft: 'left', moveRight: 'right' };
-    Object.keys(dirs).forEach(id => { if (anyMatch(id, e)) App.state.keys.delete(dirs[id]); });
     if (!App.state.keys.size && App.state.edit) App.editHist.endGesture(); // 全部松开：手势结束
   });
   window.addEventListener('blur', () => {

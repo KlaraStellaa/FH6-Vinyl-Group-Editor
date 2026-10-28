@@ -12,6 +12,10 @@ App.settings = {
   /* 自定义主题的种子色（仅 theme === 'custom' 时有意义；随设置一起落盘）。
      存的是**种子**不是 27 个变量：以后调推导比例，老配置自动跟着变好看，不用迁移。 */
   customTheme: null,
+  /* 首次启动帮助提示窗是否已确认（2026-10-29）。
+     默认 false = 没确认过 → 启动时弹；点「确认」后置 true 并落盘，
+     此后任何版本更新都不再弹（永久只弹一次）。 */
+  helpHintAck: false,
   themeOf(id) { return App.theme.presetOf(id) || (id === App.theme.CUSTOM_ID ? { id: id, scheme: App.theme.schemeOf((this.customTheme || {}).bg || '#F8FAFD') } : null); },
   /* 应用主题：id = 预设 id 或 'custom'（可带 seeds）。
      只动 UI 变量；#canvasWrap 画布背景与 class 一律不碰（既有约束）。 */
@@ -356,7 +360,12 @@ App.settings = {
       this.applyAutoSave(s.autoSave);
       this.applySpeeds(s);
       this.applyKeymap(s);
+      /* 收藏（主页「收藏」页签）：数组，元素是 SVGImages/ 下的文件名 */
+      if (App.Favorites) App.Favorites.load(s.favorites);
+      if (App.gpmap) App.gpmap.load(s.gpmap);
       if (App.fonts) App.fonts.load(s);
+      /* 首次启动帮助提示：只有明确 true 才算确认过（老配置没有这个字段 → 保持要弹） */
+      if (s.helpHintAck === true) this.helpHintAck = true;
     } catch (e) { /* 无 API（异常环境）时用默认 */ }
     /* localStorage 兜底（API 不可用时仍有记忆） */
     try {
@@ -370,11 +379,16 @@ App.settings = {
       }
       this.applySpeeds(ls);
       if (!window.sveApi.settingsGet) this.applyKeymap(ls);   /* 主通道已应用过就不重复覆盖 */
+      /* 同上：只在没有主通道时才用 localStorage 里的收藏，避免旧副本盖掉 settings.json */
+      if (App.Favorites && !window.sveApi.settingsGet) App.Favorites.load(ls.favorites);
+      if (App.gpmap && !window.sveApi.settingsGet) App.gpmap.load(ls.gpmap);
     } catch (e) { /* ignore */ }
     /* 配置生效后把定时器调成用户要的节奏（load 完成才调用，避免用默认值先跑一拍） */
     if (App.restartHistAnchors) App.restartHistAnchors();
     this.applyAll();
     this.syncPanel();   /* 读到的设置立刻反映到面板（面板不许与真实设置不一致） */
+    /* 首次启动帮助提示窗：必须等设置读完（要拿到 helpHintAck 才知道弹不弹） */
+    if (App.helpHint) App.helpHint.check();
   },
 
   /* 自动保存配置：缺失/非法逐项回退默认值（老配置文件没有这段 → 保持原有 15 分钟/15 个）。
@@ -437,6 +451,13 @@ App.settings = {
       /* 拖动速率（框外拖动的倍率）：四档各自独立 */
       dragSpeeds: Object.assign({}, App.state.dragSpeeds),
       keymap: App.keymap ? App.keymap.payload() : undefined,
+      /* 手柄绑定表（与键盘独立的两套绑定，同一套动作）：只存与默认值不同的动作。
+         主进程的 settings-set 没有字段白名单，整包落盘 ⇒ 新字段不需要改主进程。 */
+      gpmap: App.gpmap ? App.gpmap.payload() : undefined,
+      /* 收藏（主页「收藏」页签）：SVGImages/ 下的文件名数组 */
+      favorites: App.Favorites ? App.Favorites.payload() : [],
+      /* 首次启动帮助提示已确认（true = 以后任何版本都不再弹） */
+      helpHintAck: this.helpHintAck === true,
       /* 界面字体：当前选择 + 已导入清单（字体文件副本在数据目录 fonts/） */
       font: App.fonts ? App.fonts.payload() : undefined
     };

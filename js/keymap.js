@@ -13,9 +13,14 @@
 App.KM_I18N = {
   'zh-CN': {
     'settings.keymap': '自定义快捷键',
-    'km.g.global': '通用（画布与编辑都生效）', 'km.g.canvas': '画布（未进入编辑）', 'km.g.edit': '编辑模式',
+    'km.g.global': '通用', 'km.g.canvas': '画布', 'km.g.edit': '编辑模式',
     'km.hint': '点击按键框后按下新按键；与已有键位撞车时会自动与对方交换',
     'km.panSpace': '画布拖动使用空格',
+    'km.mode.key': '键盘', 'km.mode.pad': '手柄',
+    'km.gp.press': '按下手柄按键…', 'km.gp.swapped': '已与「{v}」交换按键',
+    'km.gp.conflict': '手柄按键冲突：{v}',
+    'km.a.tabPrev': '上一个标签页', 'km.a.tabNext': '下一个标签页',
+    'km.a.modePrev': '上一个编辑模式', 'km.a.modeNext': '下一个编辑模式',
     'km.press': '按下按键…', 'km.escCancel': 'Esc 取消',
     'km.conflict': '键位冲突：{v}', 'km.swapped': '已与「{v}」交换键位',
     'km.saved': '已保存快捷键设置', 'km.saveFail': '快捷键设置保存失败：{v}',
@@ -39,9 +44,14 @@ App.KM_I18N = {
   },
   'zh-TW': {
     'settings.keymap': '自訂快速鍵',
-    'km.g.global': '通用（畫布與編輯都生效）', 'km.g.canvas': '畫布（未進入編輯）', 'km.g.edit': '編輯模式',
+    'km.g.global': '通用', 'km.g.canvas': '畫布', 'km.g.edit': '編輯模式',
     'km.hint': '點擊按鍵框後按下新按鍵；與既有鍵位撞車時會自動與對方交換',
     'km.panSpace': '畫布拖曳使用空格',
+    'km.mode.key': '鍵盤', 'km.mode.pad': '手柄',
+    'km.gp.press': '按下手柄按鍵…', 'km.gp.swapped': '已與「{v}」交換按鍵',
+    'km.gp.conflict': '手柄按鍵衝突：{v}',
+    'km.a.tabPrev': '上一個頁籤', 'km.a.tabNext': '下一個頁籤',
+    'km.a.modePrev': '上一個編輯模式', 'km.a.modeNext': '下一個編輯模式',
     'km.press': '按下按鍵…', 'km.escCancel': 'Esc 取消',
     'km.conflict': '鍵位衝突：{v}', 'km.swapped': '已與「{v}」交換鍵位',
     'km.saved': '已儲存快速鍵設定', 'km.saveFail': '快速鍵設定儲存失敗：{v}',
@@ -65,9 +75,14 @@ App.KM_I18N = {
   },
   'en': {
     'settings.keymap': 'Custom shortcuts',
-    'km.g.global': 'General (canvas and edit)', 'km.g.canvas': 'Canvas (not editing)', 'km.g.edit': 'Edit mode',
+    'km.g.global': 'General', 'km.g.canvas': 'Canvas', 'km.g.edit': 'Edit mode',
     'km.hint': 'Click a key box, then press the new key. If it clashes, the two bindings are swapped',
     'km.panSpace': 'Use Space to drag the canvas',
+    'km.mode.key': 'Keyboard', 'km.mode.pad': 'Gamepad',
+    'km.gp.press': 'Press a gamepad button…', 'km.gp.swapped': 'Swapped the button with "{v}"',
+    'km.gp.conflict': 'Gamepad button conflict: {v}',
+    'km.a.tabPrev': 'Previous tab', 'km.a.tabNext': 'Next tab',
+    'km.a.modePrev': 'Previous edit mode', 'km.a.modeNext': 'Next edit mode',
     'km.press': 'Press a key…', 'km.escCancel': 'Esc to cancel',
     'km.conflict': 'Key conflict: {v}', 'km.swapped': 'Swapped keys with "{v}"',
     'km.saved': 'Shortcut settings saved', 'km.saveFail': 'Failed to save shortcut settings: {v}',
@@ -91,9 +106,14 @@ App.KM_I18N = {
   },
   'ja': {
     'settings.keymap': 'ショートカットのカスタマイズ',
-    'km.g.global': '共通（キャンバスと編集）', 'km.g.canvas': 'キャンバス（編集中以外）', 'km.g.edit': '編集モード',
+    'km.g.global': '共通', 'km.g.canvas': 'キャンバス', 'km.g.edit': '編集モード',
     'km.hint': 'キー枠をクリックして新しいキーを押します。重複した場合は互いに交換されます',
     'km.panSpace': 'キャンバスのドラッグにスペースを使用',
+    'km.mode.key': 'キーボード', 'km.mode.pad': 'ゲームパッド',
+    'km.gp.press': 'ゲームパッドのボタンを押してください…', 'km.gp.swapped': '「{v}」とボタンを交換しました',
+    'km.gp.conflict': 'ゲームパッドのボタン重複：{v}',
+    'km.a.tabPrev': '前のタブ', 'km.a.tabNext': '次のタブ',
+    'km.a.modePrev': '前の編集モード', 'km.a.modeNext': '次の編集モード',
     'km.press': 'キーを押してください…', 'km.escCancel': 'Esc でキャンセル',
     'km.conflict': 'キーの重複：{v}', 'km.swapped': '「{v}」とキーを交換しました',
     'km.saved': 'ショートカット設定を保存しました', 'km.saveFail': 'ショートカット設定の保存に失敗：{v}',
@@ -117,9 +137,14 @@ App.KM_I18N = {
   },
   'ko': {
     'settings.keymap': '단축키 사용자 지정',
-    'km.g.global': '공통(캔버스와 편집)', 'km.g.canvas': '캔버스(편집 전)', 'km.g.edit': '편집 모드',
+    'km.g.global': '공통', 'km.g.canvas': '캔버스', 'km.g.edit': '편집 모드',
     'km.hint': '키 상자를 클릭한 뒤 새 키를 누르세요. 겹치면 서로 교환됩니다',
     'km.panSpace': '캔버스 드래그에 스페이스 사용',
+    'km.mode.key': '키보드', 'km.mode.pad': '게임패드',
+    'km.gp.press': '게임패드 버튼을 누르세요…', 'km.gp.swapped': '"{v}"와(과) 버튼을 교환했습니다',
+    'km.gp.conflict': '게임패드 버튼 충돌: {v}',
+    'km.a.tabPrev': '이전 탭', 'km.a.tabNext': '다음 탭',
+    'km.a.modePrev': '이전 편집 모드', 'km.a.modeNext': '다음 편집 모드',
     'km.press': '키를 누르세요…', 'km.escCancel': 'Esc 취소',
     'km.conflict': '키 충돌: {v}', 'km.swapped': '"{v}"와 키를 교환했습니다',
     'km.saved': '단축키 설정을 저장했습니다', 'km.saveFail': '단축키 설정 저장 실패: {v}',
@@ -212,6 +237,25 @@ App.keymap = {
     return swapped;
   },
 
+  /* 给「一个绑定都没有」的动作新增一条绑定（modePrev / modeNext 的键盘默认就是空数组）。
+     撞车时没有旧键可交换 ⇒ 直接拒绝并返回撞车的动作 id；非法组合返回 null；成功返回 ''。
+     与 setCombo 的交换语义互补：交换只解决「有旧键」，新增只解决「一个键都没有」。 */
+  addCombo(id, combo) {
+    const KM = window.SVE_KEYMAP;
+    if (!KM || !this.map[id] || !KM.isValidCombo(combo)) return null;
+    const mine = this.map[id];
+    if (mine.indexOf(combo) >= 0) return '';
+    let clash = null;
+    KM.ACTIONS.forEach(a => {
+      if (a.id === id || !KM.canConflict(a.id, id)) return;
+      if ((this.map[a.id] || []).some(c => KM.sameBinding(c, combo))) clash = a.id;
+    });
+    if (clash) return clash;
+    mine.push(combo);
+    this.reindex();
+    return '';
+  },
+
   snapshot() { return JSON.parse(JSON.stringify(this.map)); },
   restore(snap) { this.map = JSON.parse(JSON.stringify(snap)); this.reindex(); },
   resetToDefaults() { this.map = window.SVE_KEYMAP.resolve(null); this.reindex(); },
@@ -231,7 +275,14 @@ App.keymapUI = {
   el: null,          /* #settingsKeyView */
   box: null,         /* .confirm-box */
   capturing: null,   /* { id, slot, btn } */
+  gpCap: null,       /* 手柄捕获：{ id, slot, btn } */
   snapshot: null,
+  gpSnapshot: null,
+  mode: 'key',       /* key = 键盘绑定 · pad = 手柄绑定 */
+  /* 「待绑定」的动作：**默认一个键都没绑**，但仍然要出现在改键名单里（带一个「+」让用户自己绑）。
+     2026-10-29 03:35 用户口径：切标签页这两个动作不许占默认快捷键（原来占着 ctrl+Tab / LT+RT，
+     把「LT/RT = Tab」顶掉了），但要在设置里留着，等用户自己绑。 */
+  PENDING: ['tabPrev', 'tabNext'],
 
   build(box) {
     this.box = box;
@@ -246,7 +297,17 @@ App.keymapUI = {
         '<label class="sve-switch"><input type="checkbox" id="kmPanSpace">' +
           '<span class="sve-switch-track" aria-hidden="true"></span></label>' +
       '</div>' +
-      '<div class="km-hint" data-i18n="km.hint"></div>' +
+      /* 紧贴它的**下方**：键盘 / 手柄 两个切换钮（与软件其它切换钮同一套 ev-tabs 组件 + glider） */
+      '<div class="km-mode-row">' +
+        '<div class="ev-tabs"><div class="ev-tabs-track">' +
+          '<input type="radio" id="kmModeKey" name="kmMode" value="key" checked>' +
+          '<label for="kmModeKey" data-i18n="km.mode.key"></label>' +
+          '<input type="radio" id="kmModePad" name="kmMode" value="pad">' +
+          '<label for="kmModePad" data-i18n="km.mode.pad"></label>' +
+          '<span class="ev-glider"></span>' +
+        '</div></div>' +
+      '</div>' +
+      '<div class="km-hint" id="kmHint" data-i18n="km.hint"></div>' +
       '<div class="km-scroll" id="kmList"></div>' +
       '<div class="km-warn hidden" id="kmWarn"></div>' +
       '<div class="speed-reset-row"><button class="speed-reset km-reset" data-i18n="speed.reset"></button></div>' +
@@ -265,6 +326,29 @@ App.keymapUI = {
         App.settings.save();
       });
     }
+    /* 键盘 / 手柄 视图切换：只换下面那份列表，快照（取消回滚点）不受影响 */
+    const modeWrap = view.querySelector('.km-mode-row');
+    if (modeWrap) {
+      const posGlider = () => {
+        const track = modeWrap.querySelector('.ev-tabs-track');
+        const checked = track && track.querySelector('input:checked');
+        const label = checked ? track.querySelector('label[for="' + checked.id + '"]') : null;
+        const glider = track && track.querySelector('.ev-glider');
+        if (!label || !glider) return;
+        glider.style.width = label.offsetWidth + 'px';
+        glider.style.transform = 'translateX(' + label.offsetLeft + 'px)';
+      };
+      modeWrap.querySelectorAll('input[type="radio"]').forEach(r => {
+        r.addEventListener('change', () => {
+          this.stopCapture();          /* 切视图 = 放弃正在进行的按键捕获 */
+          this.mode = r.value;
+          posGlider();
+          this.render();
+        });
+      });
+      this.posModeGlider = posGlider;
+      requestAnimationFrame(posGlider);
+    }
     view.querySelector('.km-reset').addEventListener('click', () => this.reset());
     view.querySelector('.km-cancel').addEventListener('click', () => this.cancel());
     view.querySelector('.km-ok').addEventListener('click', () => this.commit());
@@ -273,54 +357,123 @@ App.keymapUI = {
       const b = e.target && e.target.closest ? e.target.closest('.km-key') : null;
       if (!b) return;
       e.preventDefault();
+      /* 手柄视图：键位框上挂的是手柄按键 id，不是键盘组合串 */
+      if (this.mode === 'pad') {
+        if (this.gpCap && this.gpCap.btn === b) { this.stopCapture(); return; }   /* 再点一次=放弃 */
+        const gadd = b.getAttribute('data-gp-add');
+        if (gadd) { this.startGpCapture(gadd, 0, b, true); return; }              /* 待绑定 → 新增 */
+        const gid = b.getAttribute('data-gp-act');
+        if (gid) this.startGpCapture(gid, parseInt(b.getAttribute('data-gp-slot'), 10), b);
+        return;
+      }
       const id = b.getAttribute('data-act'), slot = parseInt(b.getAttribute('data-slot'), 10);
       if (this.capturing && this.capturing.btn === b) { this.stopCapture(); return; }   /* 再点一次=放弃 */
-      this.startCapture(id, slot, b);
+      this.startCapture(id, slot, b, b.getAttribute('data-add') === '1');
     });
     this.render();
     return view;
   },
 
-  /* 列表：分组标题 + 每行「动作名 + 若干键位框」 */
+  /* 列表：分组标题 + 每行「动作名 + 若干键位框」。
+     两个视图（键盘 / 手柄）共用同一副外壳与同一套分组，只有键位框的来源不同。 */
   render() {
     if (!this.el) return;
     const list = this.el.querySelector('#kmList');
     if (!list) return;
+    if (this.mode === 'pad') this.renderPad(list);
+    else this.renderKeys(list);
+    /* 改键期间绑定**已经生效**（动作立刻可用），所以编辑条上的键位提示也必须同步，
+       不能等点「确认」——否则窗口里写着 Q、编辑条还写着 3。 */
+    if (App.refreshEditBarKeys) App.refreshEditBarKeys();
+  },
+
+  /* 说明文字：键盘 / 手柄**共用同一句**（2026-10-29 03:30 用户口径）——
+     「点击按键框后按下新按键；与已有键位撞车时会自动与对方交换」。
+     它挂在 #kmHint 的静态 data-i18n="km.hint" 上，apply() 自己会跟着语言重刷，
+     所以不需要再按视图切一次文案。 */
+
+  /* 两个视图（键盘 / 手柄）**共用这一个渲染器**：
+       · 分组永远是 SVE_KEYMAP.GROUPS 那三组（通用 / 画布 / 编辑模式），顺序也一致 ——
+         手柄这边与键盘那边**分类完全一样**，不会各写一套；
+       · 2026-10-29 03:24 用户口径：**没有可改键的那一行整行不出现**（不是留个空格位），
+         未绑定的按键不进可绑定名单；一组里一条绑定都没有的话，连组标题都不出现；
+       · 唯一的差别只有「键位框长什么样」：`makeChip` 由调用方给。
+     combosOf(a.id) 返回该视图这一侧当前的绑定数组（键盘=组合串，手柄=按键 id）。 */
+  renderList(list, combosOf, makeChip, makeAdd) {
     const t = k => App.i18n.t(k);
+    const PENDING = this.PENDING;
     list.innerHTML = '';
     window.SVE_KEYMAP.GROUPS.forEach(g => {
+      /* 只保留「这一侧有绑定」的动作；PENDING 里的动作即使没绑定也留着（待绑定） */
+      const acts = window.SVE_KEYMAP.ACTIONS.filter(a =>
+        a.ctx === g.ctx && (combosOf(a.id).length || PENDING.indexOf(a.id) >= 0));
+      if (!acts.length) return;                  /* 整组都没有可改键 → 整组不出现 */
       const box = document.createElement('div');
       box.className = 'km-group';
+      box.setAttribute('data-km-ctx', g.ctx);
       const h = document.createElement('div');
       h.className = 'km-group-title';
       h.textContent = t(g.title);
       box.appendChild(h);
-      window.SVE_KEYMAP.ACTIONS.filter(a => a.ctx === g.ctx).forEach(a => {
+      acts.forEach(a => {
         const row = document.createElement('div');
         row.className = 'km-row';
+        row.setAttribute('data-km-act', a.id);
         const lab = document.createElement('div');
         lab.className = 'km-label';
         lab.textContent = t(a.label);
         row.appendChild(lab);
         const keys = document.createElement('div');
         keys.className = 'km-keys';
-        App.keymap.combos(a.id).forEach((combo, slot) => {
-          const b = document.createElement('button');
-          b.className = 'km-key';
-          b.setAttribute('data-act', a.id);
-          b.setAttribute('data-slot', String(slot));
-          this.fillButton(b, combo);
-          keys.appendChild(b);
-        });
+        const vals = combosOf(a.id);
+        vals.forEach((v, slot) => keys.appendChild(makeChip(a.id, v, slot)));
+        if (!vals.length) keys.appendChild(makeAdd(a.id));   /* 待绑定：虚线「+」自己绑 */
         row.appendChild(keys);
         box.appendChild(row);
       });
       list.appendChild(box);
     });
-    this.renderConflicts();
-    /* 改键期间绑定**已经生效**（动作立刻可用），所以编辑条上的键位提示也必须同步，
-       不能等点「确认」——否则窗口里写着 Q、编辑条还写着 3。 */
-    if (App.refreshEditBarKeys) App.refreshEditBarKeys();
+    if (this.mode === 'pad') this.renderGpConflicts();
+    else this.renderConflicts();
+  },
+
+  /* 键盘视图：键位框 = 键盘组合串 */
+  renderKeys(list) {
+    this.renderList(list, id => App.keymap.combos(id), (id, combo, slot) => {
+      const b = document.createElement('button');
+      b.className = 'km-key';
+      b.setAttribute('data-act', id);
+      b.setAttribute('data-slot', String(slot));
+      this.fillButton(b, combo);
+      return b;
+    }, id => {
+      const add = document.createElement('button');
+      add.className = 'km-key km-add';
+      add.setAttribute('data-act', id);
+      add.setAttribute('data-add', '1');
+      add.textContent = '+';
+      return add;
+    });
+  },
+
+  /* 手柄视图：键位框 = 手柄物理按键（A/B/X/Y/十字键/LB/RB/LT/RT/L3/R3），
+     与键盘那套**完全独立**（改键盘不会碰到这里，反之亦然） */
+  renderPad(list) {
+    const GP = App.gpmap;
+    this.renderList(list, id => GP.combos(id), (id, btn, slot) => {
+      const b = document.createElement('button');
+      b.className = 'km-key';
+      b.setAttribute('data-gp-act', id);
+      b.setAttribute('data-gp-slot', String(slot));
+      b.textContent = GP.glyph(btn);
+      return b;
+    }, id => {
+      const add = document.createElement('button');
+      add.className = 'km-key km-add';
+      add.setAttribute('data-gp-add', id);
+      add.textContent = '+';
+      return add;
+    });
   },
 
   fillButton(btn, combo) {
@@ -342,13 +495,18 @@ App.keymapUI = {
   },
 
   renderConflicts() {
+    this.showWarn(App.keymap.conflicts(), 'km.conflict');
+  },
+  renderGpConflicts() {
+    this.showWarn(App.gpmap ? App.gpmap.conflicts() : [], 'km.gp.conflict');
+  },
+  showWarn(cs, key) {
     const warn = this.el && this.el.querySelector('#kmWarn');
     if (!warn) return;
-    const cs = App.keymap.conflicts();
     if (!cs.length) { warn.classList.add('hidden'); warn.textContent = ''; return; }
     const t = k => App.i18n.t(k);
     const name = id => t((window.SVE_KEYMAP.ACTIONS_BY_ID[id] || {}).label || id);
-    warn.textContent = t('km.conflict').replace('{v}', cs.map(c => name(c.a) + ' ↔ ' + name(c.b)).join('，'));
+    warn.textContent = t(key).replace('{v}', cs.map(c => name(c.a) + ' ↔ ' + name(c.b)).join('，'));
     warn.classList.remove('hidden');
   },
 
@@ -356,6 +514,9 @@ App.keymapUI = {
   showMainView() {
     this.stopCapture();
     this.snapshot = null;
+    this.gpSnapshot = null;
+    /* 下次进来从键盘视图开始（与「重置/取消/确认」的快照口径无关） */
+    if (this.el) this.setMode('key'); else this.mode = 'key';
     const box = document.getElementById('settingsPanel');
     if (!box) return;
     const main = box.querySelector('#settingsMainView');
@@ -372,18 +533,30 @@ App.keymapUI = {
     }
   },
 
+  /* 键盘 / 手柄 视图切换（radio 的 change 与 open() 复位共用这一份） */
+  setMode(mode) {
+    this.mode = mode === 'pad' ? 'pad' : 'key';
+    const r = this.el && this.el.querySelector('#' + (this.mode === 'pad' ? 'kmModePad' : 'kmModeKey'));
+    if (r) r.checked = true;
+    if (this.posModeGlider) this.posModeGlider();
+  },
+
   /* 开关状态与真实设置同步（面板不许与真实设置不一致 —— 与 settings.syncPanel 同一原则） */
   syncPanSwitch() {
     const sw = this.el && this.el.querySelector('#kmPanSpace');
     if (sw) sw.checked = App.settings.panNeedsSpace !== false;
   },
 
-  /* 打开：切到快捷键视图，并记下当前绑定表作为「取消」的回滚点 */
+  /* 打开：切到快捷键视图，并记下当前两张绑定表（键盘 + 手柄）作为「取消」的回滚点 */
   open() {
     const box = document.getElementById('settingsPanel');
     if (!box) return false;
     if (!this.el) this.build(box.querySelector('.confirm-box') || box);
     this.snapshot = App.keymap.snapshot();
+    this.gpSnapshot = App.gpmap ? App.gpmap.snapshot() : null;
+    /* 每次打开都从「键盘」视图开始（与「每次打开都回设置主视图」同一纪律：
+       上次停在手柄视图，打开时看到的是另一张表，很容易改错地方） */
+    this.setMode('key');
     const main = box.querySelector('#settingsMainView');
     const key = box.querySelector('#settingsKeyView');
     const title = box.querySelector('#settingsTitle');
@@ -399,10 +572,12 @@ App.keymapUI = {
     return true;
   },
 
-  /* 重置：只改临时绑定表 + 界面，不落盘（与速率窗口一致，要确认才生效） */
+  /* 重置：只改临时绑定表 + 界面，不落盘（与速率窗口一致，要确认才生效）。
+     键盘、手柄两张表一起回默认（同一个窗口、同一副按钮，口径要一致）。 */
   reset() {
     this.stopCapture();
     App.keymap.resetToDefaults();
+    if (App.gpmap) App.gpmap.resetToDefaults();
     this.render();
     return true;
   },
@@ -411,6 +586,7 @@ App.keymapUI = {
   cancel() {
     this.stopCapture();
     if (this.snapshot) { App.keymap.restore(this.snapshot); this.snapshot = null; }
+    if (this.gpSnapshot) { App.gpmap.restore(this.gpSnapshot); this.gpSnapshot = null; }
     const box = document.getElementById('settingsPanel');
     if (box) App.hideOverlay(box);
     return true;
@@ -420,6 +596,7 @@ App.keymapUI = {
   commit() {
     this.stopCapture();
     this.snapshot = null;
+    this.gpSnapshot = null;
     const box = document.getElementById('settingsPanel');
     if (box) App.hideOverlay(box);
     /* 帮助窗口与编辑条立刻同步新键位（不等下次打开/重进编辑） */
@@ -436,9 +613,9 @@ App.keymapUI = {
   },
 
   /* ---------- 按键捕获 ---------- */
-  startCapture(id, slot, btn) {
+  startCapture(id, slot, btn, isNew) {
     this.stopCapture();
-    this.capturing = { id, slot, btn };
+    this.capturing = { id, slot, btn, isNew: !!isNew };   /* isNew = 待绑定那个「+」 */
     btn.classList.add('km-capturing');
     btn.innerHTML = '';
     const kbd = document.createElement('kbd');
@@ -450,7 +627,39 @@ App.keymapUI = {
     btn.appendChild(tip);
   },
 
+  /* 手柄捕获：键盘那边监听 keydown，手柄只能靠 js/gamepad.js 的轮询，
+     所以这里只登记「在等一个手柄按键」，真正的落键在 onGpCapture 里做。 */
+  startGpCapture(id, slot, btn, isNew) {
+    this.stopCapture();
+    this.gpCap = { id, slot, btn, isNew: !!isNew };
+    if (App.gpmap) App.gpmap.startCapture(id, slot, isNew);
+    btn.classList.add('km-capturing');
+    btn.textContent = App.i18n.t('km.gp.press');
+  },
+
+  /* 手柄按键捕获到之后的落表（由 App.gpmap.finishCapture 回调） */
+  onGpCapture(cap, btn) {
+    this.gpCap = null;                     /* 捕获已结束，别再走 stopCapture 的还原分支 */
+    const t = k => App.i18n.t(k);
+    const name = id => t((window.SVE_KEYMAP.ACTIONS_BY_ID[id] || {}).label || id);
+    if (cap.isNew) {
+      const clash = App.gpmap.addButton(cap.id, btn);
+      if (clash) showToast(t('km.gp.conflict').replace('{v}', name(cap.id) + ' ↔ ' + name(clash)));
+    } else {
+      const swapped = App.gpmap.setButton(cap.id, cap.slot, btn);
+      if (swapped.length) showToast(t('km.gp.swapped').replace('{v}', swapped.map(name).join('、')));
+    }
+    this.render();
+  },
+
   stopCapture() {
+    /* 手柄捕获：清掉捕获状态，并把被改过的那个键位框还原成当前真实绑定 */
+    const g = this.gpCap;
+    this.gpCap = null;
+    if (g) {
+      if (App.gpmap) App.gpmap.stopCapture();
+      if (this.mode === 'pad') this.render();
+    }
     const c = this.capturing;
     this.capturing = null;
     if (!c || !c.btn) return;
@@ -458,6 +667,7 @@ App.keymapUI = {
     /* 还原成当前真实绑定（可能没改） */
     const cur = App.keymap.combos(c.id)[c.slot];
     if (cur) this.fillButton(c.btn, cur);
+    else if (c.isNew) { c.btn.textContent = '+'; }   /* 待绑定还没绑上：还原成「+」 */
   },
 
   /* 捕获期间接管键盘：捕获阶段 + 掐断传播，避免被全局快捷键吃掉。
@@ -474,12 +684,19 @@ App.keymapUI = {
     /* 只按下修饰键（Ctrl / Alt / Shift / ⌘）→ 继续等真正的按键 */
     const parts = combo.split('+');
     if (parts.length === 1 && ['ctrl', 'alt', 'shift'].indexOf(parts[0]) >= 0) return true;
+    const name = id => App.i18n.t((window.SVE_KEYMAP.ACTIONS_BY_ID[id] || {}).label || id);
+    /* 待绑定的「+」：这个动作原本一个绑定都没有，没有旧键可交换 ⇒ 撞车时直接拒绝 */
+    if (c.isNew) {
+      const clash = App.keymap.addCombo(c.id, combo);
+      this.stopCapture();
+      this.render();
+      if (clash) showToast(App.i18n.t('km.conflict').replace('{v}', name(c.id) + ' ↔ ' + name(clash)));
+      return true;
+    }
     const swapped = App.keymap.setCombo(c.id, c.slot, combo);
     this.stopCapture();
     this.render();
     if (swapped.length) {
-      const t = k => App.i18n.t(k);
-      const name = id => t((window.SVE_KEYMAP.ACTIONS_BY_ID[id] || {}).label || id);
       showToast(App.i18n.tf('km.swapped', { v: swapped.map(name).join('、') }));
     }
     return true;
@@ -517,7 +734,22 @@ window.addEventListener('keydown', function (e) {
     if (key && !key.classList.contains('hidden')) {
       e.preventDefault(); e.stopPropagation();
       if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+      /* 正在等手柄按键：Esc 只放弃这次捕获，不关窗（否则一个错按就把整窗设置丢掉） */
+      if (App.keymapUI.gpCap) { App.keymapUI.stopCapture(); return; }
       App.keymapUI.cancel();
     }
   }
 }, true);
+
+/* 切语言：本视图里的分组标题、动作名、说明、冲突提示都是 t() 现拼的，
+   data-i18n 扫描管不到 ⇒ 注册到 apply() 末尾重刷（与 fonts.js 同一做法）。 */
+if (App.i18n && App.i18n.onApply) {
+  App.i18n.onApply(function () {
+    const ui = App.keymapUI;
+    if (!ui || !ui.el) return;
+    const view = document.getElementById('settingsKeyView');
+    if (!view || view.classList.contains('hidden')) return;
+    if (ui.render) ui.render();
+    if (ui.posModeGlider) ui.posModeGlider();
+  });
+}

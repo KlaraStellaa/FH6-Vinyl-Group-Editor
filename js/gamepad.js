@@ -1,63 +1,234 @@
 'use strict';
 /* ================= 手柄（Xbox 布局，Gamepad API）=================
-   用户口径（2026-10-26）：
-     A→Enter、B→Esc、X→X、Y→Y、两个扳机（RT/LT）→Tab（按住态，与键盘 Tab 同语义）；
-     左摇杆→WASD、十字键→方向键；右摇杆**不理会**；
-     编辑图层「移动」模式里左摇杆必须按**真实方位**走（全向、模拟量），不能退化成八方向；
-     LB/RB 在图层编辑模式里左/右移一格模式（到边界不响应）；
-     左摇杆判 WASD 的角度区域必须有明确边界（上推偏 10° 也算 W）；
-     移动模式的摇杆与 WASD 判定**绝不许打架**。
+   2026-10-29 用户口径：**手柄与键盘彻底解耦**。
+     1. 手柄按键**不再投影成键盘按键** —— 旧实现往 window 派发合成 KeyboardEvent，
+        键盘一改键手柄就跟着变、两个动作抢同一个键时还会串台，那套机制整个删掉。
+     2. 手柄走自己的通道：直接调 App.dispatchAction(A, e) / App.releaseAction(A, e)，
+        绑定表是独立的 App.gpmap（同一套动作、两套绑定）。
+        键盘那边怎么改键，都不会让手柄按键失效 / 变错 / 串台。
+     3. 摇杆（轴）不参与绑定，摇杆只当摇杆：
+        数字 4 向（迟滞 8°）→ 画布上/下移白框、编辑模式里连续调整；
+        移动模式的左摇杆仍是全向模拟量，直接调 App.applyEditMove（与 WASD 完全同一基准，
+        设置里改「编辑速率」立刻生效）。这条通道**与 WASD 的代码路径分开**，互不打架。
+     4. 焦点只管功能栏那 18 个按钮（#selToolbar）：手柄操作时按钮有可见焦点，
+        键盘/鼠标一动立即失效（记忆点保留），功能栏一关记忆点彻底清掉。
+     5. **十字键管按钮焦点、摇杆管图层选择**（2026-10-29 02:15 用户最终口径）：
+        功能栏打开时十字键专职跳按钮，摇杆上下照旧移动左侧图层选择；两条通道并行不互抢。
 
-   实现原则：**不新造一套动作**。数字按键一律派发真实 KeyboardEvent，
-   走 App.keymap 查表 → 自动继承自定义键位、上下文、输入框闸门、帮助模式拦截。
-   只有「移动模式的模拟量」这一条不走按键，直接调 App.applyEditMove（并把摇杆的
-   虚拟 WASD 键全部松开，保证两条通道不并存）。
+   ★ 用户没有实体手柄：本文件的行为一律是「代码级正确 + 假手柄模拟输入验证」，
+     不是真机实测。 */
+App.gpFocus = {
+  active: false,
+  /* ★ 记忆点**全局只记一个**：焦点因键盘/鼠标失效时写入（按钮 id），重新唤起后立刻清空。
+     不用数组、不往 DOM 上贴标记 ⇒ 不存在「越积越多让软件变大」。 */
+  mem: null,
+  el: null,
 
-   速度口径：与 WASD **完全同一基准** —— 每帧位移 = (editSpeeds.move / view.scale) × 摇杆幅度 × dt。
-   所以设置里改「编辑速率」立刻生效，摇杆只是乘一个 0~1 的百分比，不是写死的数值。 */
+  /* 功能栏是否处于「可以给焦点」的状态：
+     未进编辑 / 没被 Esc 收掉 / 不在主页 / 没有模态窗 / 节点可见且不在滑出动画里。
+     （可见性判定沿用 PR #1 的口径：hidden 与 sve-bar-out 都算不可用） */
+  bar() {
+    if (!App.state) return null;
+    if (App.state.edit) return null;
+    if (App.state.selBarDismissed) return null;
+    if (App.state.plusAnchorActive) return null;
+    if (App.Home && App.Home.shown) return null;
+    if (document.querySelector('.confirm-overlay:not(.hidden)')) return null;
+    const bar = document.getElementById('selToolbar');
+    if (!bar) return null;
+    if (bar.classList.contains('hidden') || bar.classList.contains('sve-bar-out')) return null;
+    return bar;
+  },
+  /* 可导航 = 没有被禁用、且真的占着版面（PR #1 的口径） */
+  buttons(scope) {
+    return Array.prototype.slice.call(scope.querySelectorAll('button:not(:disabled)'))
+      .filter(b => b.getClientRects().length);
+  },
+  clearRing() {
+    document.querySelectorAll('#selToolbar button.gp-focus').forEach(b => b.classList.remove('gp-focus'));
+  },
+  setFocus(el) {
+    this.clearRing();
+    if (!el) { this.el = null; return; }
+    this.el = el;
+    el.classList.add('gp-focus');
+    try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { /* ignore */ }
+  },
+
+  /* 唤起焦点：有记忆点就从记忆点继续，没有就从**左上角第一个可用按钮**开始 */
+  wake() {
+    const bar = this.bar();
+    if (!bar) return false;
+    const list = this.buttons(bar);
+    if (!list.length) return false;
+    let target = null;
+    if (this.mem) target = list.find(b => b.id === this.mem) || null;
+    this.mem = null;              /* ★ 重新唤起即删除记忆点（只留一个，不堆积） */
+    this.active = true;
+    this.setFocus(target || list[0]);
+    return true;
+  },
+
+  /* 十字键按下：焦点还没出现时，第一次按只把焦点落到起点（不移动） */
+  press(btnId) {
+    if (!this.bar()) return false;
+    if (!this.active || !this.el || !this.el.isConnected) { this.wake(); return true; }
+    const dir = { DUp: 'up', DDown: 'down', DLeft: 'left', DRight: 'right' }[btnId];
+    if (dir) this.move(dir);
+    return true;
+  },
+
+  /* 同列上下跳；跨列左右跳，按垂直距离就近选（算法照搬 PR #1） */
+  move(dir) {
+    const bar = this.bar();
+    if (!bar || !this.el) return;
+    const cols = Array.prototype.slice.call(bar.querySelectorAll('.st-col'));
+    const col = this.el.closest('.st-col');
+    let target = null;
+    if (dir === 'up' || dir === 'down') {
+      const list = this.buttons(col || bar);
+      const i = list.indexOf(this.el);
+      target = list[i + (dir === 'up' ? -1 : 1)] || null;
+    } else {
+      const adj = cols[cols.indexOf(col) + (dir === 'left' ? -1 : 1)];
+      if (adj) {
+        const cy = b => { const r = b.getBoundingClientRect(); return r.top + r.height / 2; };
+        const y = cy(this.el);
+        target = this.buttons(adj).sort((a, b) => Math.abs(cy(a) - y) - Math.abs(cy(b) - y))[0] || null;
+      }
+    }
+    if (target) this.setFocus(target);
+  },
+
+  /* A 键：点当前焦点按钮（合成 click 不会执行浏览器默认动作，必须显式 .click()） */
+  pressA() {
+    const el = this.el;
+    if (!el || !el.isConnected || el.disabled) return false;
+    el.click();
+    return true;
+  },
+
+  /* 键盘/鼠标一动：焦点立刻失效，但**保留记忆点**（功能栏还开着，手柄回来要接着走） */
+  deactivate() {
+    if (!this.active) return;
+    if (this.el && this.el.id) this.mem = this.el.id;
+    this.active = false;
+    this.clearRing();
+    this.el = null;
+  },
+
+  /* 功能栏关闭：连记忆点一起清（下次打开从左上角重新开始），DOM 残留标记一并清掉 */
+  clear() {
+    this.active = false;
+    this.mem = null;
+    this.el = null;
+    this.clearRing();
+  },
+
+  /* 每帧兜底：功能栏没了 → 清干净；焦点元素被禁用/重建 → 重新落位 */
+  tick() {
+    const bar = this.bar();
+    if (!bar) {
+      if (this.active || this.mem || this.el) this.clear();
+      return;
+    }
+    if (!this.active) return;
+    const live = this.el && this.el.isConnected && !this.el.disabled && bar.contains(this.el);
+    if (!live) this.wake();
+  }
+};
+
 App.gamepad = {
   enabled: true,
   /* 摇杆死区：小于它一律当没推（避免漂移） */
   DEAD: 0.18,
-  /* 数字方向（WASD）判定的迟滞：越过 45° 分界还要多走 8° 才换向，
-     这样「上推偏 10°」稳稳是 W，不会在分界线附近来回抖 */
+  /* 数字方向判定的迟滞：越过 45° 分界还要多走 8° 才换向，
+     这样「上推偏 10°」稳稳是正上，不会在分界线附近来回抖 */
   HYST: 8,
   _pad: null,
-  _pressed: new Set(),
+  _pressed: new Set(),  /* 当前按住的动作 id */
   _stickDir: null,      /* 0=右 1=上 2=左 3=下 */
+  _stickAct: null,      /* 摇杆当前按住的动作 id */
   _analogOn: false,
   _lastT: 0,
+  _bp: {},              /* 手柄按键 id → 上一帧是否按住（边沿检测） */
+  _btnAct: {},          /* 手柄按键 id → 按下时派发的动作 id（松开必须按**同一个**动作回收：
+                           上下文可能在这期间变了 —— 画布按 A 是 toolbar、编辑里按 A 是 editFinish，
+                           按松开时的上下文去回收会漏掉一个，_pressed 里留下僵尸动作 ⇒ 手柄按键失效） */
+  _capPrev: {},         /* 设置窗捕获时用的独立边沿表 */
 
-  CODE: {
-    'w': 'KeyW', 'a': 'KeyA', 's': 'KeyS', 'd': 'KeyD',
-    'x': 'KeyX', 'y': 'KeyY',
-    'ArrowUp': 'ArrowUp', 'ArrowDown': 'ArrowDown', 'ArrowLeft': 'ArrowLeft', 'ArrowRight': 'ArrowRight',
-    'Tab': 'Tab', 'Enter': 'Enter', 'Escape': 'Escape'
-  },
   /* 数字方向的轴心角（度）：0=右 90=上 180=左 -90=下 */
   DIR_CENTER: [0, 90, 180, -90],
-  DIR_KEY: ['d', 'w', 'a', 's'],
-  MODES: ['move', 'size', 'rotate', 'skew', 'opacity'],
+  /* 摇杆方向 → 动作（**摇杆不可自定义**，固定如下）：
+       画布：只有上/下（= W/S；左/右在画布本来就没有动作）
+       编辑（非移动模式）：连续调整上下左右（= WASD） */
+  STICK_ACT: { canvas: [null, 'up', null, 'down'], edit: ['moveRight', 'moveUp', 'moveLeft', 'moveDown'] },
 
-  send(type, key) {
-    const ev = new KeyboardEvent(type, {
-      key: key, code: this.CODE[key] || '', bubbles: true, cancelable: true
-    });
-    window.dispatchEvent(ev);
+  /* 手柄事件是**伪事件**：dispatchAction 只读 repeat / key / shiftKey / target 并调 preventDefault，
+     不必也不该伪造 KeyboardEvent（合成的 KeyboardEvent 是 untrusted，浏览器不会执行按钮默认动作，
+     旧实现就是在这一点上既失效又串台）。 */
+  ev() {
+    return {
+      repeat: false, key: '', code: '', shiftKey: false, ctrlKey: false, altKey: false, metaKey: false,
+      target: null, preventDefault() { }, stopPropagation() { }
+    };
   },
-  press(key) {
-    if (this._pressed.has(key)) return;
-    this._pressed.add(key);
-    this.send('keydown', key);
+
+  /* ---------- 手柄 → 动作（唯一入口，不经过键盘） ---------- */
+  ctx() { return (App.state && App.state.edit) ? 'edit' : 'canvas'; },
+  actionOf(btn) {
+    if (!App.gpmap) return null;
+    return App.gpmap.actionFor(btn, this.ctx());
   },
-  release(key) {
-    if (!this._pressed.has(key)) return;
-    this._pressed.delete(key);
-    this.send('keyup', key);
+  /* 功能栏未呼出时，十字键 → 也能呼出（等价于 A/Enter 的单击）。
+     条件与 toolbar 动作本身一致：不在编辑态、不在主页、有白框。
+     返回 true 表示"这次按下已经被呼出消耗掉"，调用方不要再派发 nudgeRight。 */
+  openToolbarByRight() {
+    if (!App.dispatchAction) return false;
+    if (App.state && App.state.edit) return false;
+    if (App.Home && App.Home.shown) return false;
+    if (!App.whiteBoxLayer || !App.whiteBoxLayer()) return false;
+    App.dispatchAction('toolbar', this.ev());
+    return true;
+  },
+  /* 引用计数：LT 和 RT 默认都绑 Tab（highlight），必须做到「任一按住就算按住、全松开才抬起」
+     —— 与解耦前那句 `const trig = down(6) || down(7)` 逐字等价。
+     顺带也覆盖「用户把两个物理键绑到同一个动作」的情况。 */
+  _refs: {},
+  act(A) {
+    if (!A) return;
+    const n = this._refs[A] || 0;
+    this._refs[A] = n + 1;
+    if (n) return;                       /* 别的按键已经按着它了：只加引用，不重复派发 */
+    this._pressed.add(A);
+    if (App.dispatchAction) App.dispatchAction(A, this.ev());
+  },
+  unact(A) {
+    if (!A) return;
+    const n = this._refs[A] || 0;
+    if (n > 1) { this._refs[A] = n - 1; return; }   /* 还有一个按键按着：不抬 */
+    delete this._refs[A];
+    if (!this._pressed.has(A)) return;
+    this._pressed.delete(A);
+    if (App.releaseAction) App.releaseAction(A, this.ev());
   },
   releaseAll() {
-    Array.from(this._pressed).forEach(k => this.release(k));
+    this._refs = {};                                   /* 先清引用计数：保证下面每一条都是真的「抬」 */
+    Array.from(this._pressed).forEach(a => this.unact(a));
+    this._btnAct = {};
     this._stickDir = null;
+    this._stickAct = null;
+  },
+  /* 按下/松开都记着**按下那一刻**解析出的动作 id（见 _btnAct 注释） */
+  pressBtn(id, A) {
+    if (!A) { delete this._btnAct[id]; return; }
+    this._btnAct[id] = A;
+    this.act(A);
+  },
+  releaseBtn(id) {
+    const A = this._btnAct[id];
+    delete this._btnAct[id];
+    if (A) this.unact(A);
   },
 
   /* 焦点在**文字输入**里时不抢输入（与键盘那条闸门同口径）。
@@ -82,55 +253,55 @@ App.gamepad = {
   },
 
   /* ---------- 按钮 ---------- */
-  handleButtons(pad) {
-    const b = pad.buttons || [];
-    const down = i => !!(b[i] && b[i].pressed);
-    const edge = (i, key) => { if (down(i)) this.press(key); else this.release(key); };
-
-    edge(0, 'Enter');    /* A */
-    edge(1, 'Escape');   /* B */
-    edge(2, 'x');        /* X */
-    edge(3, 'y');        /* Y */
-
-    /* 十字键 → 方向键。
-       ★ 摇杆已经在给模拟量时，十字键的「方向」不再重复映射：
-         不少手柄/驱动会把左摇杆同时镜像成 DPad，两路一起走会表现为
-         「一会儿连续、一会儿按格子蹦」。摇杆优先，十字键让位。 */
-    const stickLive = this.stickMag(pad) >= this.DEAD;
-    if (stickLive) {
-      this.release('ArrowUp'); this.release('ArrowDown');
-      this.release('ArrowLeft'); this.release('ArrowRight');
-    } else {
-      edge(12, 'ArrowUp');
-      edge(13, 'ArrowDown');
-      edge(14, 'ArrowLeft');
-      edge(15, 'ArrowRight');
-    }
-
-    /* 两个扳机 → Tab（按住态）：任一按住就算按住，全松开才抬起 */
-    const trig = down(6) || down(7);
-    if (trig) this.press('Tab'); else this.release('Tab');
-
-    /* 肩键 → 编辑模式左右移一格（边沿触发，到边界不响应） */
-    this.edgeButton(4, () => this.stepMode(-1));
-    this.edgeButton(5, () => this.stepMode(1));
+  btnDown(i) {
+    const p = this._pad;
+    return !!(p && p.buttons && p.buttons[i] && p.buttons[i].pressed);
   },
-  _prevBtn: {},
-  edgeButton(i, fn) {
-    const pad = this._pad;
-    const pressed = !!(pad && pad.buttons && pad.buttons[i] && pad.buttons[i].pressed);
-    const was = !!this._prevBtn[i];
-    this._prevBtn[i] = pressed;
-    if (pressed && !was) fn();
+  /* 边沿检测：返回 { d: 现在按住, e: 这一帧刚按下 } */
+  edge(id, i) {
+    const d = this.btnDown(i);
+    const was = !!this._bp[id];
+    this._bp[id] = d;
+    return { d: d, e: d && !was };
   },
-  stepMode(dir) {
-    /* 只在**图层编辑**里切（编辑背景图片时肩键不响应，与需求一致） */
-    if (!this.editingLayer()) return;
-    const i = this.MODES.indexOf(App.state.editMode);
-    if (i < 0) return;
-    const j = i + dir;
-    if (j < 0 || j >= this.MODES.length) return;   /* 边界：不响应，不循环 */
-    App.setEditMode(this.MODES[j]);
+
+  handleButtons() {
+    const GP = App.gpmap;
+    if (!GP) return;
+
+    /* 十字键：功能栏打开时**专职跳按钮焦点**（2026-10-29 口径），关着时才走绑定表 */
+    const bar = App.gpFocus.bar();
+    ['DUp', 'DDown', 'DLeft', 'DRight'].forEach(id => {
+      const st = this.edge(id, GP.idxOf(id));
+      if (st.d && bar) {
+        /* 焦点模式：按下才动，不产生画布动作；顺手把之前可能按住的动作松开（不许两条通道并存） */
+        if (st.e) App.gpFocus.press(id);
+        this.releaseBtn(id);
+      } else if (st.d) {
+        /* 功能栏还没呼出时，→ 也能把它呼出来（2026-10-29 用户口径）。
+           只在按下那一帧触发一次；呼出成功后 bar 非空，后续 → 自动转为跳焦点，
+           既不会重复触发，也不会和编辑模式的 nudgeRight 抢（编辑态直接返回 false）。 */
+        if (id === 'DRight' && st.e && this.openToolbarByRight()) { this.releaseBtn(id); return; }
+        /* ★ 只在按下那一帧派发一次：act/unact 带引用计数，每帧都调会让计数越加越高，
+           松开时减不到 0 → 这个动作永远卡在「按下」态（下一次按同一方向也不响应）。 */
+        if (st.e) this.pressBtn(id, this.actionOf(id));
+      } else {
+        this.releaseBtn(id);
+      }
+    });
+
+    /* 其余按键：A/B/X/Y、LB/RB、LT/RT、L3/R3（可绑定范围就是这 14 个，没有 Start/Back） */
+    ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'L3', 'R3'].forEach(id => {
+      const st = this.edge(id, GP.idxOf(id));
+      if (!st.d) { this.releaseBtn(id); return; }
+      /* A：焦点已经点亮时 = 点当前焦点按钮（PR #1 的核心技术点：必须显式 .click()） */
+      if (id === 'A' && App.gpFocus.active) {
+        this.releaseBtn(id);
+        if (st.e) App.gpFocus.pressA();
+        return;
+      }
+      if (st.e) this.pressBtn(id, this.actionOf(id));
+    });
   },
 
   /* ---------- 左摇杆 ---------- */
@@ -180,7 +351,8 @@ App.gamepad = {
       this.digitalStick(ax, ay);
     }
   },
-  /* 数字方向：4 向（上/下/左/右）+ 迟滞；一次只按一个键（避免画布上一步变两步） */
+  /* 数字方向：4 向 + 迟滞；一次只按一个动作（避免画布上一步变两步）。
+     ★ 摇杆不受功能栏焦点影响：功能栏开着时上下照样移动左侧图层选择。 */
   digitalStick(ax, ay) {
     const ang = Math.atan2(-ay, ax) * 180 / Math.PI;   /* 0=右 90=上 -90=下 ±180=左 */
     let dir = this._stickDir;
@@ -192,10 +364,15 @@ App.gamepad = {
       dir = this.nearestDir(ang);
     }
     this._stickDir = dir;
-    const want = this.DIR_KEY[dir];
-    /* 换向：先松开旧键再按新键 */
-    ['w', 'a', 's', 'd'].forEach(k => { if (k !== want) this.release(k); });
-    this.press(want);
+    const table = this.STICK_ACT[this.ctx()];
+    const want = table ? table[dir] : null;
+    /* 换向：先松开旧动作再按新动作。
+       ★ act/unact 是**带引用计数**的，只能在「方向真的变了」那一刻调一次；
+         每帧都调会把计数越加越高（松开时永远减不到 0 → 动作卡在按下态，摇杆从此失灵）。 */
+    const prev = this._stickAct;
+    if (prev && prev !== want) this.unact(prev);
+    this._stickAct = want;
+    if (want && prev !== want) this.act(want);
   },
   nearestDir(ang) {
     let best = 0, bestD = 999;
@@ -207,9 +384,8 @@ App.gamepad = {
   },
   norm180(x) { return ((x + 180) % 360 + 360) % 360 - 180; },
   releaseStickKeys() {
-    if (this._stickDir === null) return;
+    if (this._stickAct) { this.unact(this._stickAct); this._stickAct = null; }
     this._stickDir = null;
-    ['w', 'a', 's', 'd'].forEach(k => this.release(k));
   },
 
   /* 移动模式：全向模拟量。位移 = (editSpeeds.move / view.scale) × 幅度 × dt
@@ -239,9 +415,25 @@ App.gamepad = {
     if (App.editHist && App.editHist.endGesture) App.editHist.endGesture();
   },
 
+  /* 设置窗里「等用户按一个手柄按键」：捕获期间不产生任何动作 */
+  captureTick() {
+    const GP = App.gpmap;
+    if (!GP || !GP.capturing) return;
+    for (let i = 0; i < GP.BUTTONS.length; i++) {
+      const b = GP.BUTTONS[i];
+      const d = this.btnDown(b.idx);
+      const was = !!this._capPrev[b.id];
+      this._capPrev[b.id] = d;
+      if (d && !was) { GP.finishCapture(b.id); return; }
+    }
+  },
+
   /* ---------- 轮询 ---------- */
   poll() {
     if (!this.enabled) return;
+    /* 功能栏没了就把记忆点清干净（切页面/鼠标点别处/进编辑都由这条兜底） */
+    App.gpFocus.tick();
+
     let pad = null;
     try {
       const pads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -251,16 +443,27 @@ App.gamepad = {
       }
     } catch (e) { pad = null; }
     if (!pad) {
-      if (this._pad) { this._pad = null; this._prevBtn = {}; this.releaseAll(); this.stopAnalog(); }
+      if (this._pad) {
+        this._pad = null; this._bp = {}; this._capPrev = {};
+        this.releaseAll(); this.stopAnalog(); App.gpFocus.deactivate();
+      }
       return;
     }
     this._pad = pad;
+    /* 设置窗正在等一个手柄按键：只做捕获，别的什么都不做 */
+    if (App.gpmap && App.gpmap.capturing) {
+      this.releaseAll();
+      this.stopAnalog();
+      this.captureTick();
+      return;
+    }
+    this._capPrev = {};
     if (this.blocked()) {
       this.releaseAll();
       this.stopAnalog();
       return;
     }
-    this.handleButtons(pad);
+    this.handleButtons();
     this.handleStick(pad);
   },
   start() {
@@ -271,9 +474,20 @@ App.gamepad = {
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
-    window.addEventListener('blur', () => { this.releaseAll(); this.stopAnalog(); this._prevBtn = {}; });
+    /* 键盘/鼠标一操作，焦点立即失效（视觉消失），但记忆点保留 */
+    window.addEventListener('keydown', () => App.gpFocus.deactivate(), true);
+    window.addEventListener('pointerdown', () => App.gpFocus.deactivate(), true);
+    window.addEventListener('mousedown', () => App.gpFocus.deactivate(), true);
+    window.addEventListener('wheel', () => App.gpFocus.deactivate(), { capture: true, passive: true });
+    window.addEventListener('blur', () => {
+      this.releaseAll(); this.stopAnalog(); this._bp = {}; this._capPrev = {};
+      App.gpFocus.deactivate();
+    });
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) { this.releaseAll(); this.stopAnalog(); this._prevBtn = {}; }
+      if (document.hidden) {
+        this.releaseAll(); this.stopAnalog(); this._bp = {}; this._capPrev = {};
+        App.gpFocus.deactivate();
+      }
     });
   }
 };
