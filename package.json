@@ -55,5 +55,5 @@
     "electron-builder": "^26.15.3"
   },
   "repository": "https://github.com/KlaraStellaa/fh6-vinyl-group-editor",
-  "license": "MIT"
+  "license": "GPL-3.0-only"
 }
