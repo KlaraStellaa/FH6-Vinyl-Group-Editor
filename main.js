@@ -46,33 +46,78 @@ function appDataDir() {
 }
 
 /* ---------- 自动更新用：下载到文件（走 Electron net，自动处理系统代理/证书） ----------
-   带进度回调（0~100）。失败一律删掉半截文件，绝不留一个坏的 exe 在数据目录里。 */
+   带进度回调 onPct(pct, got, total)。失败一律删掉半截文件，绝不留一个坏的 exe 在数据目录里。
+   2026-10-29 修的四个坑（都来自「更新卡在 0% / 软件自己没了」）：
+     ① 写盘流的 error 没人接 ⇒ 未捕获异常，主进程直接崩（表现就是更新到一半软件自己关了）；
+     ② 没有空闲超时 ⇒ 网络卡住时进度永远停在某个数字，窗口也没法给用户任何提示；
+     ③ 不校验长度 ⇒ 半截 exe 也能"下载成功"，覆盖后软件就启动不了；
+     ④ 写盘不控背压 ⇒ 92MB 全堆内存里。
+   ★ 下载慢不是 bug：GitHub 的 release 附件在本机实测只有 100~220KB/s（92MB≈7~16 分钟），
+     所以进度条必须**同时给百分比和「已下/总量」**，否则用户只会看到长期停在 0~1%。 */
+const DL_IDLE_MS = 45000;      /* 连续 45s 没有任何数据 ⇒ 判定卡死 */
 function downloadToFile(url, dest, onPct) {
   return new Promise((resolve, reject) => {
     let out;
     try { out = fs.createWriteStream(dest); } catch (e) { reject(e); return; }
-    let req;
-    try { req = net.request({ method: 'GET', url: String(url), redirect: 'follow' }); }
-    catch (e) { try { out.close(); } catch (e2) { /* ignore */ } reject(e); return; }
-    try { req.setHeader('User-Agent', 'VinylFH6-Updater'); } catch (e) { /* ignore */ }
+    let req = null;
+    let settled = false;
+    let idleTimer = null;
+    const report = (pct, got, total) => {
+      try { if (typeof onPct === 'function') onPct(pct, got, total); } catch (e) { /* ignore */ }
+    };
     const fail = (err) => {
-      try { out.close(); } catch (e) { /* ignore */ }
+      if (settled) return;
+      settled = true;
+      if (idleTimer) { try { clearTimeout(idleTimer); } catch (e) { /* ignore */ } idleTimer = null; }
+      try { out.destroy(); } catch (e) { /* ignore */ }
       try { fs.unlinkSync(dest); } catch (e) { /* ignore */ }
       reject(err);
     };
+    /* ① 写盘出错必须显式接住（磁盘满 / 目录被占用 / 权限） */
+    out.on('error', fail);
+    try { req = net.request({ method: 'GET', url: String(url), redirect: 'follow' }); }
+    catch (e) { fail(e); return; }
+    try { req.setHeader('User-Agent', 'VinylFH6-Updater'); } catch (e) { /* ignore */ }
+    /* ② 空闲看门狗：每次收到数据就重置；超时主动 abort 并报错，绝不无限挂着 */
+    const armIdle = () => {
+      if (idleTimer) { try { clearTimeout(idleTimer); } catch (e) { /* ignore */ } }
+      idleTimer = setTimeout(() => {
+        try { req.abort(); } catch (e) { /* ignore */ }
+        fail(new Error('timeout'));
+      }, DL_IDLE_MS);
+    };
+    armIdle();
     req.on('response', res => {
       if (res.statusCode !== 200) { fail(new Error('HTTP ' + res.statusCode)); return; }
       const total = Number((res.headers && res.headers['content-length']) || 0);
       let got = 0;
+      report(0, 0, total);
       res.on('data', chunk => {
+        armIdle();
         got += chunk.length;
-        try { out.write(chunk); } catch (e) { /* ignore */ }
-        if (total && typeof onPct === 'function') onPct(Math.min(99, Math.round(got / total * 100)));
+        let ok = true;
+        try { ok = out.write(chunk); } catch (e) { fail(e); return; }
+        /* ④ 背压：写不动就先停住响应流，等 drain 再继续 */
+        if (ok === false) {
+          try { res.pause(); } catch (e) { /* ignore */ }
+          out.once('drain', () => { try { res.resume(); } catch (e) { /* ignore */ } });
+        }
+        if (total) report(Math.min(99, Math.round(got / total * 100)), got, total);
+        else report(0, got, total);          /* 没给 content-length：至少把字节数报上去 */
       });
       res.on('end', () => {
-        out.end(() => { if (typeof onPct === 'function') onPct(100); resolve(dest); });
+        if (idleTimer) { try { clearTimeout(idleTimer); } catch (e) { /* ignore */ } idleTimer = null; }
+        /* ③ 长度对不上 = 传输被截断，宁可失败也不能覆盖出一个坏 exe */
+        if (total && got !== total) { fail(new Error('incomplete ' + got + '/' + total)); return; }
+        out.end(() => {
+          if (settled) return;
+          settled = true;
+          report(100, got, total);
+          resolve(dest);
+        });
       });
       res.on('error', fail);
+      res.on('aborted', () => fail(new Error('aborted')));
     });
     req.on('error', fail);
     req.end();
@@ -1275,14 +1320,33 @@ app.whenReady().then(() => {
     if (!url) return { ok: false, error: 'no-asset' };
     if (!app.isPackaged) return { ok: false, error: 'dev' };
     const sender = e.sender;
-    const sendPct = (pct) => { try { if (sender && !sender.isDestroyed()) sender.send('update-progress', { pct: pct }); } catch (err) { /* ignore */ } };
+    const sendPct = (pct, got, total) => {
+      try { if (sender && !sender.isDestroyed()) sender.send('update-progress', { pct: pct, got: got || 0, total: total || 0 }); }
+      catch (err) { /* ignore */ }
+    };
     try {
       /* 便携版的真实 exe 路径在 PORTABLE_EXECUTABLE_FILE；app.getPath('exe') 是 %TEMP% 里的解压副本 */
       const exePath = process.env.PORTABLE_EXECUTABLE_FILE || app.getPath('exe');
       const dir = path.dirname(exePath);
       const tmp = path.join(dir, 'update-' + Date.now() + '.exe');
       appendLog('info', '自动更新：开始下载', { url: String(url).slice(0, 120), to: tmp });
-      await downloadToFile(url, tmp, sendPct);
+      /* 国内直连 GitHub 附件 CDN 经常在 ~20s 左右被 ERR_CONNECTION_RESET 打断：
+         同一个 URL 重试往往就能过（reset 是间歇性的）。3 次，退避 1.5s / 3s。 */
+      let lastErr = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await downloadToFile(url, tmp, sendPct);
+          lastErr = null;
+          if (attempt > 1) appendLog('info', '自动更新：重试成功', { attempt: attempt });
+          break;
+        } catch (err) {
+          lastErr = err;
+          appendLog('warn', '自动更新：下载失败', { attempt: attempt, message: String(err && err.message || err).slice(0, 140) });
+          try { fs.unlinkSync(tmp); } catch (e2) { /* ignore */ }
+          if (attempt < 3) await new Promise(r => setTimeout(r, 1500 * attempt));
+        }
+      }
+      if (lastErr) throw lastErr;
       const oldPath = exePath.replace(/\.exe$/i, '') + '.old.exe';
       try { if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath); } catch (err) { /* 旧残留删不掉就算了 */ }
       fs.renameSync(exePath, oldPath);          /* 运行中的 exe 允许改名 */
@@ -1293,12 +1357,39 @@ app.whenReady().then(() => {
         throw err;
       }
       appendLog('info', '自动更新：已替换，准备重启', { exe: exePath });
-      setTimeout(() => { app.relaunch(); app.exit(0); }, 400);
+      /* ★ 重启不能再用 app.relaunch()：便携版里 process.execPath 是 %TEMP% 里的解压副本，
+         而外层的 SFX 一旦发现子进程退出就会清掉那个临时目录 ⇒ 新进程起来就被删文件，
+         表现就是「更新完软件自己没了」。改成延时拉起**用户真正双击的那个 exe**，
+         2 秒足够让旧 SFX 收尾，再启动新文件。 */
+      try {
+        const bat = path.join(os.tmpdir(), 'sve-update-restart-' + Date.now() + '.bat');
+        fs.writeFileSync(bat, '@echo off\r\ntimeout /t 2 /nobreak >nul\r\nstart "" "' + exePath + '"\r\ndel "%~f0"\r\n', 'utf8');
+        const child = require('child_process').spawn('cmd.exe', ['/c', bat], { detached: true, stdio: 'ignore', windowsHide: true });
+        child.unref();
+      } catch (e) {
+        appendLog('warn', '重启脚本失败，退回 relaunch', { message: String(e && e.message || e).slice(0, 160) });
+        try { app.relaunch({ execPath: exePath }); } catch (e2) { app.relaunch(); }
+      }
+      setTimeout(() => { app.exit(0); }, 300);
       return { ok: true };
     } catch (err) {
       appendLog('warn', '自动更新失败', { message: String(err && err.message || err).slice(0, 200) });
       return { ok: false, error: String(err && err.message || err) };
     }
+  });
+
+  /* ---------- 自动更新失败 → 自动打开 GitHub 仓库（2026-10-29 用户口径） ----------
+     仓库地址只从 package.json 的 repository 解析（与更新检查同一个 readRepo），
+     渲染层不硬编码 owner/repo，改仓库时不用改两处。 */
+  ipcMain.handle('update-open-repo', async () => {
+    let url = 'https://github.com';
+    try {
+      const t = require('./update-check').readRepo();
+      if (t && t.owner && t.repo) url = 'https://github.com/' + t.owner + '/' + t.repo;
+    } catch (e) { /* 解析不了就给 github 首页 */ }
+    appendLog('info', '自动更新失败：打开仓库页', { url: url });
+    try { await shell.openExternal(url); return { ok: true, url: url }; }
+    catch (e) { return { ok: false, error: String(e && e.message || e), url: url }; }
   });
 
   /* ---------- 界面字体（设置 → 更改字体）----------

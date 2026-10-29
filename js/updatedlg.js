@@ -20,7 +20,11 @@ App.UPD_I18N = {
     'upd.devHint': '当前是开发模式，请手动更新',
     'upd.noAsset': '这个版本没有可下载的 exe，请手动更新',
     'upd.fail': '更新失败：{v}',
-    'upd.done': '已下载，正在重启…'
+    'upd.done': '已下载，正在重启…',
+    'upd.openRepo': '已自动打开 GitHub 仓库，可手动下载最新版',
+    'upd.errReset': '网络连接被重置（直连 GitHub 常见）',
+    'upd.errTimeout': '下载超时（网络不稳定）',
+    'upd.errIncomplete': '下载不完整，已丢弃'
   },
   'zh-TW': {
     'upd.title': '偵測到更新 🎆🎆',
@@ -30,7 +34,11 @@ App.UPD_I18N = {
     'upd.devHint': '目前是開發模式，請手動更新',
     'upd.noAsset': '這個版本沒有可下載的 exe，請手動更新',
     'upd.fail': '更新失敗：{v}',
-    'upd.done': '已下載，正在重新啟動…'
+    'upd.done': '已下載，正在重新啟動…',
+    'upd.openRepo': '已自動開啟 GitHub 儲存庫，可手動下載最新版',
+    'upd.errReset': '網路連線被重設（直連 GitHub 常見）',
+    'upd.errTimeout': '下載逾時（網路不穩定）',
+    'upd.errIncomplete': '下載不完整，已丟棄'
   },
   'en': {
     'upd.title': 'Update available 🎆🎆',
@@ -40,7 +48,11 @@ App.UPD_I18N = {
     'upd.devHint': 'Running in dev mode — please update manually',
     'upd.noAsset': 'No exe asset for this release — please update manually',
     'upd.fail': 'Update failed: {v}',
-    'upd.done': 'Downloaded, restarting…'
+    'upd.done': 'Downloaded, restarting…',
+    'upd.openRepo': 'Opened the GitHub repository — you can download manually',
+    'upd.errReset': 'connection reset (common when GitHub is blocked)',
+    'upd.errTimeout': 'download timed out (unstable network)',
+    'upd.errIncomplete': 'download incomplete, discarded'
   },
   'ja': {
     'upd.title': 'アップデートがあります 🎆🎆',
@@ -50,7 +62,11 @@ App.UPD_I18N = {
     'upd.devHint': '開発モードのため手動で更新してください',
     'upd.noAsset': 'このリリースには exe がありません。手動で更新してください',
     'upd.fail': '更新に失敗しました：{v}',
-    'upd.done': 'ダウンロード完了、再起動します…'
+    'upd.done': 'ダウンロード完了、再起動します…',
+    'upd.openRepo': 'GitHub リポジトリを開きました。手動でダウンロードできます',
+    'upd.errReset': '接続がリセットされました（GitHub 直結でよく発生）',
+    'upd.errTimeout': 'ダウンロードがタイムアウトしました（不安定な回線）',
+    'upd.errIncomplete': 'ダウンロードが不完全なため破棄しました'
   },
   'ko': {
     'upd.title': '업데이트가 있습니다 🎆🎆',
@@ -60,7 +76,11 @@ App.UPD_I18N = {
     'upd.devHint': '개발 모드이므로 직접 업데이트하세요',
     'upd.noAsset': '이 릴리스에는 exe가 없습니다. 직접 업데이트하세요',
     'upd.fail': '업데이트 실패: {v}',
-    'upd.done': '다운로드 완료, 재시작합니다…'
+    'upd.done': '다운로드 완료, 재시작합니다…',
+    'upd.openRepo': 'GitHub 저장소를 열었습니다. 직접 다운로드할 수 있습니다',
+    'upd.errReset': '연결이 재설정되었습니다 (GitHub 직접 연결 시 흔함)',
+    'upd.errTimeout': '다운로드 시간 초과 (불안정한 네트워크)',
+    'upd.errIncomplete': '다운로드가 불완전하여 폐기했습니다'
   }
 };
 Object.keys(App.UPD_I18N).forEach(function (lang) {
@@ -141,6 +161,65 @@ App.updateDlg = {
     if (el && el.parentNode) el.parentNode.removeChild(el);
   },
 
+  /* 字节数给人看：GitHub 附件在本机只有 100~220KB/s，92MB 要 7~16 分钟，
+     只显示百分比会让人以为「卡在 0%」——必须同时给出「已下 / 总量」。 */
+  fmtMB(n) {
+    const mb = Number(n || 0) / 1048576;
+    if (!mb) return '0 MB';
+    return (mb >= 100 ? mb.toFixed(0) : mb.toFixed(1)) + ' MB';
+  },
+
+  /* 进度渲染单独抽出来：CDP 判据可以直接喂一个假 pr 验文案，不必真下 92MB */
+  applyProgress(pr) {
+    if (!this.el || !pr) return false;
+    const go = this.el.querySelector('#updGo');
+    const hint = this.el.querySelector('.upd-hint');
+    if (go && typeof pr.pct === 'number') go.textContent = App.i18n.t('upd.busy').replace('{v}', String(pr.pct));
+    if (hint && pr.total) {
+      hint.textContent = this.fmtMB(pr.got) + ' / ' + this.fmtMB(pr.total);
+      hint.classList.remove('hidden');
+    }
+    return true;
+  },
+
+  /* 原始错误 → 人话（判据要能吃住这些映射） */
+  friendlyError(raw) {
+    const s = String(raw || '');
+    if (/ERR_CONNECTION_RESET|ERR_CONNECTION_CLOSED|ERR_CONNECTION_ABORTED|ERR_NETWORK_CHANGED|ERR_INTERNET_DISCONNECTED/i.test(s)) {
+      return App.i18n.t('upd.errReset');
+    }
+    if (/timeout/i.test(s)) return App.i18n.t('upd.errTimeout');
+    if (/incomplete/i.test(s)) return App.i18n.t('upd.errIncomplete');
+    return s.slice(0, 80);
+  },
+
+  /* ★ 两个「测试缝」：默认走 preload 暴露的真实 IPC，判据可以换成计数桩
+     （contextBridge 暴露的对象是只读的，判据没法直接改写 window.sveApi.*）。 */
+  _opener: null,
+  _installer: null,
+
+  openRepoArg() {
+    const run = this._opener || function () {
+      return (window.sveApi && window.sveApi.updateOpenRepo) ? window.sveApi.updateOpenRepo() : null;
+    };
+    return run();
+  },
+
+  /* ★ 2026-10-29 用户口径：更新失败后**自动打开 GitHub 仓库**（浏览器里可以手动下载/挂代理）。
+     仓库地址由主进程从 package.json 的 repository 解析，这里不写死 owner/repo。 */
+  openRepo() {
+    const hint = this.el && this.el.querySelector('.upd-hint');
+    if (hint) {
+      hint.textContent = App.i18n.t('upd.openRepo');
+      hint.classList.remove('hidden');
+    }
+    try {
+      const p = this.openRepoArg();
+      if (p && typeof p.catch === 'function') p.catch(function () { /* 打不开浏览器也不该再抛 */ });
+    } catch (e) { /* ignore */ }
+    return true;
+  },
+
   async start() {
     if (this.busy || !this.info) return;
     if (!this.info.exeUrl) return;
@@ -150,12 +229,11 @@ App.updateDlg = {
     if (cancel) cancel.disabled = true;
     if (go) { go.disabled = true; go.textContent = App.i18n.t('upd.busy').replace('{v}', '0'); }
     const off = (window.sveApi && window.sveApi.onUpdateProgress)
-      ? window.sveApi.onUpdateProgress(pr => {
-        if (go && pr && typeof pr.pct === 'number') go.textContent = App.i18n.t('upd.busy').replace('{v}', String(pr.pct));
-      })
+      ? window.sveApi.onUpdateProgress(pr => this.applyProgress(pr))
       : function () { };
     try {
-      const r = await window.sveApi.updateInstall({ exeUrl: this.info.exeUrl, version: this.info.remote });
+      const install = this._installer || function (payload) { return window.sveApi.updateInstall(payload); };
+      const r = await install({ exeUrl: this.info.exeUrl, version: this.info.remote });
       if (r && r.ok) {
         if (go) go.textContent = App.i18n.t('upd.done');
         return;   /* 主进程会自己重启，窗口随进程一起消失 */
@@ -169,9 +247,11 @@ App.updateDlg = {
         go.disabled = false;
         go.textContent = App.i18n.t('upd.update');
       }
-      const msg = App.i18n.t('upd.fail').replace('{v}', String(e && e.message || e).slice(0, 80));
-      if (typeof showToast === 'function') showToast(msg);
+      const msg = App.i18n.t('upd.fail').replace('{v}', this.friendlyError(e && e.message || e));
+      if (typeof showToast === 'function') showToast(msg, 4200);
       else console.warn('[update]', msg);
+      /* 失败即打开仓库 —— 不管失败原因是网络还是文件系统，用户都能自己去下 */
+      this.openRepo();
     }
   },
 

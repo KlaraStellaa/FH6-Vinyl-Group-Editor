@@ -41,6 +41,8 @@ contextBridge.exposeInMainWorld('sveApi', Object.assign({
   settingsSet: (s) => ipcRenderer.invoke('settings-set', s),
   /* 自动更新：窗口里点「更新」→ 主进程下载 exe 覆盖自己并重启 */
   updateInstall: (payload) => ipcRenderer.invoke('update-install', payload || {}),
+  /* 更新失败时自动打开 GitHub 仓库（地址由主进程从 package.json 的 repository 解析） */
+  updateOpenRepo: () => ipcRenderer.invoke('update-open-repo'),
   onUpdateAvailable: (cb) => {
     if (typeof cb !== 'function') return function () { };
     const h = (_e, info) => { try { cb(info); } catch (err) { /* ignore */ } };

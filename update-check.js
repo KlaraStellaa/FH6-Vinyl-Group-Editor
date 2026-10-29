@@ -159,6 +159,7 @@ function check(opts) {
       remote: remote,
       notes: notes.slice(0, 8000),
       htmlUrl: String(rel.html_url || ('https://github.com/' + target.owner + '/' + target.repo + '/releases/latest')),
+      repoUrl: 'https://github.com/' + target.owner + '/' + target.repo,
       exeUrl: exeAsset ? String(exeAsset.browser_download_url || '') : '',
       exeName: exeAsset ? String(exeAsset.name || '') : '',
       exeSize: exeAsset ? Number(exeAsset.size || 0) : 0,
