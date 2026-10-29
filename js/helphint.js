@@ -32,6 +32,9 @@ App.helpHint = {
       this.esc(t) + '</p>').join('');
     p.innerHTML =
       '<div class="confirm-box" style="width:560px;max-width:92vw;">' +
+        /* 窗口最顶上的一行联系方式（2026-10-29 用户口径：固定文案、不做多语言）。
+           ★ 三个空格的间距靠 CSS 的 white-space: pre-wrap 保真（HTML 默认会把连续空格折叠成一个）。 */
+        '<div class="helphint-contact">QQ：1074132460   X：@KlaraStellak</div>' +
         /* 内容区固定高度 + 滚动条：窗口不再随文案变高（2026-10-29 用户口径）。
            滚动条沿用全局 ::-webkit-scrollbar 样式（10px，主题色滑块）。 */
         '<div style="max-height:240px;overflow-y:auto;border:1px solid var(--btn-border);border-radius:10px;padding:8px 10px;">' + paras + '</div>' +

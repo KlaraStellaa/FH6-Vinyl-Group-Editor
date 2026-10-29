@@ -426,6 +426,13 @@ html[data-scheme="light"] {
 .confirm-btns button { padding: 7px 18px; }
 .confirm-ok { background: #c0392b; }
 
+/* 首次启动帮助提示窗：最顶上一行联系方式（固定文案，不参与多语言）。
+   white-space: pre-wrap 是为了保住 QQ 号与 X 号之间那三个空格的原始间距。 */
+.helphint-contact {
+  font-size: 12px; color: var(--text); margin: 0 0 10px;
+  white-space: pre-wrap; user-select: text;
+}
+
 /* 历史工作锚点选择器 */
 .anchor-box { width: 380px; max-height: 70vh; display: flex; flex-direction: column; }
 .anchor-title { font-size: 13px; color: var(--text); margin-bottom: 10px; }
