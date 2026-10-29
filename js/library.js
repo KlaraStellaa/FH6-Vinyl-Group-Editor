@@ -308,6 +308,11 @@ App.buildLibraryPanel = function () {
         e.dataTransfer.effectAllowed = 'copy';
       });
       tile.addEventListener('click', () => {
+        /* 编辑图层模式：点哪个换哪个（单层编辑目标才响应；多选/分组/背景/合并一律静默不响应） */
+        if (App.state.edit) {
+          App.replacePatternInEdit({ kind: isPat ? 'pattern' : 'symbol', key: item.key });
+          return;
+        }
         if (App.state.replacing) {
           App.replaceSelectedPattern({ kind: isPat ? 'pattern' : 'symbol', key: item.key });
         }
@@ -326,16 +331,14 @@ App.refreshLibraryPanel = function () {
 
 App.findSymbol = key => App.symbolMap.get(key);
 
-/* 更换图案（保持大小、旋转、颜色、透明度） */
-App.replaceSelectedPattern = function (spec) {
-  const sel = App.operationTargets();
-  if (sel.length !== 1) { showToast(App.i18n.t('toast.lib.oneLayerOnly')); return; }
-  const layer = sel[0];
-  if (layer.kind === 'merged') { showToast(App.i18n.t('toast.lib.mergedNoReplace')); return; }
-  App.history.markDiscrete();
+/* 更换图案（保持大小、旋转、颜色、透明度）。
+   把图案写进图层的**核心**：不管历史、不管模式，只改内容并刷新。
+   —— 选中态的「更换图案」按钮与编辑态的「点即换」共用这一段。 */
+App.applyPatternToLayer = function (layer, spec) {
+  if (!layer || !spec) return false;
   if (spec.kind === 'symbol') {
     const sym = App.symbolMap.get(spec.key);
-    if (!sym) return;
+    if (!sym) return false;
     layer.kind = 'symbol';
     layer.symbolKey = spec.key;
     layer.name = sym.label;
@@ -347,7 +350,7 @@ App.replaceSelectedPattern = function (spec) {
     App.normalizeSymbolSize(layer);
   } else {
     const pat = App.patterns.find(p => p.key === spec.key);
-    if (!pat) return;
+    if (!pat) return false;
     layer.kind = 'pattern';
     layer.patternKey = spec.key;
     layer.name = pat.name;
@@ -359,6 +362,48 @@ App.replaceSelectedPattern = function (spec) {
   if (App.dropEditStaticItem) App.dropEditStaticItem(layer);
   if (App.contentChanged) App.contentChanged();
   App.refreshPanel();
+  return true;
+};
+
+/* 当前图层是不是已经是这个图案（点击同一个图案不该产生空撤销步） */
+App.samePattern = function (layer, spec) {
+  if (!layer || !spec) return false;
+  if (spec.kind === 'symbol') return layer.kind === 'symbol' && layer.symbolKey === spec.key;
+  return layer.kind === 'pattern' && layer.patternKey === spec.key;
+};
+
+/* 编辑图层模式：点图案即换（2026-10-29 用户口径）
+   · 只在「单层编辑目标」上生效 —— 多选 / 分组**不响应**；
+   · 背景图 / 合并图层**静默不理**（没有「形状」可换）；
+   · 每点一次 = 编辑会话内一个独立撤销点（Ctrl+Z 一次退一个图案）；
+   · 点到的就是当前图案时不产生空撤销点。 */
+App.replacePatternInEdit = function (spec) {
+  if (!App.state.edit || !spec) return false;
+  const t = App.editTargets();
+  if (t.length !== 1) return false;
+  const layer = t[0];
+  if (!layer || layer.kind === 'bg' || layer.kind === 'merged') return false;
+  if (spec.kind === 'symbol' && !App.symbolMap.get(spec.key)) return false;
+  if (spec.kind === 'pattern' && !App.patterns.find(p => p.key === spec.key)) return false;
+  if (App.samePattern(layer, spec)) return false;
+  if (App.editHist) {
+    App.editHist.endGesture();      /* 有未结束的手势就先收尾，保证这一下是独立一步 */
+    App.editHist.checkpoint();
+    App.editHist.endGesture();
+  }
+  const ok = App.applyPatternToLayer(layer, spec);
+  if (ok && App.requestFlashRefresh) App.requestFlashRefresh();
+  return ok;
+};
+
+/* 更换图案（保持大小、旋转、颜色、透明度）—— 选中态按钮走这条 */
+App.replaceSelectedPattern = function (spec) {
+  const sel = App.operationTargets();
+  if (sel.length !== 1) { showToast(App.i18n.t('toast.lib.oneLayerOnly')); return; }
+  const layer = sel[0];
+  if (layer.kind === 'merged') { showToast(App.i18n.t('toast.lib.mergedNoReplace')); return; }
+  App.history.markDiscrete();
+  if (!App.applyPatternToLayer(layer, spec)) return;
   /* 替换完成：退出更换模式（否则遗留状态会导致之后点击库形状再次误替换），并刷新闪烁动画为新图案 */
   App.setReplacing(false);
   if (App.requestFlashRefresh) App.requestFlashRefresh();

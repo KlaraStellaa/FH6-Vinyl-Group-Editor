@@ -405,13 +405,15 @@ App.ensurePatternDef = function (layer) {
   if (base) { base.setAttribute('fill', layer.color || '#888888'); layer.patBaseRect = base; }
 };
 
-/* transform 组合：translate rotate scale skewX（scale 在旋转之前 => 随图层方向缩放的本地轴缩放）
-   翻转用负缩放实现，位于旋转之前（本地轴翻转） */
+/* transform 组合：translate rotate skewX scale —— **倾斜在缩放外层**（M = T·R·K·S）
+   ⇒ 剪切量 D = tan(倾斜)·高度，只随高度变，改宽度不会把倾角一起缩放（与游戏同构：
+   游戏图层合成也是 R·K·S，见 forza-cgroup.js 的 shapeMatrix）。
+   scale 仍在旋转之后 => 随图层方向缩放的本地轴缩放；翻转用负缩放实现（本地轴翻转）。 */
 App.applyLayerTransform = function (layer) {
   if (!layer.el) return;
   const sfx = layer.flipH ? -1 : 1, sfy = layer.flipV ? -1 : 1;
   layer.el.setAttribute('transform',
-    'translate(' + layer.x + ' ' + layer.y + ') rotate(' + layer.rot + ') scale(' + (layer.sx * sfx) + ' ' + (layer.sy * sfy) + ') skewX(' + layer.skew + ')');
+    'translate(' + layer.x + ' ' + layer.y + ') rotate(' + layer.rot + ') skewX(' + layer.skew + ') scale(' + (layer.sx * sfx) + ' ' + (layer.sy * sfy) + ')');
   layer.el.setAttribute('opacity', layer.opacity);
   if (layer.kind !== 'bg') layer.thumbDirty = true;
 };

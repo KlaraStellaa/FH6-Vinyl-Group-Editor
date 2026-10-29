@@ -2553,13 +2553,14 @@ function fitDrawRect(img, size) {
   cx.drawImage(img, x, y, w, h);
   return { canvas: c, ctx: cx, rect: { x, y, w, h } };
 }
-/* 与图层 transform 同序：先 skewX，再 scale（含翻转负号），再 rotate（本地轴缩放随旋转） */
+/* 与图层 transform 同序：先 scale（含翻转负号），再 skewX，再 rotate
+   （M = R·K·S：倾斜在缩放外层 ⇒ 剪切量 = tan·高度，改宽度不变） */
 function tfPoint(x, y, f) {
-  let px = x + Math.tan(f.skew * D2R) * y;
-  let py = y;
-  px *= f.sx * (f.flipH ? -1 : 1); py *= f.sy * (f.flipV ? -1 : 1);
+  const sy = f.sy * (f.flipV ? -1 : 1);
+  const py0 = y * sy;
+  const px = x * (f.sx * (f.flipH ? -1 : 1)) + Math.tan(f.skew * D2R) * py0;
   const a = f.rot * D2R, c = Math.cos(a), s = Math.sin(a);
-  return [px * c - py * s, px * s + py * c];
+  return [px * c - py0 * s, px * s + py0 * c];
 }
 /* 分析式计算图层内容的本地包围盒（不依赖 getBBox，合并图层克隆体 getBBox 会返回空） */
 App.computeLocalBBox = function (layer) {
@@ -2568,9 +2569,9 @@ App.computeLocalBBox = function (layer) {
     if (l.kind === 'merged') { (l.children || []).forEach(addCorners); return; }
     const hw = (l.w || 0) / 2, hh = (l.h || 0) / 2;
     [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].forEach(p => {
-      let px = p[0] + Math.tan(l.skew * D2R) * p[1];
-      let py = p[1];
-      px *= l.sx * (l.flipH ? -1 : 1); py *= l.sy * (l.flipV ? -1 : 1);
+      /* 与 tfPoint / 图层 transform 同序：scale → skewX → rotate */
+      const py = p[1] * (l.sy * (l.flipV ? -1 : 1));
+      const px = p[0] * (l.sx * (l.flipH ? -1 : 1)) + Math.tan(l.skew * D2R) * py;
       const a = l.rot * D2R, c = Math.cos(a), s = Math.sin(a);
       const rx = px * c - py * s, ry = px * s + py * c;
       minx = Math.min(minx, rx + l.x); maxx = Math.max(maxx, rx + l.x);
@@ -2600,8 +2601,10 @@ App.renderTransformedThumb = function (base, rect, f) {
   cx.translate(24, 24);
   cx.scale(s, s);
   cx.rotate(f.rot * D2R);
-  cx.scale(f.sx * (f.flipH ? -1 : 1), f.sy * (f.flipV ? -1 : 1));
+  /* canvas 是「右乘」，调用顺序 = 从内到外：translate → rotate → skewX → scale
+     （与图层 transform 同序：倾斜在缩放外层） */
   cx.transform(1, 0, Math.tan(f.skew * D2R), 1, 0, 0);
+  cx.scale(f.sx * (f.flipH ? -1 : 1), f.sy * (f.flipV ? -1 : 1));
   cx.drawImage(base, -(rect.x + rect.w / 2), -(rect.y + rect.h / 2));
   return c;
 };
@@ -2971,7 +2974,7 @@ App.mergedThumbGeometry = function (layer) {
     const sx = (Number.isFinite(Number(l.sx)) ? Number(l.sx) : 1) * (l.flipH ? -1 : 1);
     const sy = (Number.isFinite(Number(l.sy)) ? Number(l.sy) : 1) * (l.flipV ? -1 : 1);
     return new DOMMatrix().translate(Number(l.x) || 0, Number(l.y) || 0)
-      .rotate(Number(l.rot) || 0).scale(sx, sy).skewX(Number(l.skew) || 0);
+      .rotate(Number(l.rot) || 0).skewX(Number(l.skew) || 0).scale(sx, sy);
   };
   (function walk(l, parent, isRoot) {
     if (!l) return;
@@ -3112,7 +3115,7 @@ App.svgRasterThumb = async function (layer, size) {
     if (!isFinite(w) || !isFinite(h) || w <= 0 || h <= 0) return Promise.resolve('');
     const pad = Math.max(w, h) * 0.05;
     const sfx = f.flipH ? -1 : 1, sfy = f.flipV ? -1 : 1;
-    clone.setAttribute('transform', 'rotate(' + f.rot + ') scale(' + (f.sx * sfx) + ' ' + (f.sy * sfy) + ') skewX(' + f.skew + ')');
+    clone.setAttribute('transform', 'rotate(' + f.rot + ') skewX(' + f.skew + ') scale(' + (f.sx * sfx) + ' ' + (f.sy * sfy) + ')');
     const host = svgEl('svg');
     host.setAttribute('viewBox', (minx - pad) + ' ' + (miny - pad) + ' ' + (w + 2 * pad) + ' ' + (h + 2 * pad));
     /* 蒙版图层：克隆 sveMaskInd 定义进宿主，否则 url(#sveMaskInd) 无法解析 */

@@ -59,6 +59,49 @@ App.withTransformBatch = function (fn) {
 };
 
 /* ---------- 编辑模式内独立撤销/重做（每个手势一个撤回点；退出编辑后一步撤回整段） ---------- */
+
+/* 图案身份快照：kind / 素材键 / 名字 / 本机尺寸。
+   为什么必须进快照：换图案改的是「内容」，而原来编辑会话的两套快照只存几何与颜色，
+   于是「编辑里换了图案 → Ctrl+Z 退不回去 / Esc 也带不走」（2026-10-29 用户口径）。 */
+App.editPatternSnap = function (it) {
+  return {
+    kind: it.kind,
+    symbolKey: it.symbolKey || null,
+    patternKey: it.patternKey || null,
+    name: it.name,
+    w: it.w, h: it.h
+    /* ★ 不存 dataUri：一个符号的 base64 有几十 KB，80 层撤销点 × 多目标会把内存吃爆。
+       恢复时按 symbolKey 从素材库重新挂接（与 history 的 slim 快照同一口径）。 */
+  };
+};
+/* 把图案快照写回图层；内容身份真变了才重建 DOM（返回 true = 重建过） */
+App.editPatternRestore = function (it, s) {
+  if (!it || !s) return false;
+  const dirty = it.kind !== s.kind ||
+    (s.kind === 'symbol' && it.symbolKey !== s.symbolKey) ||
+    (s.kind === 'pattern' && it.patternKey !== s.patternKey) ||
+    Number(it.w) !== Number(s.w) || Number(it.h) !== Number(s.h);
+  it.kind = s.kind;
+  it.symbolKey = s.symbolKey || null;
+  it.patternKey = s.patternKey || null;
+  it.name = s.name;
+  it.w = s.w; it.h = s.h;
+  it.thumbDirty = true;
+  it.thumbCache = null;
+  if (dirty) {
+    /* 内容身份变了才重新挂素材并重建 DOM（图片按 symbolKey 从素材库取回） */
+    if (it.kind === 'symbol') {
+      it.dataUri = null;
+      if (App.relinkSymbolData) App.relinkSymbolData(it);
+    } else if (it.kind === 'pattern') {
+      it.dataUri = null;
+    }
+    if (App.dropEditStaticItem) App.dropEditStaticItem(it);
+    if (App.rebuildLayerContent) App.rebuildLayerContent(it);
+  }
+  return dirty;
+};
+
 App.editHist = {
   stack: [],
   redoStack: [],
@@ -68,7 +111,9 @@ App.editHist = {
       id: it.id,
       x: it.x, y: it.y, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew, opacity: it.opacity,
       flipH: !!it.flipH, flipV: !!it.flipV,
-      colors: App.leafColorEntries(it)
+      colors: App.leafColorEntries(it),
+      /* 图案（kind / 素材键 / 名字 / 本机尺寸）—— 换图案也要能撤销 */
+      pat: App.editPatternSnap(it)
     }));
   },
   restore: function (snap) {
@@ -80,9 +125,12 @@ App.editHist = {
         if (l && App.state.layers.includes(l)) App.removeTopLayer(l);
       });
     }
+    let patDirty = false;
     snap.forEach(s => {
       const l = App.findLayer(s.id);
       if (!l) return;
+      /* 图案先落位（会按需重建内容与 w/h），再套几何变换与颜色 */
+      if (s.pat && App.editPatternRestore(l, s.pat)) patDirty = true;
       l.x = s.x; l.y = s.y; l.sx = s.sx; l.sy = s.sy;
       l.rot = s.rot; l.skew = s.skew; l.opacity = s.opacity;
       l.flipH = !!s.flipH; l.flipV = !!s.flipV;
@@ -94,6 +142,9 @@ App.editHist = {
     App.drawOutlines();
     App.updateEditValue();
     App.refreshLayerThumbs();
+    /* 图案被换回来时，闪动覆盖层还挂着上一条内容的指纹：立刻重建，
+       避免「图案退回去了、闪的还是新图案」 */
+    if (patDirty && App.requestFlashRefresh) App.requestFlashRefresh(false);
   },
   /* 每个手势开始前记录一次撤回点（手势过程中不重复记录） */
   checkpoint: function () {
@@ -161,7 +212,9 @@ App.enterEdit = function (spec) {
       x: it.x, y: it.y, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew, opacity: it.opacity,
       flipH: !!it.flipH, flipV: !!it.flipV,
       color: it.color,
-      colors: App.leafColorEntries(it)
+      colors: App.leafColorEntries(it),
+      /* Esc 回滚必须连图案一起带走（进门那一刻的图案身份） */
+      pat: App.editPatternSnap(it)
     })),
   };
   /* 多选整组（≥2 目标）：初始化组矩阵会话——整组倾斜/缩放/旋转与合并分组
@@ -232,6 +285,8 @@ App.exitEdit = function (cancel) {
         s.it.sx = s.sx; s.it.sy = s.sy;
         s.it.rot = s.rot; s.it.skew = s.skew; s.it.opacity = s.opacity;
         s.it.flipH = !!s.flipH; s.it.flipV = !!s.flipV;
+        /* 图案回到进门那一刻（必要时重建内容与 w/h）—— Esc = 这趟没来过，图案一并不许留 */
+        if (s.pat) App.editPatternRestore(s.it, s.pat);
         App.applyItemTransform(s.it);
         App.markThumbDirty(s.it);
         /* 颜色恢复到各叶子图层的原始颜色（嵌套分组递归，不经过分组的空颜色） */
@@ -529,7 +584,9 @@ function groupCenter(items) {
    组内容中心 C，任何组级操作只累积组参数 {rot, skew, sx, sy}，随后
    每层从 G(C, 参数)·M0 精确分解回字段（矩阵分解与 splitMerged 烘焙同源）。
    这样任意仿射组合（含旋转层的倾斜/非等比缩放）都与合并分组完全等价。 */
-/* 成员完整文档矩阵（字段 → 仿射，含位移）：T(x,y)·R(rot)·S(sx,sy)·K(skew)，翻转=负号进 S */
+/* 成员完整文档矩阵（字段 → 仿射，含位移）：T(x,y)·R(rot)·K(skew)·S(sx,sy)，翻转=负号进 S
+   ★ 倾斜在缩放外层（与 DOM transform、游戏 shapeMatrix 三方同序）：
+     剪切列不乘 sx ⇒ 改宽度不会改变倾角。 */
 function layerDocMatrix(it) {
   const sxf = (it.flipH ? -1 : 1) * (it.sx || 1);
   const syf = (it.flipV ? -1 : 1) * (it.sy || 1);
@@ -537,14 +594,15 @@ function layerDocMatrix(it) {
   const a0 = Math.cos((it.rot || 0) * D2R), b0 = Math.sin((it.rot || 0) * D2R);
   return {
     a: a0 * sxf, b: b0 * sxf,
-    c: a0 * sxf * t - b0 * syf, d: b0 * sxf * t + a0 * syf,
+    c: syf * (a0 * t - b0), d: syf * (b0 * t + a0),
     e: it.x, f: it.y
   };
 }
-/* 组矩阵：G = T(C)·R(rot)·S(sx,sy)·K(skew)·T(-C)（与分组根 transform 同序，绕组内容中心） */
+/* 组矩阵：G = T(C)·R(rot)·K(skew)·S(sx,sy)·T(-C)（与分组根 transform 同序，绕组内容中心） */
 function groupMatrix(g, C) {
   return App.FZA.matFromString('translate(' + C.x + ' ' + C.y + ') rotate(' + (g.rot || 0) +
-    ') scale(' + (g.sx || 1) + ' ' + (g.sy || 1) + ') skewX(' + (g.skew || 0) + ') translate(' + (-C.x) + ' ' + (-C.y) + ')');
+    ') skewX(' + (g.skew || 0) + ') scale(' + (g.sx || 1) + ' ' + (g.sy || 1) +
+    ') translate(' + (-C.x) + ' ' + (-C.y) + ')');
 }
 /* 把组参数分解写回每个成员的字段（每层 = G·M0），并同步 el 变换。
    返回 false = 当前会话无组状态（调用方走原单层/合并逻辑） */
@@ -1641,39 +1699,26 @@ App.onEditPointerMove = function (e) {
     }
     const lx = dx * dxx + dy * dxy; // 沿本地 x 的拖拽分量
     const ly = dx * dyx + dy * dyy; // 沿本地 y 的拖拽分量
-    /* ★ 手柄直接跟手：被拖的手柄走多远 = 鼠标走多远（都按本地轴投影）。
-       换算分母 = 手柄相对「缩放固定点」的偏移量，在「缩放参数 = 1」的那个尺度上量：
-         · 单个目标（普通图层 / 合并分组 / 背景）：固定点 = 锚点或内容中心，
-           偏移就是内容半宽/半高；角手柄还要带上 skew 引起的水平分量（W + tan(skew)·H）；
-         · 多选整组：组缩放参数从 1 起算，偏移就是「手柄相对组内容中心的旋转后偏移」。
-       分母与 sx/sy、翻转都无关 —— 它们同时出现在「偏移」和「缩放参数」里，正好约掉。
-       （旧实现固定除以 200：手柄只走「本机尺寸/200」倍 —— 128 的图案鼠标拖 100 只走 64，
-        1920 宽的背景图反过来跑 9.6 倍，这就是「手柄移动与鼠标移动距离不一致」。） */
     const _lcs = App.localContentSize(it);
-    const _tanS = Math.tan(((it && it.skew) || 0) * D2R);
     /* ★★ 缩放换算**只有这一份**：给一个（虚拟）手柄的本地偏移，算出它两个分母。
        上下左右四条边、四个角、以及「框外拖动」，全部调它 —— 不存在第二套公式。
        手柄直接跟手：被拖的手柄走多远 = 鼠标走多远（都按本地轴投影）。
        换算分母 = 手柄相对「缩放固定点」的偏移量，在「缩放参数 = 1」的那个尺度上量：
          · 单个目标（普通图层 / 合并分组 / 背景）：固定点 = 锚点或内容中心，
-           偏移就是内容半宽/半高；角手柄还要带上 skew 引起的水平分量（W + tan(skew)·H）；
+           偏移就是内容半宽/半高；
          · 多选整组：组缩放参数从 1 起算，偏移就是「手柄相对组内容中心的旋转后偏移」。
        分母与 sx/sy、翻转都无关 —— 它们同时出现在「偏移」和「缩放参数」里，正好约掉。
-       （旧实现固定除以 200：手柄只走「本机尺寸/200」倍 —— 128 的图案鼠标拖 100 只走 64，
-        1920 宽的背景图反过来跑 9.6 倍，这就是「手柄移动与鼠标移动距离不一致」。）
-       ★ 有锚点（单目标）：缩放的固定点是**锚点**，不是内容中心 —— 分母必须换成
-       「手柄相对锚点」的本地偏移（2026-10-02 用户报障「放置锚点后拖手柄，手柄位移与鼠标不一致」）。
-       锚点被 clampToQuad 限制在内容四边形内 ⇒ 同一轴的两个手柄偏移符号相反，取绝对值即可。
-       手柄的**本地坐标**要带分组中心偏移：合并分组的内容盒是组本地包围盒（el.getBBox），
-       中心 (lcx,lcy) 一般不在原点上（实测合并后 lcx=-30、lcy=25），少了它手柄走不到位。 */
+       ★ 2026-10-30：倾斜改成「在缩放外层」之后，角手柄的水平偏移 = sx·hx + tan·sy·hy，
+         **对 sx 求导只剩 hx**（tan·sy·hy 那一项不再随宽度变）⇒ 分母里不许再带 tan 分量，
+         否则倾斜过的图案拖角手柄会跟不上鼠标。 */
     const _hc = (it && it.kind === 'merged') ? App.mergedLocalCenter(it) : { lcx: 0, lcy: 0 };
     const _denFor = function (hx, hy) {
-      let denX = 2 * (Math.abs(hx) + _tanS * Math.abs(hy));
+      let denX = 2 * Math.abs(hx);
       let denY = 2 * Math.abs(hy);
       if (App.drag.anchorFix && App.drag.snap.length === 1) {
         const _ox = (_hc.lcx + hx) - App.drag.anchorFix.x;
         const _oy = (_hc.lcy + hy) - App.drag.anchorFix.y;
-        denX = 2 * Math.abs(_ox + _tanS * _oy);
+        denX = 2 * Math.abs(_ox);
         denY = 2 * Math.abs(_oy);
       }
       /* 退化保护：手柄正好落在固定点上时分母趋零，退回一个安全的等效尺度 */

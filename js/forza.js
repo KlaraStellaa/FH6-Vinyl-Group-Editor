@@ -44,8 +44,10 @@ App.FZA.symbolDefMap = function () {
    单位约定（改这里之前先读一遍）：
      · 编辑器模型 it.skew 是**角度**（度）—— model.js 写 `skewX(deg)`、editmode 用 `skew*D2R`
      · FH6 / Forza 二进制里的 skew 是**正切**（无量纲）—— 见 decomposeFza / forza-cgroup
-     两者的换算经由「矩阵」隐式完成（skewX(deg) 的矩阵 c = tan(deg)），
-     所以这里只负责角度→矩阵，不要去改 FH6 字段的语义。 */
+     两者的换算经由「矩阵」隐式完成（skewX(deg) 的矩阵 c = tan(deg)）。
+     ★ 2026-10-30：编辑器与游戏的合成顺序已统一成 M = R·K·S（倾斜在缩放外层），
+       所以两边是**同一个量**：FH6 skew 字段 == -tan(编辑器 skew°)，不再有过去那个
+       (sx/sy) 系数 —— 改宽度不会再改变导出/游戏里的倾斜。 */
 App.FZA.SKEW_LIMIT = 89.99;              // 奇点兜底值（距 ±90° 仅 0.01°，任何真实图案都远达不到）
 App.FZA.SKEW_SINGULAR = 1e15;            // |tan| 超过此值即判定为落在奇点上
 App.FZA.normalizeSkew = function (deg) {
@@ -63,7 +65,10 @@ App.FZA.skewTan = function (deg) {
   return Math.tan(App.FZA.normalizeSkew(d) * D2R);
 };
 
-/* 图层 2x2 矩阵（与 transform 同序：rotate·scale·skewX，翻转折入缩放符号） */
+/* 图层 2x2 矩阵（与 transform 同序：rotate·skewX·scale，翻转折入缩放符号）
+   ★ 2026-10-30 定稿口径：**倾斜在缩放外层**（M = R·K·S），与游戏的图层合成完全同构
+   （见 forza-cgroup.js 的 shapeMatrix）。这样「倾斜角」= 侧边相对竖直的真实倾角
+   （D = tan(θ)·H），只随高度变化，**改宽度不会把倾角一起缩放**。 */
 App.FZA.layerMatrix = function (l) {
   const sxf = (l.flipH ? -1 : 1) * (l.sx || 1);
   const syf = (l.flipV ? -1 : 1) * (l.sy || 1);
@@ -72,8 +77,8 @@ App.FZA.layerMatrix = function (l) {
   return {
     a: a0 * sxf,
     b: b0 * sxf,
-    c: a0 * sxf * t - b0 * syf,
-    d: b0 * sxf * t + a0 * syf
+    c: syf * (a0 * t - b0),
+    d: syf * (b0 * t + a0)
   };
 };
 
@@ -124,14 +129,19 @@ App.FZA.matFromString = function (str) {
 };
 
 /* SVG 矩阵 -> 编辑器模型参数（y 向下，内容中心锚点，rot/skew 为角度）。
-   与 Inkscape2Forza decompose_matrix 互逆：FH6 rot = -编辑器的 rot，FH6 skew = -(sx/sy)·tan(编辑器的 skew°) */
+   分解对象是 M = R(rot)·K(tan skew)·S(sx,sy)（与游戏 shapeMatrix / 本编辑器 transform 同序）：
+     rot = atan2(b, a)，sx = hypot(a, b)；
+     sy  = -c·sin(rot) + d·cos(rot)；
+     tan = (c·cos(rot) + d·sin(rot)) / sy
+   ⇒ skew 是**倾斜在缩放外层**的斜率，与 FH6 二进制里的 skew 字段同一个量（不再有 sx/sy 系数）。 */
 App.FZA.decomposeToModel = function (M) {
   const a = M.a, b = M.b, c = M.c, d = M.d;
   const rot = Math.atan2(b, a) * 180 / Math.PI;
   const sx = Math.hypot(a, b);
   const rr = rot * D2R;
-  const sy = d * Math.cos(rr) - c * Math.sin(rr);
-  const t = sx > 1e-9 ? (a * c + b * d) / (a * a + b * b) : 0;
+  const ca = Math.cos(rr), sa = Math.sin(rr);
+  const sy = -c * sa + d * ca;
+  const t = Math.abs(sy) > 1e-9 ? (c * ca + d * sa) / sy : 0;
   /* atan 的值域是 (-90°, 90°)，本来就到不了 ±90°；
      但 SVG 里真写 `skewX(90)` 时 t = 1.63e16 → atan 给到 89.99999999999999，
      已经落在奇点上。这里统一过一道 normalizeSkew：
@@ -152,9 +162,9 @@ App.FZA.modelToFzaMatrix = function (l) {
      避免把 1.63e16 这种垃圾写进存档。除奇点外与裸 Math.tan 逐位一致，
      所以注入/导出的保真度不受影响。 */
   const t = App.FZA.skewTan(l.skew);
-  /* 矩阵 R(rot)·S(sx,sy)·K(t)（与 transform 同序） */
+  /* 矩阵 R(rot)·K(t)·S(sx,sy)（与 transform / 游戏 shapeMatrix 同序：倾斜在缩放外层） */
   const a0 = Math.cos((l.rot || 0) * D2R), b0 = Math.sin((l.rot || 0) * D2R);
-  const a = a0 * sx, b = b0 * sx, c = a0 * sx * t - b0 * sy, d = b0 * sx * t + a0 * sy;
+  const a = a0 * sx, b = b0 * sx, c = sy * (a0 * t - b0), d = sy * (b0 * t + a0);
   /* 分解为 Inkscape2Forza 参数（其 importer 的逆分解在此形式上无损），再按其约定合成 */
   const sxF = Math.hypot(a, b);
   const rotF = Math.atan2(-b, a);

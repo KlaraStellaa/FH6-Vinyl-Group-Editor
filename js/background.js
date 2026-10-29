@@ -345,8 +345,9 @@ App.setBackgroundImage = function (dataUrl) {
 App.applyBgTransform = function (m) {
   if (!m.el) return;
   const sfx = m.flipH ? -1 : 1, sfy = m.flipV ? -1 : 1;
+  /* 与图层同序：translate rotate skewX scale（倾斜在缩放外层，见 js/model.js） */
   m.el.setAttribute('transform',
-    'translate(' + m.x + ' ' + m.y + ') rotate(' + m.rot + ') scale(' + (m.sx * sfx) + ' ' + (m.sy * sfy) + ') skewX(' + m.skew + ')');
+    'translate(' + m.x + ' ' + m.y + ') rotate(' + m.rot + ') skewX(' + m.skew + ') scale(' + (m.sx * sfx) + ' ' + (m.sy * sfy) + ')');
   m.el.setAttribute('opacity', m.opacity);
   m.el.setAttribute('pointer-events', App.state.edit && App.state.edit.type === 'bg' && App.state.editMode === 'move' ? 'all' : 'none');
 };
@@ -396,9 +397,11 @@ App.sampleBackgroundColor = function (clientX, clientY) {
   cx.clearRect(0, 0, w, h);
   cx.setTransform(v.scale, 0, 0, v.scale, -v.x * v.scale, -v.y * v.scale);
   cx.translate(m.x, m.y);
-  cx.scale(m.sx * (m.flipH ? -1 : 1), m.sy * (m.flipV ? -1 : 1));
+  /* 与 applyBgTransform 同序：translate → rotate → skewX → scale
+     （倾斜在缩放外层；以前这里是 scale 在前，取色采样与画布显示不一致） */
   cx.rotate(m.rot * D2R);
   cx.transform(1, 0, Math.tan(m.skew * D2R), 1, 0, 0);
+  cx.scale(m.sx * (m.flipH ? -1 : 1), m.sy * (m.flipV ? -1 : 1));
   cx.drawImage(m.imgEl, -m.w / 2, -m.h / 2, m.w, m.h);
   const px = clamp(Math.round(clientX - r.left), 0, w - 1);
   const py = clamp(Math.round(clientY - r.top), 0, h - 1);
