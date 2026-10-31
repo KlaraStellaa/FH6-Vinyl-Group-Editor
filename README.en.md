@@ -152,6 +152,12 @@ Skipping semi-transparent layers can affect the visual result, and raising the t
 
 ## What's New
 
+### v1.3.4
+
+- Fixed: the thumbnail no longer differs from the shape that is actually inserted
+- The vinyl pattern library now uses pre-rendered thumbnails, so the panel opens faster and scrolls smoothly
+- Two sets of work-session reading rules, so work sessions saved by earlier versions stay readable
+
 ### v1.2.0
 
 - Added group inner editing feature
@@ -170,6 +176,10 @@ This project's inspiration and its understanding of the underlying resource stru
 Thanks to **F3ankk** for help with the tricky parts of this project.
 
 Sincere thanks to the original author and the open-source community.
+
+## License
+
+Released under the **MIT** license. See [LICENSE](LICENSE) for details.
 
 ## Disclaimer
 
