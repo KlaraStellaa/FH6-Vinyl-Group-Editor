@@ -1,16 +1,4 @@
 'use strict';
-/* ================= 检测到更新（软件自己的窗口） =================
-   用户口径（2026-10-26）：
-     · 左上角标题：**检测到更新 🎆🎆**
-     · 中间：最新版本的更新说明（Release 的 body，不是标题）
-     · 右下角两个按键：左「取消」、右「更新」
-     · 点「更新」→ 立刻自动下载 exe → 覆盖原软件 → 自动重启；
-       已保存的 SVG / 工作进程 / 字体包 / 快捷键 / 速率等设置**一个都不能变**
-     · 取消 = 本次关窗，下次启动还提示（不记「跳过此版本」）
-     · 开发模式（start.bat）没有 exe 可覆盖 ⇒ 只提示不动
-
-   数据为什么不丢：便携版的数据目录 = exe 所在目录（`appDataDir()`），
-   覆盖只动那一个 exe 文件，其余目录与 settings.json 原地不动。 */
 App.UPD_I18N = {
   'zh-CN': {
     'upd.title': '检测到更新 🎆🎆',
@@ -92,17 +80,16 @@ App.updateDlg = {
   info: null,
   busy: false,
 
-  /* Release 说明是 Markdown：这里只做「读得顺」的轻量清洗，不引入渲染器 */
   plainNotes(md) {
     let t = String(md || '');
     if (!t.trim()) return '';
     t = t.replace(/\r\n/g, '\n');
-    t = t.replace(/```[\s\S]*?```/g, m => m.replace(/```[a-z]*\n?/gi, '').replace(/```/g, ''));  /* 代码块去掉围栏 */
-    t = t.replace(/!\[[^\]]*\]\([^)]*\)/g, '');                    /* 图片整条丢掉 */
-    t = t.replace(/\[([^\]]*)\]\(([^)]*)\)/g, '$1（$2）');          /* 链接 → 文字（地址） */
-    t = t.replace(/^\s{0,3}#{1,6}\s*/gm, '');                       /* 标题井号 */
-    t = t.replace(/^\s{0,3}>\s?/gm, '');                            /* 引用 */
-    t = t.replace(/^\s{0,3}[-*+]\s+/gm, '· ');                      /* 列表 */
+    t = t.replace(/```[\s\S]*?```/g, m => m.replace(/```[a-z]*\n?/gi, '').replace(/```/g, ''));   
+    t = t.replace(/!\[[^\]]*\]\([^)]*\)/g, '');                     
+    t = t.replace(/\[([^\]]*)\]\(([^)]*)\)/g, '$1（$2）');           
+    t = t.replace(/^\s{0,3}#{1,6}\s*/gm, '');                        
+    t = t.replace(/^\s{0,3}>\s?/gm, '');                             
+    t = t.replace(/^\s{0,3}[-*+]\s+/gm, '· ');                       
     t = t.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/__([^_]+)__/g, '$1');
     t = t.replace(/`([^`]+)`/g, '$1');
     t = t.replace(/\n{3,}/g, '\n\n');
@@ -112,8 +99,6 @@ App.updateDlg = {
   show(info) {
     if (!info || this.busy) return;
     this.info = info;
-    /* 同 id 的旧窗口可能还在关闭动画里（hideOverlay 不是立即移除）⇒ 按 id 全清，
-       否则 getElementById 会拿到旧的那一个，按钮状态全错。 */
     Array.from(document.querySelectorAll('#updateOv')).forEach(el => el.remove());
     this.el = null;
     const ov = document.createElement('div');
@@ -139,7 +124,6 @@ App.updateDlg = {
     go.textContent = App.i18n.t('upd.update');
     const hint = ov.querySelector('.upd-hint');
 
-    /* 开发模式 / 没有 exe 附件：只提示不动（按钮禁用） */
     const blocked = !!(info.isDev || !info.exeUrl);
     if (blocked) {
       hint.textContent = App.i18n.t(info.isDev ? 'upd.devHint' : 'upd.noAsset');
@@ -155,21 +139,17 @@ App.updateDlg = {
   },
 
   close() {
-    /* 直接摘掉节点：更新窗不需要关闭动画，立即移除才能保证「点取消就没了」。 */
     const el = this.el || document.getElementById('updateOv');
     this.el = null;
     if (el && el.parentNode) el.parentNode.removeChild(el);
   },
 
-  /* 字节数给人看：GitHub 附件在本机只有 100~220KB/s，92MB 要 7~16 分钟，
-     只显示百分比会让人以为「卡在 0%」——必须同时给出「已下 / 总量」。 */
   fmtMB(n) {
     const mb = Number(n || 0) / 1048576;
     if (!mb) return '0 MB';
     return (mb >= 100 ? mb.toFixed(0) : mb.toFixed(1)) + ' MB';
   },
 
-  /* 进度渲染单独抽出来：CDP 判据可以直接喂一个假 pr 验文案，不必真下 92MB */
   applyProgress(pr) {
     if (!this.el || !pr) return false;
     const go = this.el.querySelector('#updGo');
@@ -182,7 +162,6 @@ App.updateDlg = {
     return true;
   },
 
-  /* 原始错误 → 人话（判据要能吃住这些映射） */
   friendlyError(raw) {
     const s = String(raw || '');
     if (/ERR_CONNECTION_RESET|ERR_CONNECTION_CLOSED|ERR_CONNECTION_ABORTED|ERR_NETWORK_CHANGED|ERR_INTERNET_DISCONNECTED/i.test(s)) {
@@ -193,8 +172,6 @@ App.updateDlg = {
     return s.slice(0, 80);
   },
 
-  /* ★ 两个「测试缝」：默认走 preload 暴露的真实 IPC，判据可以换成计数桩
-     （contextBridge 暴露的对象是只读的，判据没法直接改写 window.sveApi.*）。 */
   _opener: null,
   _installer: null,
 
@@ -205,8 +182,6 @@ App.updateDlg = {
     return run();
   },
 
-  /* ★ 2026-10-29 用户口径：更新失败后**自动打开 GitHub 仓库**（浏览器里可以手动下载/挂代理）。
-     仓库地址由主进程从 package.json 的 repository 解析，这里不写死 owner/repo。 */
   openRepo() {
     const hint = this.el && this.el.querySelector('.upd-hint');
     if (hint) {
@@ -215,8 +190,8 @@ App.updateDlg = {
     }
     try {
       const p = this.openRepoArg();
-      if (p && typeof p.catch === 'function') p.catch(function () { /* 打不开浏览器也不该再抛 */ });
-    } catch (e) { /* ignore */ }
+      if (p && typeof p.catch === 'function') p.catch(function () {   });
+    } catch (e) {   }
     return true;
   },
 
@@ -236,7 +211,7 @@ App.updateDlg = {
       const r = await install({ exeUrl: this.info.exeUrl, version: this.info.remote });
       if (r && r.ok) {
         if (go) go.textContent = App.i18n.t('upd.done');
-        return;   /* 主进程会自己重启，窗口随进程一起消失 */
+        return;    
       }
       throw new Error((r && r.error) || 'unknown');
     } catch (e) {
@@ -250,7 +225,6 @@ App.updateDlg = {
       const msg = App.i18n.t('upd.fail').replace('{v}', this.friendlyError(e && e.message || e));
       if (typeof showToast === 'function') showToast(msg, 4200);
       else console.warn('[update]', msg);
-      /* 失败即打开仓库 —— 不管失败原因是网络还是文件系统，用户都能自己去下 */
       this.openRepo();
     }
   },

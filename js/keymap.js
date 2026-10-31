@@ -1,15 +1,5 @@
 'use strict';
-/* 快捷键自定义（渲染层）：
-     App.keymap    —— 当前绑定表（默认值 ← settings.json 的 keymap 差分）、查表、改键
-     App.keymapUI  —— 设置窗内的「自定义快捷键」视图（入口按钮 + 列表 + 重置/取消/确认）
-   规则全在根目录 keymap.js（纯函数）；这里只管状态与界面。
 
-   三按钮语义与「编辑速率」窗口**完全一致**：
-     重置 = 只把临时绑定表恢复默认，不落盘（还要点确认才生效）
-     取消 = 丢弃本次改动，回到打开窗口前的绑定表并关闭窗口
-     确认 = 保留本次改动，写入 settings.json 并关闭窗口 */
-
-/* ---------- 词典（加载时并入 App.i18n.dicts，与 shortcuts.js 同一套做法） ---------- */
 App.KM_I18N = {
   'zh-CN': {
     'settings.keymap': '自定义快捷键',
@@ -171,10 +161,9 @@ Object.keys(App.KM_I18N).forEach(function (lang) {
   if (App.i18n.dicts[lang]) Object.assign(App.i18n.dicts[lang], App.KM_I18N[lang]);
 });
 
-/* ================= 绑定表状态 ================= */
 App.keymap = {
   map: null,
-  index: null,     /* 上下文 → { 规范组合串: 动作 id }，每次改表重建（查表 O(1)） */
+  index: null,      
 
   init() {
     this.map = window.SVE_KEYMAP.resolve(null);
@@ -182,15 +171,12 @@ App.keymap = {
     return this.map;
   },
 
-  /* 用 settings.json 里的差分覆盖默认值（非法项自动回退默认） */
   load(saved) {
     this.map = window.SVE_KEYMAP.resolve(saved || null);
     this.reindex();
     return this.map;
   },
 
-  /* 索引里同时登记「松散匹配」变体：无 Ctrl/Alt 的组合也接住 Shift+本键，
-     与 keymap.js 的 matchesEvent 规则保持一致（W 与 Shift+W 等效）。 */
   reindex() {
     const KM = window.SVE_KEYMAP;
     const idx = { global: {}, canvas: {}, edit: {} };
@@ -206,7 +192,6 @@ App.keymap = {
 
   combos(id) { return (this.map[id] || []).slice(); },
 
-  /* 当前按键属于哪个动作：先查本上下文，再查通用（编辑模式内 Tab=翻转 覆盖画布 Tab=高亮） */
   actionFor(e, ctx) {
     if (!this.index) return null;
     const canon = window.SVE_KEYMAP.normalizeKey(e);
@@ -216,8 +201,6 @@ App.keymap = {
     return this.index.global[canon] || null;
   },
 
-  /* 改一个槽位。若新组合被「同上下文 / 通用」的别的动作占用 → 两者**交换**，
-     这样永远不会出现「某动作没绑定」或「两个动作抢同一个键」。返回被交换的动作 id 列表。 */
   setCombo(id, slot, combo) {
     const KM = window.SVE_KEYMAP;
     const mine = this.map[id];
@@ -237,9 +220,6 @@ App.keymap = {
     return swapped;
   },
 
-  /* 给「一个绑定都没有」的动作新增一条绑定（modePrev / modeNext 的键盘默认就是空数组）。
-     撞车时没有旧键可交换 ⇒ 直接拒绝并返回撞车的动作 id；非法组合返回 null；成功返回 ''。
-     与 setCombo 的交换语义互补：交换只解决「有旧键」，新增只解决「一个键都没有」。 */
   addCombo(id, combo) {
     const KM = window.SVE_KEYMAP;
     if (!KM || !this.map[id] || !KM.isValidCombo(combo)) return null;
@@ -261,27 +241,21 @@ App.keymap = {
   resetToDefaults() { this.map = window.SVE_KEYMAP.resolve(null); this.reindex(); },
   isDefault() { return Object.keys(window.SVE_KEYMAP.toSaved(this.map)).length === 0; },
   conflicts() { return window.SVE_KEYMAP.conflicts(this.map); },
-  /* 落盘用：只存与默认值不同的动作 */
   payload() { return window.SVE_KEYMAP.toSaved(this.map); },
-  /* 显示用：把某个动作的绑定拆成 chip 列表 */
   display(id) {
     return this.combos(id).map(c => window.SVE_KEYMAP.displayParts(c));
   }
 };
 App.keymap.init();
 
-/* ================= 设置窗内的快捷键视图 ================= */
 App.keymapUI = {
-  el: null,          /* #settingsKeyView */
-  box: null,         /* .confirm-box */
-  capturing: null,   /* { id, slot, btn } */
-  gpCap: null,       /* 手柄捕获：{ id, slot, btn } */
+  el: null,           
+  box: null,          
+  capturing: null,    
+  gpCap: null,        
   snapshot: null,
   gpSnapshot: null,
-  mode: 'key',       /* key = 键盘绑定 · pad = 手柄绑定 */
-  /* 「待绑定」的动作：**默认一个键都没绑**，但仍然要出现在改键名单里（带一个「+」让用户自己绑）。
-     2026-10-29 03:35 用户口径：切标签页这两个动作不许占默认快捷键（原来占着 ctrl+Tab / LT+RT，
-     把「LT/RT = Tab」顶掉了），但要在设置里留着，等用户自己绑。 */
+  mode: 'key',        
   PENDING: ['tabPrev', 'tabNext'],
 
   build(box) {
@@ -290,14 +264,11 @@ App.keymapUI = {
     if (!view) return null;
     this.el = view;
     view.innerHTML =
-      /* 第一个是「画布拖动使用空格」开关：
-         开（默认）= 按住空格才能拖动平移画布；关 = 鼠标直接拖动即可平移。 */
       '<div class="km-opt-row">' +
         '<label class="km-opt-label" for="kmPanSpace" data-i18n="km.panSpace"></label>' +
         '<label class="sve-switch"><input type="checkbox" id="kmPanSpace">' +
           '<span class="sve-switch-track" aria-hidden="true"></span></label>' +
       '</div>' +
-      /* 紧贴它的**下方**：键盘 / 手柄 两个切换钮（与软件其它切换钮同一套 ev-tabs 组件 + glider） */
       '<div class="km-mode-row">' +
         '<div class="ev-tabs"><div class="ev-tabs-track">' +
           '<input type="radio" id="kmModeKey" name="kmMode" value="key" checked>' +
@@ -316,8 +287,6 @@ App.keymapUI = {
         '<button class="km-ok" data-i18n="speed.ok"></button>' +
       '</div>';
     if (App.i18n && App.i18n.apply) App.i18n.apply(view);
-    /* 「画布拖动使用空格」开关：**即时生效 + 立即落盘**（与设置窗主视图的语言/主题同一做法）。
-       它不参与本视图「重置 / 取消 / 确认」的快照 —— 那三个按钮管的是键位绑定。 */
     const panSw = view.querySelector('#kmPanSpace');
     if (panSw) {
       panSw.checked = App.settings.panNeedsSpace !== false;
@@ -326,7 +295,6 @@ App.keymapUI = {
         App.settings.save();
       });
     }
-    /* 键盘 / 手柄 视图切换：只换下面那份列表，快照（取消回滚点）不受影响 */
     const modeWrap = view.querySelector('.km-mode-row');
     if (modeWrap) {
       const posGlider = () => {
@@ -340,7 +308,7 @@ App.keymapUI = {
       };
       modeWrap.querySelectorAll('input[type="radio"]').forEach(r => {
         r.addEventListener('change', () => {
-          this.stopCapture();          /* 切视图 = 放弃正在进行的按键捕获 */
+          this.stopCapture();           
           this.mode = r.value;
           posGlider();
           this.render();
@@ -352,62 +320,44 @@ App.keymapUI = {
     view.querySelector('.km-reset').addEventListener('click', () => this.reset());
     view.querySelector('.km-cancel').addEventListener('click', () => this.cancel());
     view.querySelector('.km-ok').addEventListener('click', () => this.commit());
-    /* 列表用事件委托：键位框是每次重渲重建的 */
     view.querySelector('#kmList').addEventListener('click', e => {
       const b = e.target && e.target.closest ? e.target.closest('.km-key') : null;
       if (!b) return;
       e.preventDefault();
-      /* 手柄视图：键位框上挂的是手柄按键 id，不是键盘组合串 */
       if (this.mode === 'pad') {
-        if (this.gpCap && this.gpCap.btn === b) { this.stopCapture(); return; }   /* 再点一次=放弃 */
+        if (this.gpCap && this.gpCap.btn === b) { this.stopCapture(); return; }    
         const gadd = b.getAttribute('data-gp-add');
-        if (gadd) { this.startGpCapture(gadd, 0, b, true); return; }              /* 待绑定 → 新增 */
+        if (gadd) { this.startGpCapture(gadd, 0, b, true); return; }               
         const gid = b.getAttribute('data-gp-act');
         if (gid) this.startGpCapture(gid, parseInt(b.getAttribute('data-gp-slot'), 10), b);
         return;
       }
       const id = b.getAttribute('data-act'), slot = parseInt(b.getAttribute('data-slot'), 10);
-      if (this.capturing && this.capturing.btn === b) { this.stopCapture(); return; }   /* 再点一次=放弃 */
+      if (this.capturing && this.capturing.btn === b) { this.stopCapture(); return; }    
       this.startCapture(id, slot, b, b.getAttribute('data-add') === '1');
     });
     this.render();
     return view;
   },
 
-  /* 列表：分组标题 + 每行「动作名 + 若干键位框」。
-     两个视图（键盘 / 手柄）共用同一副外壳与同一套分组，只有键位框的来源不同。 */
   render() {
     if (!this.el) return;
     const list = this.el.querySelector('#kmList');
     if (!list) return;
     if (this.mode === 'pad') this.renderPad(list);
     else this.renderKeys(list);
-    /* 改键期间绑定**已经生效**（动作立刻可用），所以编辑条上的键位提示也必须同步，
-       不能等点「确认」——否则窗口里写着 Q、编辑条还写着 3。 */
     if (App.refreshEditBarKeys) App.refreshEditBarKeys();
   },
 
-  /* 说明文字：键盘 / 手柄**共用同一句**（2026-10-29 03:30 用户口径）——
-     「点击按键框后按下新按键；与已有键位撞车时会自动与对方交换」。
-     它挂在 #kmHint 的静态 data-i18n="km.hint" 上，apply() 自己会跟着语言重刷，
-     所以不需要再按视图切一次文案。 */
 
-  /* 两个视图（键盘 / 手柄）**共用这一个渲染器**：
-       · 分组永远是 SVE_KEYMAP.GROUPS 那三组（通用 / 画布 / 编辑模式），顺序也一致 ——
-         手柄这边与键盘那边**分类完全一样**，不会各写一套；
-       · 2026-10-29 03:24 用户口径：**没有可改键的那一行整行不出现**（不是留个空格位），
-         未绑定的按键不进可绑定名单；一组里一条绑定都没有的话，连组标题都不出现；
-       · 唯一的差别只有「键位框长什么样」：`makeChip` 由调用方给。
-     combosOf(a.id) 返回该视图这一侧当前的绑定数组（键盘=组合串，手柄=按键 id）。 */
   renderList(list, combosOf, makeChip, makeAdd) {
     const t = k => App.i18n.t(k);
     const PENDING = this.PENDING;
     list.innerHTML = '';
     window.SVE_KEYMAP.GROUPS.forEach(g => {
-      /* 只保留「这一侧有绑定」的动作；PENDING 里的动作即使没绑定也留着（待绑定） */
       const acts = window.SVE_KEYMAP.ACTIONS.filter(a =>
         a.ctx === g.ctx && (combosOf(a.id).length || PENDING.indexOf(a.id) >= 0));
-      if (!acts.length) return;                  /* 整组都没有可改键 → 整组不出现 */
+      if (!acts.length) return;                   
       const box = document.createElement('div');
       box.className = 'km-group';
       box.setAttribute('data-km-ctx', g.ctx);
@@ -427,7 +377,7 @@ App.keymapUI = {
         keys.className = 'km-keys';
         const vals = combosOf(a.id);
         vals.forEach((v, slot) => keys.appendChild(makeChip(a.id, v, slot)));
-        if (!vals.length) keys.appendChild(makeAdd(a.id));   /* 待绑定：虚线「+」自己绑 */
+        if (!vals.length) keys.appendChild(makeAdd(a.id));    
         row.appendChild(keys);
         box.appendChild(row);
       });
@@ -437,7 +387,6 @@ App.keymapUI = {
     else this.renderConflicts();
   },
 
-  /* 键盘视图：键位框 = 键盘组合串 */
   renderKeys(list) {
     this.renderList(list, id => App.keymap.combos(id), (id, combo, slot) => {
       const b = document.createElement('button');
@@ -456,8 +405,6 @@ App.keymapUI = {
     });
   },
 
-  /* 手柄视图：键位框 = 手柄物理按键（A/B/X/Y/十字键/LB/RB/LT/RT/L3/R3），
-     与键盘那套**完全独立**（改键盘不会碰到这里，反之亦然） */
   renderPad(list) {
     const GP = App.gpmap;
     this.renderList(list, id => GP.combos(id), (id, btn, slot) => {
@@ -510,12 +457,10 @@ App.keymapUI = {
     warn.classList.remove('hidden');
   },
 
-  /* 切回设置主视图（再次打开设置窗时必须回到主视图，不能停在上次的快捷键页） */
   showMainView() {
     this.stopCapture();
     this.snapshot = null;
     this.gpSnapshot = null;
-    /* 下次进来从键盘视图开始（与「重置/取消/确认」的快照口径无关） */
     if (this.el) this.setMode('key'); else this.mode = 'key';
     const box = document.getElementById('settingsPanel');
     if (!box) return;
@@ -526,14 +471,12 @@ App.keymapUI = {
     if (key) key.classList.add('hidden');
     if (this.box) this.box.classList.remove('km-mode');
     if (title) { title.setAttribute('data-i18n', 'settings.title'); title.textContent = App.i18n.t('settings.title'); }
-    /* 回到主视图：× 的语义变回「直接关窗」（主视图里没有待确认状态） */
     if (this.box && App.attachDlgClose) {
       const panel = document.getElementById('settingsPanel');
       App.attachDlgClose(this.box, () => { App.hideOverlay(panel || box); return true; });
     }
   },
 
-  /* 键盘 / 手柄 视图切换（radio 的 change 与 open() 复位共用这一份） */
   setMode(mode) {
     this.mode = mode === 'pad' ? 'pad' : 'key';
     const r = this.el && this.el.querySelector('#' + (this.mode === 'pad' ? 'kmModePad' : 'kmModeKey'));
@@ -541,39 +484,31 @@ App.keymapUI = {
     if (this.posModeGlider) this.posModeGlider();
   },
 
-  /* 开关状态与真实设置同步（面板不许与真实设置不一致 —— 与 settings.syncPanel 同一原则） */
   syncPanSwitch() {
     const sw = this.el && this.el.querySelector('#kmPanSpace');
     if (sw) sw.checked = App.settings.panNeedsSpace !== false;
   },
 
-  /* 打开：切到快捷键视图，并记下当前两张绑定表（键盘 + 手柄）作为「取消」的回滚点 */
   open() {
     const box = document.getElementById('settingsPanel');
     if (!box) return false;
     if (!this.el) this.build(box.querySelector('.confirm-box') || box);
     this.snapshot = App.keymap.snapshot();
     this.gpSnapshot = App.gpmap ? App.gpmap.snapshot() : null;
-    /* 每次打开都从「键盘」视图开始（与「每次打开都回设置主视图」同一纪律：
-       上次停在手柄视图，打开时看到的是另一张表，很容易改错地方） */
     this.setMode('key');
     const main = box.querySelector('#settingsMainView');
     const key = box.querySelector('#settingsKeyView');
     const title = box.querySelector('#settingsTitle');
     if (main) main.classList.add('hidden');
     if (key) key.classList.remove('hidden');
-    if (this.box) this.box.classList.add('km-mode');   /* 快捷键视图更宽一点，键位框才排得下 */
+    if (this.box) this.box.classList.add('km-mode');    
     if (title) { title.setAttribute('data-i18n', 'settings.keymap'); title.textContent = App.i18n.t('settings.keymap'); }
-    /* 进快捷键视图：× 必须改走 cancel()。本视图里改的绑定是「待确认」的临时表，
-       走主视图那个直接隐藏会把没确认的绑定静默留下（下拉里的 Cancel 本来就会回滚）。 */
     if (this.box && App.attachDlgClose) App.attachDlgClose(this.box, () => this.cancel());
     this.syncPanSwitch();
     this.render();
     return true;
   },
 
-  /* 重置：只改临时绑定表 + 界面，不落盘（与速率窗口一致，要确认才生效）。
-     键盘、手柄两张表一起回默认（同一个窗口、同一副按钮，口径要一致）。 */
   reset() {
     this.stopCapture();
     App.keymap.resetToDefaults();
@@ -582,7 +517,6 @@ App.keymapUI = {
     return true;
   },
 
-  /* 取消：丢弃本次改动（回到打开窗口前的绑定表）并关闭设置窗 */
   cancel() {
     this.stopCapture();
     if (this.snapshot) { App.keymap.restore(this.snapshot); this.snapshot = null; }
@@ -592,14 +526,12 @@ App.keymapUI = {
     return true;
   },
 
-  /* 确认：保留本次改动、写入 settings.json 并关闭；保存失败要提示，不静默伪装成功 */
   commit() {
     this.stopCapture();
     this.snapshot = null;
     this.gpSnapshot = null;
     const box = document.getElementById('settingsPanel');
     if (box) App.hideOverlay(box);
-    /* 帮助窗口与编辑条立刻同步新键位（不等下次打开/重进编辑） */
     if (App.refreshShortcutPanel) App.refreshShortcutPanel();
     if (App.refreshEditBarKeys) App.refreshEditBarKeys();
     const p = App.settings.save();
@@ -612,10 +544,9 @@ App.keymapUI = {
     return true;
   },
 
-  /* ---------- 按键捕获 ---------- */
   startCapture(id, slot, btn, isNew) {
     this.stopCapture();
-    this.capturing = { id, slot, btn, isNew: !!isNew };   /* isNew = 待绑定那个「+」 */
+    this.capturing = { id, slot, btn, isNew: !!isNew };    
     btn.classList.add('km-capturing');
     btn.innerHTML = '';
     const kbd = document.createElement('kbd');
@@ -627,8 +558,6 @@ App.keymapUI = {
     btn.appendChild(tip);
   },
 
-  /* 手柄捕获：键盘那边监听 keydown，手柄只能靠 js/gamepad.js 的轮询，
-     所以这里只登记「在等一个手柄按键」，真正的落键在 onGpCapture 里做。 */
   startGpCapture(id, slot, btn, isNew) {
     this.stopCapture();
     this.gpCap = { id, slot, btn, isNew: !!isNew };
@@ -637,9 +566,8 @@ App.keymapUI = {
     btn.textContent = App.i18n.t('km.gp.press');
   },
 
-  /* 手柄按键捕获到之后的落表（由 App.gpmap.finishCapture 回调） */
   onGpCapture(cap, btn) {
-    this.gpCap = null;                     /* 捕获已结束，别再走 stopCapture 的还原分支 */
+    this.gpCap = null;                      
     const t = k => App.i18n.t(k);
     const name = id => t((window.SVE_KEYMAP.ACTIONS_BY_ID[id] || {}).label || id);
     if (cap.isNew) {
@@ -653,7 +581,6 @@ App.keymapUI = {
   },
 
   stopCapture() {
-    /* 手柄捕获：清掉捕获状态，并把被改过的那个键位框还原成当前真实绑定 */
     const g = this.gpCap;
     this.gpCap = null;
     if (g) {
@@ -664,14 +591,11 @@ App.keymapUI = {
     this.capturing = null;
     if (!c || !c.btn) return;
     c.btn.classList.remove('km-capturing');
-    /* 还原成当前真实绑定（可能没改） */
     const cur = App.keymap.combos(c.id)[c.slot];
     if (cur) this.fillButton(c.btn, cur);
-    else if (c.isNew) { c.btn.textContent = '+'; }   /* 待绑定还没绑上：还原成「+」 */
+    else if (c.isNew) { c.btn.textContent = '+'; }    
   },
 
-  /* 捕获期间接管键盘：捕获阶段 + 掐断传播，避免被全局快捷键吃掉。
-     只按修饰键不算（继续等）；Esc = 放弃本次捕获。 */
   onKeydown(e) {
     const c = this.capturing;
     if (!c) return false;
@@ -681,11 +605,9 @@ App.keymapUI = {
     if (e.key === 'Escape') { this.stopCapture(); return true; }
     const combo = window.SVE_KEYMAP.comboFromEvent(e);
     if (!combo) return true;
-    /* 只按下修饰键（Ctrl / Alt / Shift / ⌘）→ 继续等真正的按键 */
     const parts = combo.split('+');
     if (parts.length === 1 && ['ctrl', 'alt', 'shift'].indexOf(parts[0]) >= 0) return true;
     const name = id => App.i18n.t((window.SVE_KEYMAP.ACTIONS_BY_ID[id] || {}).label || id);
-    /* 待绑定的「+」：这个动作原本一个绑定都没有，没有旧键可交换 ⇒ 撞车时直接拒绝 */
     if (c.isNew) {
       const clash = App.keymap.addCombo(c.id, combo);
       this.stopCapture();
@@ -702,16 +624,12 @@ App.keymapUI = {
     return true;
   },
 
-  /* 设置窗（含快捷键视图）开着时，全局快捷键一律不生效 */
   isOpen() {
     const box = document.getElementById('settingsPanel');
     return !!(box && !box.classList.contains('hidden'));
   }
 };
 
-/* 编辑条上的模式键位（1~5）也要跟着自定义绑定走：
-   index.html 里那几颗 <kbd>1</kbd>~<kbd>5</kbd> 是写死的，改键后必须重写，
-   否则「编辑条写着 3、实际要按 Q」这种自相矛盾的界面就出现了。 */
 App.refreshEditBarKeys = function () {
   if (!App.keymap || !window.SVE_KEYMAP) return;
   ['move', 'size', 'rotate', 'skew', 'opacity'].forEach(function (m, i) {
@@ -725,24 +643,19 @@ App.refreshEditBarKeys = function () {
 };
 App.refreshEditBarKeys();
 
-/* 捕获监听：注册在捕获阶段，先于 main.js 的全局 keydown */
 window.addEventListener('keydown', function (e) {
   if (App.keymapUI && App.keymapUI.capturing) { App.keymapUI.onKeydown(e); return; }
-  /* 设置窗开着时 Esc = 取消（与速率窗口一致：Esc 关窗即回滚） */
   if (e.key === 'Escape' && App.keymapUI && App.keymapUI.isOpen()) {
     const key = document.getElementById('settingsKeyView');
     if (key && !key.classList.contains('hidden')) {
       e.preventDefault(); e.stopPropagation();
       if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
-      /* 正在等手柄按键：Esc 只放弃这次捕获，不关窗（否则一个错按就把整窗设置丢掉） */
       if (App.keymapUI.gpCap) { App.keymapUI.stopCapture(); return; }
       App.keymapUI.cancel();
     }
   }
 }, true);
 
-/* 切语言：本视图里的分组标题、动作名、说明、冲突提示都是 t() 现拼的，
-   data-i18n 扫描管不到 ⇒ 注册到 apply() 末尾重刷（与 fonts.js 同一做法）。 */
 if (App.i18n && App.i18n.onApply) {
   App.i18n.onApply(function () {
     const ui = App.keymapUI;

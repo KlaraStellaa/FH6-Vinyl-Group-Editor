@@ -5,8 +5,6 @@ const crypto = require('crypto');
 const { resolveAutoSaveName } = require('./auto-name');
 const hash = text => crypto.createHash('sha256').update(text, 'utf8').digest('hex');
 
-// Write a complete, flushed sibling first. Never truncate a user's original file.
-// New files are published exclusively; existing targets are replaced by rename.
 function atomicWrite(fp, text, replace, io = fs) {
   const tmp = fp + '.' + crypto.randomUUID() + '.tmp';
   let fd;
@@ -16,7 +14,7 @@ function atomicWrite(fp, text, replace, io = fs) {
     io.fsyncSync(fd);
     io.closeSync(fd); fd = undefined;
     if (replace) io.renameSync(tmp, fp);
-    else io.linkSync(tmp, fp); // fails with EEXIST rather than overwriting a collision
+    else io.linkSync(tmp, fp); 
   } finally {
     if (fd !== undefined) { try { io.closeSync(fd); } catch (_) {} }
     try { io.unlinkSync(tmp); } catch (_) {}
@@ -45,10 +43,11 @@ class WorkcopyStore {
     return { id, path: resolved, name: path.basename(resolved), revision: hash(text) };
   }
   read(fp) {
-    if (this.fs.statSync(fp).size > 200 * 1024 * 1024) throw new Error('文件过大');
+    const st = this.fs.statSync(fp);
+    if (st.size > 200 * 1024 * 1024) throw new Error('文件过大');
     const content = this.fs.readFileSync(fp, 'utf8');
     this.validate(content);
-    return { ok: true, content, name: path.basename(fp), source: this.source(fp, content) };
+    return { ok: true, content, name: path.basename(fp), mtimeMs: st.mtimeMs, source: this.source(fp, content) };
   }
   renamed(oldPath, newPath) {
     oldPath = path.resolve(oldPath); newPath = path.resolve(newPath);
@@ -59,15 +58,12 @@ class WorkcopyStore {
     const io = this.fs;
     let fp;
     if (source) {
-      // Only a capability issued by file-read / the native open dialog is accepted.
-      // Never trust an arbitrary path or filename received over IPC.
       fp = this.sources.get(source.id);
       if (!fp || typeof source.revision !== 'string') throw new Error('源文件关联已失效，请重新打开文件');
       if (!io.existsSync(fp)) throw new Error('源文件已移动或删除，请重新打开；未重建旧文件');
       const oldText = io.readFileSync(fp, 'utf8');
       if (hash(oldText) !== source.revision)
         throw new Error('源文件已被其他标签或程序修改。为避免覆盖较新的内容，保存已停止；请先另存当前内容再重新打开');
-      // Detect external changes that happened while this save was in progress.
       if (hash(io.readFileSync(fp, 'utf8')) !== source.revision)
         throw new Error('保存期间源文件发生变化，已停止覆盖');
       atomicWrite(fp, content, true, io);

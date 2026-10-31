@@ -1,5 +1,4 @@
 'use strict';
-/* 编辑模式：五种模式（1移动/2大小/3旋转/4倾斜/5透明度）、WASD/方向键/鼠标、角度与透明度显示、Y 复制 */
 App.initEditMode = function () {
   $('#btnFinish').addEventListener('click', () => App.exitEdit(false));
   $('#btnPropMode').addEventListener('click', () => {
@@ -11,14 +10,11 @@ App.initEditMode = function () {
     App.updateEditBar();
     App.drawOutlines();
   });
-  /* 手柄显示开关：隐藏时大小模式不画手柄、鼠标不触发手柄（拖图案内部移动保留） */
   $('#btnShowHandles').addEventListener('click', () => {
     App.state.showHandles = !App.state.showHandles;
     App.updateEditBar();
     App.drawOutlines();
   });
-  /* 缩放锚点：点按钮 = 开始放置（再点 = 取消放置） / 已固定 = 清除锚点。
-     与 F 键共用 App.toggleAnchor —— 两套状态逻辑不允许分叉 */
   $('#btnPlaceAnchor').addEventListener('click', () => App.toggleAnchor());
   $$('#editBar .edit-modes button[data-mode]').forEach(b => {
     b.addEventListener('click', () => App.setEditMode(b.getAttribute('data-mode')));
@@ -28,24 +24,19 @@ App.initEditMode = function () {
     e.stopPropagation();
     if (e.key === 'Enter') { e.target.blur(); }
   });
-  /* 编辑条滑条：旋转/倾斜/透明度三模式都有——拖动 = 同步到输入框后走统一提交路径（双向同步） */
   $('#editValueRange').addEventListener('input', () => {
-    if (!['skew', 'opacity'].includes(App.state.editMode)) return;   /* 旋转模式无滑条 */
+    if (!['skew', 'opacity'].includes(App.state.editMode)) return;    
     if (App.cancelColorPreview) App.cancelColorPreview();
-    $('#editValueInput').value = $('#editValueRange').value; // 输入框跟随滑条显示
-    App.editValueCommit(); // 与回车/输入框提交同一路径
+    $('#editValueInput').value = $('#editValueRange').value; 
+    App.editValueCommit(); 
   });
 };
 
-/* 叶子颜色快照（递归到叶子层）：嵌套分组的 color 为 ''，直接按分组恢复会把子图层全部洗白 */
 App.leafColorEntries = function (l) {
   if (l.kind !== 'merged') return [{ c: l, color: l.color }];
   return (l.children || []).reduce((acc, ch) => acc.concat(App.leafColorEntries(ch)), []);
 };
 
-/* Transform batching shared by edit gestures.  applyItemTransform remains the
-   single model→DOM path, but nested calls defer overlay refresh until the outer
-   batch exits.  This keeps model order and history semantics unchanged. */
 App.withTransformBatch = function (fn) {
   App._batchTransformDepth = (App._batchTransformDepth || 0) + 1;
   try { return fn(); }
@@ -58,11 +49,7 @@ App.withTransformBatch = function (fn) {
   }
 };
 
-/* ---------- 编辑模式内独立撤销/重做（每个手势一个撤回点；退出编辑后一步撤回整段） ---------- */
 
-/* 图案身份快照：kind / 素材键 / 名字 / 本机尺寸。
-   为什么必须进快照：换图案改的是「内容」，而原来编辑会话的两套快照只存几何与颜色，
-   于是「编辑里换了图案 → Ctrl+Z 退不回去 / Esc 也带不走」（2026-10-29 用户口径）。 */
 App.editPatternSnap = function (it) {
   return {
     kind: it.kind,
@@ -70,11 +57,8 @@ App.editPatternSnap = function (it) {
     patternKey: it.patternKey || null,
     name: it.name,
     w: it.w, h: it.h
-    /* ★ 不存 dataUri：一个符号的 base64 有几十 KB，80 层撤销点 × 多目标会把内存吃爆。
-       恢复时按 symbolKey 从素材库重新挂接（与 history 的 slim 快照同一口径）。 */
   };
 };
-/* 把图案快照写回图层；内容身份真变了才重建 DOM（返回 true = 重建过） */
 App.editPatternRestore = function (it, s) {
   if (!it || !s) return false;
   const dirty = it.kind !== s.kind ||
@@ -89,7 +73,6 @@ App.editPatternRestore = function (it, s) {
   it.thumbDirty = true;
   it.thumbCache = null;
   if (dirty) {
-    /* 内容身份变了才重新挂素材并重建 DOM（图片按 symbolKey 从素材库取回） */
     if (it.kind === 'symbol') {
       it.dataUri = null;
       if (App.relinkSymbolData) App.relinkSymbolData(it);
@@ -112,13 +95,10 @@ App.editHist = {
       x: it.x, y: it.y, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew, opacity: it.opacity,
       flipH: !!it.flipH, flipV: !!it.flipV,
       colors: App.leafColorEntries(it),
-      /* 图案（kind / 素材键 / 名字 / 本机尺寸）—— 换图案也要能撤销 */
       pat: App.editPatternSnap(it)
     }));
   },
   restore: function (snap) {
-    /* 复制的撤回：snapshot 携带 despawn（本次操作新建的图层 id 列表）时，
-       撤销先移除这些图层（Y 复制出来的副本），再恢复原图层字段 —— 副本与锚点各自安好 */
     if (snap && snap.despawn && snap.despawn.length) {
       snap.despawn.forEach(id => {
         const l = App.findLayer(id);
@@ -129,7 +109,6 @@ App.editHist = {
     snap.forEach(s => {
       const l = App.findLayer(s.id);
       if (!l) return;
-      /* 图案先落位（会按需重建内容与 w/h），再套几何变换与颜色 */
       if (s.pat && App.editPatternRestore(l, s.pat)) patDirty = true;
       l.x = s.x; l.y = s.y; l.sx = s.sx; l.sy = s.sy;
       l.rot = s.rot; l.skew = s.skew; l.opacity = s.opacity;
@@ -138,15 +117,12 @@ App.editHist = {
       App.markThumbDirty(l);
       (s.colors || []).forEach(p => App.setLayerColor(p.c, p.color));
     });
-    App.groupRebase(); // 组会话以恢复后的状态为新起点（旧 M0 失配）
+    App.groupRebase(); 
     App.drawOutlines();
     App.updateEditValue();
     App.refreshLayerThumbs();
-    /* 图案被换回来时，闪动覆盖层还挂着上一条内容的指纹：立刻重建，
-       避免「图案退回去了、闪的还是新图案」 */
     if (patDirty && App.requestFlashRefresh) App.requestFlashRefresh(false);
   },
-  /* 每个手势开始前记录一次撤回点（手势过程中不重复记录） */
   checkpoint: function () {
     if (this.gesture) return null;
     const s = this.snapshot();
@@ -163,7 +139,6 @@ App.editHist = {
   },
   undo: function () {
     if (!this.stack.length) return false;
-    /* 编辑内撤销：先撤销未点「应用」的颜色预览 */
     if (App.cancelColorPreview) App.cancelColorPreview();
     this.redoStack.push(this.snapshot());
     this.gesture = false;
@@ -172,7 +147,6 @@ App.editHist = {
   },
   redo: function () {
     if (!this.redoStack.length) return false;
-    /* 编辑内重做：先撤销未点「应用」的颜色预览 */
     if (App.cancelColorPreview) App.cancelColorPreview();
     this.stack.push(this.snapshot());
     this.gesture = false;
@@ -188,23 +162,17 @@ App.editHist = {
 };
 
 App.enterEdit = function (spec) {
-  /* 进入编辑：撤销未点「应用」的颜色预览 */
   if (App.cancelColorPreview) App.cancelColorPreview();
-  /* 新编辑会话不继承上一段的缩放锚点（锚点绑定编辑目标，目标可能完全不同） */
   App.clearAnchor();
-  /* 取色器激活中进入编辑：先退出（否则取色器拦截指针、编辑目标保持隐藏不可见） */
   if (App.state.eyeMode) App.setEyedropper(null);
-  try { App.log('info', '进入编辑', { type: spec && spec.type, id: spec && spec.id, ids: spec && spec.ids ? spec.ids.length : undefined }); } catch (e) { /* ignore */ }
+  try { App.log('info', '进入编辑', { type: spec && spec.type, id: spec && spec.id, ids: spec && spec.ids ? spec.ids.length : undefined }); } catch (e) {   }
   if (!App.editTargets2(spec).length && spec.type !== 'bg') return;
   App.state.edit = spec;
   App.state.editMode = 'move';
   App.state.sizeMode = 'free';
-  App.state.editFlipStep = 0; // Tab 翻转循环从“无翻转”状态开始计数
-  App.editHist.reset(); // 编辑会话内的撤回点是独立的
-  /* Esc 取消编辑的历史记录点：记录编辑会话开始时的栈位置（cancelTop 据此
-     只丢弃会话记录、保留编辑期间独立操作的记录） */
+  App.state.editFlipStep = 0; 
+  App.editHist.reset(); 
   App.editHistStart = App.history.undoStack.length;
-  /* 编辑会话快照（Esc 取消恢复用）+ 撤销历史记录点 */
   App.editSession = {
     lastColor: App.state.lastColor,
     snapshot: App.editTargets().map(it => ({
@@ -213,19 +181,15 @@ App.enterEdit = function (spec) {
       flipH: !!it.flipH, flipV: !!it.flipV,
       color: it.color,
       colors: App.leafColorEntries(it),
-      /* Esc 回滚必须连图案一起带走（进门那一刻的图案身份） */
       pat: App.editPatternSnap(it)
     })),
   };
-  /* 多选整组（≥2 目标）：初始化组矩阵会话——整组倾斜/缩放/旋转与合并分组
-     同一数学模型（每个内容点按组矩阵精确变形，旋转层不再"各改各的"） */
   {
     const t = App.editTargets();
     if (t.length >= 2) {
       App.editSession.grp = { rot: 0, skew: 0, sx: 1, sy: 1 };
       const e = groupExtent(t);
       App.editSession.grpC = { x: e.cx, y: e.cy };
-      /* 会话起点的内容包围盒 = 多选版的「本机内容尺寸」（组缩放换算基准，见 applyGroupScaleAbs） */
       App.editSession.grpLCS = { w: e.w, h: e.h };
       App.editSession.grpM0 = t.map(it => layerDocMatrix(it));
     }
@@ -234,7 +198,7 @@ App.enterEdit = function (spec) {
   $('#leftPanel').classList.add('hidden');
   const eb = $('#editBar');
   eb.classList.remove('hidden');
-  eb.classList.remove('sve-editbar-out');   /* 快速退出再进入时清掉退场动画 */
+  eb.classList.remove('sve-editbar-out');    
   $('#selToolbar').classList.add('hidden');
   const isBg = spec.type === 'bg';
   if (isBg) {
@@ -247,15 +211,10 @@ App.enterEdit = function (spec) {
   $('#btnRemoveBg').classList.toggle('hidden', !isBg);
   App.layersRoot.style.pointerEvents = 'auto';
   App.updateEditBar();
-  /* 「隐藏其他图层」只在编辑图层时出现：进编辑立刻刷新它的显隐 */
   if (App.updateHideLayersButton) App.updateHideLayersButton();
   App.drawOutlines();
-  /* import 位图化：进入编辑立即恢复编辑层的矢量显示 */
   if (App.refreshImpBitmaps) App.refreshImpBitmaps();
-  /* 进编辑先撤下视口位图（方案A）：否则位图里烘着「进编辑之前」的目标副本，
-      编辑中视觉会停在原位原形状 */
   if (App.autoStaticRelease) App.autoStaticRelease();
-  /* 编辑模式静态化：大量图层时非编辑层合成背景位图（编辑流畅） */
   if (App.beginEditStatic) App.beginEditStatic();
 };
 App.editTargets2 = function (spec) {
@@ -268,16 +227,13 @@ App.editTargets2 = function (spec) {
 
 App.exitEdit = function (cancel) {
   if (!App.state.edit) return;
-  /* 完成/取消编辑一律清除锚点与放置状态（Esc 取消不写历史快照——锚点本来就不进模型） */
   App.clearAnchor();
-  try { App.log('info', '退出编辑', { cancel: !!cancel, type: App.state.edit.type }); } catch (e) { /* ignore */ }
-  App.editHistStart = undefined; // 编辑会话结束：历史记录点恢复全局语义
-  /* 退出编辑：撤销未点「应用」的颜色预览 */
+  try { App.log('info', '退出编辑', { cancel: !!cancel, type: App.state.edit.type }); } catch (e) {   }
+  App.editHistStart = undefined; 
   if (App.cancelColorPreview) App.cancelColorPreview();
   const es = App.editSession;
-  App.editHist.reset(); // 编辑会话内的撤回点随退出清空（退出后一步撤回整段）
+  App.editHist.reset(); 
   if (cancel && es) {
-    /* Esc 取消：回到本次编辑前的状态（批量恢复，避免逐层刷新造成卡顿） */
     App.state.batching = true;
     try {
       es.snapshot.forEach(s => {
@@ -285,11 +241,9 @@ App.exitEdit = function (cancel) {
         s.it.sx = s.sx; s.it.sy = s.sy;
         s.it.rot = s.rot; s.it.skew = s.skew; s.it.opacity = s.opacity;
         s.it.flipH = !!s.flipH; s.it.flipV = !!s.flipV;
-        /* 图案回到进门那一刻（必要时重建内容与 w/h）—— Esc = 这趟没来过，图案一并不许留 */
         if (s.pat) App.editPatternRestore(s.it, s.pat);
         App.applyItemTransform(s.it);
         App.markThumbDirty(s.it);
-        /* 颜色恢复到各叶子图层的原始颜色（嵌套分组递归，不经过分组的空颜色） */
         if (s.colors) {
           s.colors.forEach(p => App.setLayerColor(p.c, p.color));
         } else if (s.it.kind !== 'bg' && s.color !== undefined) {
@@ -297,7 +251,6 @@ App.exitEdit = function (cancel) {
         }
       });
       App.state.lastColor = es.lastColor;
-      /* 编辑期间按 Y 复制的图层保留：Esc 只回退原图层的修改，不删除复制层 */
     } finally {
       App.state.batching = false;
     }
@@ -312,16 +265,10 @@ App.exitEdit = function (cancel) {
   }
   App.editSession = null;
   App.state.edit = null;
-  /* 「隐藏其他图层」只在编辑图层时出现：退出后收起按钮并还原逐个图层的 display */
   if (App.updateHideLayersButton) App.updateHideLayersButton();
-  /* 编辑模式静态化：退出后保持背景位图（非编辑层不立即恢复，
-     避免 1942 层全量恢复渲染卡 30 秒+）；交互层由 updateFlashOverlays 按需恢复 */
   if (App.updateEditStaticViewport) App.updateEditStaticViewport();
   App.state.keys.clear();
   App.drag = null;
-  /* 退出编辑：清空单选/遗留单选留下的选中残留（编辑期间 selected 保持进入时的值不动。
-     不清理的话，退出后白框滚轮移到其他图层再按 Tab 多选，会把原编辑图层一起带上；
-     多选集合（≥2 个）保留——多选编辑退出后仍维持多选状态 */
   if (!(App.state.selectedByTab && App.state.selected.size > 1)) {
     App.state.selected = new Set();
     App.state.selectedByTab = false;
@@ -337,19 +284,11 @@ App.exitEdit = function (cancel) {
   App.handleG.innerHTML = '';
   App.handleEls = [];
   if (App.state.bg.image) App.applyBgTransform(App.state.bg.image);
-  /* 面板重新显示后重新对齐白框（编辑期间面板隐藏时对齐被跳过，不补一次会停在错误位置） */
   if (App.alignWheelScroll) App.alignWheelScroll();
-  /* 编辑期间合并分组的缩略图重绘被跳过：退出时统一刷新 */
   App.refreshLayerThumbs();
   App.updateSelToolbar();
   App.drawOutlines();
-  /* 退出编辑后补一次闪动同步：Esc 取消恢复期间 batching 会跳过 requestFlashRefresh，
-     不补的话闪动覆盖层会停留在取消前编辑过的位置/大小/旋转 */
   if (App.requestFlashRefresh) App.requestFlashRefresh(false);
-  /* 退出编辑瞬间图案不得被闪动颜色覆盖：3 秒周期的动画可能正播放到红/绿/蓝阶段，
-     此时退出会看到图案短暂变蓝——立即取消当前动画并隐藏覆盖层
-     （覆盖层 DOM 保留，3 秒周期照常继续）；同时作废进行中的合成构建，
-     防止其异步 resolve 后重播动画再染一次色 */
   App.flashSeq++;
   App.flashTimers.forEach(t => { cancelAnimationFrame(t); clearTimeout(t); });
   App.flashTimers = [];
@@ -360,9 +299,6 @@ App.exitEdit = function (cancel) {
   App.switchTab('lib');
 };
 
-/* 编辑模式左右移一格（手柄 LB/RB 与 keymap 的 modePrev / modeNext 共用这一个入口）：
-   · 只在**图层编辑**里生效（编辑背景图片时不响应，与既有口径一致）；
-   · **两端不响应、不循环** —— 已经在「移动」再按左、已经在「透明度」再按右，什么都不发生。 */
 App.stepEditMode = function (dir) {
   const e = App.state && App.state.edit;
   if (!e || e.type === 'bg') return false;
@@ -370,19 +306,14 @@ App.stepEditMode = function (dir) {
   const i = MODES.indexOf(App.state.editMode);
   if (i < 0) return false;
   const j = i + dir;
-  if (j < 0 || j >= MODES.length) return false;   /* 边界：不响应，不循环 */
+  if (j < 0 || j >= MODES.length) return false;    
   App.setEditMode(MODES[j]);
   return true;
 };
 
 App.setEditMode = function (mode) {
-  /* 编辑背景图片没有「透明度」模式（模式键已收起，这里挡住快捷键 5 的直达） */
   if (mode === 'opacity' && App.state.edit && App.state.edit.type === 'bg') return;
-  /* 切换编辑模式：撤销未点「应用」的颜色预览 */
   if (App.cancelColorPreview) App.cancelColorPreview();
-  /* 移动/透明度：离开大小模式 = 取消「正在放置」（尚未点击固定时不保存临时锚点）；
-      已固定的锚点保留信息，回到大小模式继续生效。
-      旋转/倾斜模式下锚点保留且不隐藏，所以这两个模式不取消「正在放置」。 */
   if (App.state.anchorPlacing && mode !== 'size' && mode !== 'rotate' && mode !== 'skew') App.cancelAnchorPlacing();
   App.state.editMode = mode;
   App.updateEditBar();
@@ -392,8 +323,6 @@ App.setEditMode = function (mode) {
 App.updateEditBar = function () {
   $$('#editBar .edit-modes button[data-mode]').forEach(b =>
     b.classList.toggle('active', b.getAttribute('data-mode') === App.state.editMode));
-  /* 编辑背景图片时收起「透明度」模式键（背景的显示透明度由画布右上角「背景」滑条管）；
-     显隐随每次 updateEditBar 重设（与 #btnRemoveBg 同一约定），下次进图层编辑照常可用 */
   const opModeBtn = $('#editBar .edit-modes button[data-mode="opacity"]');
   if (opModeBtn) opModeBtn.classList.toggle('hidden', !!(App.state.edit && App.state.edit.type === 'bg'));
   const mode = App.state.editMode;
@@ -405,9 +334,6 @@ App.updateEditBar = function () {
   $('#btnAxisHint').textContent = App.i18n.t(App.state.axisHint ? 'edit.axisOn' : 'edit.axisOff');
   $('#btnShowHandles').classList.toggle('hidden', !isSize);
   $('#btnShowHandles').textContent = App.i18n.t(App.state.showHandles ? 'edit.handlesOn' : 'edit.handlesOff');
-  /* 放置锚点：大小 / 旋转 / 倾斜模式都显示；
-      移动、透明度两个模式不显示。
-      非「单个目标」（多选）时禁用；单个普通图案 / 合并分组 / 背景图片都可以放。 */
   const anchorShown = isSize || mode === 'rotate' || mode === 'skew';
   const anchorBtn = $('#btnPlaceAnchor');
   if (anchorBtn) {
@@ -415,14 +341,12 @@ App.updateEditBar = function () {
     anchorBtn.disabled = !(anchorShown && App.anchorEligible());
     const anchorTxt = App.i18n.t(App.state.anchor ? 'edit.anchorCancel' : 'edit.anchorPlace');
     anchorBtn.textContent = anchorTxt;
-    anchorBtn.setAttribute('textContent', anchorTxt);   // 与 i18n.apply 的写法保持一致（按属性读）
+    anchorBtn.setAttribute('textContent', anchorTxt);   
     anchorBtn.setAttribute('data-i18n', App.state.anchor ? 'edit.anchorCancel' : 'edit.anchorPlace');
     anchorBtn.classList.toggle('active', !!App.state.anchorPlacing);
   }
-  /* 编辑条（旋转/倾斜/透明度）：三种模式共用第 2 行，且都显示滑条 */
   const rng = $('#editValueRange');
   $('#editValueBox').classList.toggle('hidden', !isRotSkewOp);
-  /* 滑条：**只有透明度模式显示**（旋转与倾斜模式都不显示）。 */
   rng.classList.toggle('hidden', mode !== 'opacity');
   if (isRotSkewOp) {
     $('#editValueLabel').textContent = App.i18n.t(mode === 'rotate' ? 'edit.label.rotate' : mode === 'skew' ? 'edit.label.skew' : 'edit.label.opacity');
@@ -431,7 +355,6 @@ App.updateEditBar = function () {
     else { rng.min = -180; rng.max = 180; rng.step = 0.5; }
   }
   App.updateEditValue();
-  /* 第 2 行可见性：大小模式（手柄显示/方向指示/等比）或 旋转倾斜透明度（编辑条）或 背景编辑（移除背景）任一项可见即显示 */
   const any2 = !$('#btnShowHandles').classList.contains('hidden') ||
     !$('#btnAxisHint').classList.contains('hidden') ||
     !$('#btnPropMode').classList.contains('hidden') ||
@@ -456,7 +379,7 @@ App.updateEditValue = function () {
   if (App.state.editMode === 'rotate') {
     const d = normalizeDeg(it.rot);
     inp.value = fmtNum(d, 1);
-    $('#editValueRange').value = d; // 滑条与输入框同步（-180~180）
+    $('#editValueRange').value = d; 
   } else if (App.state.editMode === 'skew') {
     const d = normalizeDeg(it.skew);
     inp.value = fmtNum(d, 1);
@@ -468,17 +391,14 @@ App.updateEditValue = function () {
 };
 
 App.editValueCommit = function () {
-  /* 编辑数值输入：撤销未点「应用」的颜色预览 */
   if (App.cancelColorPreview) App.cancelColorPreview();
   const v = parseFloat($('#editValueInput').value);
   if (isNaN(v)) { App.updateEditValue(); return; }
   const items = App.editTargets();
   if (App.state.editMode === 'rotate') {
     if (items.length > 1) {
-      /* 多选：组级旋转（相对第一个图层的角度增量，绕组中心），与合并分组一致 */
       App.groupRotateItems(items, v - items[0].rot);
     } else items.forEach(it => {
-      /* 锚点优先，普通图层与合并分组统一。 */
       const af = App.anchorFixedLocal(it);
       if (af) {
         const p0 = App.itemLocalToDoc(it, af.x, af.y);
@@ -493,9 +413,6 @@ App.editValueCommit = function () {
     if (items.length > 1) {
       App.groupSkewItems(items, v - items[0].skew);
     } else items.forEach(it => {
-      /* 锚点优先，普通图层与合并分组统一。
-         「倾斜」模式的滑条走的正是这条路径（见 wire() 里 #editValueRange），
-         所以拖滑条 / 输入角度时锚点必须钉住。 */
       const af = App.anchorFixedLocal(it);
       if (af) {
         const p0 = App.itemLocalToDoc(it, af.x, af.y);
@@ -512,21 +429,15 @@ App.editValueCommit = function () {
   App.refreshLayerThumbs();
 };
 
-/* ---------- 变换操作 ---------- */
 App.applyEditMove = function (dx, dy) {
   App.withTransformBatch(() => App.editTargets().forEach(it => {
     it.x += dx; it.y += dy;
     App.applyItemTransform(it);
   }));
-  /* ★ 同 onEditPointerUp：移动是直接改字段，多选会话必须重锚点，
-     否则随后的组级操作（大小/旋转/倾斜）会用旧 M0 把移动抹掉。 */
   App.groupRebase();
   if (App.scheduleFrameUpdate) App.scheduleFrameUpdate('edit');
   else App.drawOutlines();
 };
-/* 编辑缩放支持负值：负值 = 镜像（flip 标志 + 正缩放）。
-   语义为“绝对值”（参数 = 期望的带符号缩放）：连续增量（键盘 WASD / 鼠标拖拽）
-   过零后符号保持，翻转只发生一次，不会在 0 附近反复翻转循环 */
 App.applyScaleWithFlip = function (it, sx, sy) {
   if (sx < 0) { it.flipH = true; sx = -sx; }
   else if (sx > 0) { it.flipH = false; }
@@ -536,14 +447,9 @@ App.applyScaleWithFlip = function (it, sx, sy) {
   it.sy = clamp(sy, 1e-6, 1e6);
 };
 
-/* 缩放单图层时保持视觉中心不动：仅合并分组需要（锚点可能远离视觉中心，
-   直接改 sx/sy 会绕锚点缩放导致图案整体跑偏）；普通图层锚点=内容几何中心，
-   绕锚点缩放视觉中心自然不动，锚点保持原位（不随缩放移动） */
 App.scaleItemKeepCenter = function (it, fx, fy) {
   const af = App.anchorFixedLocal(it);
   if (af) {
-    /* 有锚点：固定点 = 锚点本地坐标（不是几何中心）。先把锚点的文档坐标记下来，
-       缩放后重算 x/y 让它回到原处 —— 模型 x/y/sx/sy 保持真实，保存/撤销/导出都一致 */
     const p0 = App.itemLocalToDoc(it, af.x, af.y);
     App.applyScaleWithFlip(it, (it.flipH ? -1 : 1) * (it.sx || 1) * fx, (it.flipV ? -1 : 1) * (it.sy || 1) * fy);
     App.placeItemAtDocPoint(it, af.x, af.y, p0.x, p0.y);
@@ -575,18 +481,6 @@ function groupCenter(items) {
   const e = groupExtent(items);
   return { x: e.cx, y: e.cy };
 }
-/* ---------- 多选整组编辑 = 组矩阵模型（与合并分组根叠加同构） ----------
-   合并分组"是一个整体"的原因：倾斜/缩放/旋转全部叠加在分组根矩阵上，
-   组内每个内容点（包括旋转过的图案）都按同一个矩阵变形。
-   多选没有公共根，若每层各改各的 rot/skew/sx（再加位置模拟），
-   旋转过的图案变形方向会与整组不一致——视觉上"不是一个整体"。
-   解法：编辑会话内记录每个成员在会话开始时的完整文档矩阵 M0 与固定的
-   组内容中心 C，任何组级操作只累积组参数 {rot, skew, sx, sy}，随后
-   每层从 G(C, 参数)·M0 精确分解回字段（矩阵分解与 splitMerged 烘焙同源）。
-   这样任意仿射组合（含旋转层的倾斜/非等比缩放）都与合并分组完全等价。 */
-/* 成员完整文档矩阵（字段 → 仿射，含位移）：T(x,y)·R(rot)·K(skew)·S(sx,sy)，翻转=负号进 S
-   ★ 倾斜在缩放外层（与 DOM transform、游戏 shapeMatrix 三方同序）：
-     剪切列不乘 sx ⇒ 改宽度不会改变倾角。 */
 function layerDocMatrix(it) {
   const sxf = (it.flipH ? -1 : 1) * (it.sx || 1);
   const syf = (it.flipV ? -1 : 1) * (it.sy || 1);
@@ -598,14 +492,11 @@ function layerDocMatrix(it) {
     e: it.x, f: it.y
   };
 }
-/* 组矩阵：G = T(C)·R(rot)·K(skew)·S(sx,sy)·T(-C)（与分组根 transform 同序，绕组内容中心） */
 function groupMatrix(g, C) {
   return App.FZA.matFromString('translate(' + C.x + ' ' + C.y + ') rotate(' + (g.rot || 0) +
     ') skewX(' + (g.skew || 0) + ') scale(' + (g.sx || 1) + ' ' + (g.sy || 1) +
     ') translate(' + (-C.x) + ' ' + (-C.y) + ')');
 }
-/* 把组参数分解写回每个成员的字段（每层 = G·M0），并同步 el 变换。
-   返回 false = 当前会话无组状态（调用方走原单层/合并逻辑） */
 App.groupDecompose = function () {
   const es = App.editSession;
   if (!es || !es.grp || !es.grpM0) return false;
@@ -621,8 +512,6 @@ App.groupDecompose = function () {
     it.rot = normalizeDeg(p.rot);
     it.skew = App.clampSkew(p.skew);
     it.sx = Math.abs(p.sx) || 1;
-    /* 负 sy = 垂直镜像（与 splitMerged 烘焙同一约定）；水平反射由分解折入 rot±180，
-       几何完全保真；每次操作从会话起点 M0 重算，无累积漂移 */
     it.flipH = false;
     it.flipV = !!(sy < 0);
     it.sy = Math.abs(sy) || 1;
@@ -632,7 +521,6 @@ App.groupDecompose = function () {
   App.drawOutlines();
   return true;
 };
-/* 组级变换入口：更新组参数并重算全部成员（返回 false = 非组会话，调用方走单层路径） */
 App.groupTransformApply = function (upd) {
   const es = App.editSession;
   if (!es || !es.grp) return false;
@@ -641,7 +529,6 @@ App.groupTransformApply = function (upd) {
   upd(es.grp);
   return App.groupDecompose();
 };
-/* 撤销/重做恢复字段后：组会话以当前状态为新起点（组参数清零），避免旧 M0 失配 */
 App.groupRebase = function () {
   const es = App.editSession;
   if (!es || !es.grp) return;
@@ -653,9 +540,6 @@ App.groupRebase = function () {
   es.grpC = { x: e.cx, y: e.cy };
   es.grpLCS = { w: e.w, h: e.h };
 };
-/* 多选整组按统一比例缩放（与合并分组同一语义）：所有图层倍率同乘 fx/fy，
-   位置绕组中心等比拉伸（组中心不动），负比例 = 整组镜像。
-   合并分组目标用内容中心跟随（锚点远离内容中心，直接用锚点会跑偏） */
 App.applyGroupScaleAt = function (items, cx, cy, fx, fy) {
   items.forEach(it => {
     if (it.kind === 'merged') {
@@ -665,9 +549,8 @@ App.applyGroupScaleAt = function (items, cx, cy, fx, fy) {
       App.applyScaleWithFlip(it, (it.flipH ? -1 : 1) * (it.sx || 1) * fx, (it.flipV ? -1 : 1) * (it.sy || 1) * fy);
       App.anchorToKeepCenter(it, tx, ty);
     } else {
-      it.x = cx + (it.x - cx) * fx; // fx 负 = 绕组中心镜像位置（配合内容 flipH = 整组镜像）
+      it.x = cx + (it.x - cx) * fx; 
       it.y = cy + (it.y - cy) * fy;
-      /* 带符号缩放：比例乘法保留当前翻转标志（fx 正不变、fx 负镜像切换） */
       App.applyScaleWithFlip(it, (it.flipH ? -1 : 1) * (it.sx || 1) * fx, (it.flipV ? -1 : 1) * (it.sy || 1) * fy);
     }
     App.applyItemTransform(it);
@@ -677,7 +560,6 @@ App.applyGroupScaleAt = function (items, cx, cy, fx, fy) {
 App.applyEditScale = function (fx, fy) {
   const items = App.editTargets();
   if (items.length >= 2) {
-    /* 多选整组：组矩阵模型（每个内容点按组矩阵精确变形，与合并分组等价） */
     if (App.groupTransformApply(g => { g.sx *= fx; g.sy *= fy; })) {
       App.refreshLayerThumbs();
       return;
@@ -687,10 +569,6 @@ App.applyEditScale = function (fx, fy) {
   App.drawOutlines();
   App.refreshLayerThumbs();
 };
-/* 图层「本机内容尺寸」（不含 x/y/sx/sy/rot/skew）：
-   普通图层就是模型的 w/h（见 js/model.js，默认 128）；合并分组用本地包围盒 _localBB。
-   WASD / 方向键的「大小」「倾斜」按本机尺寸折算绝对增量，让每帧在画布上的视觉变化恒定，
-   与「当前比例」「图案本身多大」都无关。 */
 App.localContentSize = function (it) {
   if (it && it.kind === 'merged') {
     const loc = it._localBB;
@@ -705,36 +583,22 @@ App.localContentSize = function (it) {
   }
   return { w: Math.max(1, Number(it && it.w) || 128), h: Math.max(1, Number(it && it.h) || 128) };
 };
-/* 大小调整（键盘 WASD）：按带符号绝对值增量连续调整。
-   不要用比例因子 (sx+ddx)/sx：sx 接近 0 时因子爆炸、镜像反复翻转，
-   会导致按住缩小键在 0 附近循环。按绝对值增量则缩放值线性穿过零点，
-   过零只翻转一次镜像，|sx| 从 0 连续增长（与鼠标拖拽一致） */
 App.scaleItemKeepCenterAbs = function (it, ddx, ddy) {
-  const ssx = (it.flipH ? -1 : 1) * (it.sx || 1); // 带符号缩放（镜像 = 负）
+  const ssx = (it.flipH ? -1 : 1) * (it.sx || 1); 
   const ssy = (it.flipV ? -1 : 1) * (it.sy || 1);
-  /* WASD / 方向键的「大小」调整用**固定相对于画布的速度**。
-     把绝对增量按「本机内容宽 / 128」折算：
-       视觉变化 = 本机宽 × Δsx = bw × (d × 128/bw) = 128 × d   ← 恒定（画布单位）
-     合并分组与普通图层两支统一按「本机内容宽」，并保留 128 作基准
-     （普通图案本机宽默认就是 128，所以常见情况的手感不变）。 */
   const _lcs = App.localContentSize(it);
   const k = 128 / Math.max(1, _lcs.w);
   const nddx = ddx * k, nddy = ddy * k;
   if (it.kind === 'merged') {
     const nsx = ssx + nddx, nsy = ssy + nddy;
-    /* 合并分组：锚点远离内容中心（尤其旋转/倾斜后），位置必须用矩阵精确换算，
-       保证缩放时【视觉中心不动】——标量比例（绕 cx 缩放锚点）在旋转/倾斜时会漂移。
-       内容中心用纯矩阵计算（mergedContentCenter），不再每帧 getItemDocBBox——
-       getScreenCTM 强制整组同步布局，大分组 WASD 缩放时掉帧、速度异常变慢 */
     const af = App.anchorFixedLocal(it);
     if (af) {
-      /* 有锚点：固定点 = 锚点本地坐标（与普通图层同一套语义），视觉速度仍按上面的 k 归一化 */
       const p0 = App.itemLocalToDoc(it, af.x, af.y);
       App.applyScaleWithFlip(it, nsx, nsy);
       App.placeItemAtDocPoint(it, af.x, af.y, p0.x, p0.y);
     } else {
       const { lcx, lcy } = App.mergedLocalCenter(it);
-      const c = App.mergedContentCenter(it); // 当前内容几何中心（旧矩阵）
+      const c = App.mergedContentCenter(it); 
       const M = App.FZA.layerMatrix({ flipH: nsx < 0, flipV: nsy < 0, sx: Math.abs(nsx), sy: Math.abs(nsy), rot: it.rot, skew: it.skew });
       it.x = c.x - (M.a * lcx + M.c * lcy);
       it.y = c.y - (M.b * lcx + M.d * lcy);
@@ -744,7 +608,6 @@ App.scaleItemKeepCenterAbs = function (it, ddx, ddy) {
     const nsx = ssx + nddx, nsy = ssy + nddy;
     const af = App.anchorFixedLocal(it);
     if (af) {
-      /* 有锚点：绕锚点缩放，锚点文档坐标在手势前后保持一致（含过零/镜像） */
       const p0 = App.itemLocalToDoc(it, af.x, af.y);
       App.applyScaleWithFlip(it, nsx, nsy);
       App.placeItemAtDocPoint(it, af.x, af.y, p0.x, p0.y);
@@ -755,22 +618,11 @@ App.scaleItemKeepCenterAbs = function (it, ddx, ddy) {
   App.applyItemTransform(it);
   App.markThumbDirty(it);
 };
-/* 多选整组键盘缩放：整组统一比例（与合并分组完全一致——不再各层各加各的）。
-   增量换算比例：视觉速度与合并分组/单层一致（每帧视觉变化 = 128×d，
-   与 scaleItemKeepCenterAbs 的 128 基准相同），换算基准 = 组当前视觉宽/高；
-   组参数按比例累积（sx *= f），负比例（|128·d| 超过组宽）整组镜像。 */
 App.applyGroupScaleAbs = function (ddx, ddy) {
   const items = App.editTargets();
   if (items.length < 2) return false;
   const es = App.editSession;
   if (!es || !es.grp) return false;
-  /* ★ 换算基准必须与「合并分组」完全一致（见 scaleItemKeepCenterAbs 的 k）：
-     那里 k = 128 / 本机内容宽，且**两轴共用同一个 k**（不是各轴各算）。
-     以前这里按 e.w / e.h 分轴算 —— 非方形选区上 y 方向的视觉速度与分组不同：
-     同一个 applyEditScaleDelta(0.12, 0.08)，两边 y 尺寸差 2.8~3.6 文档单位
-     （2026-10-03 用户要求「多选与建组不能有任何区别」）。
-     基准取**会话起点**（组参数为 1 时）的内容包围盒 = 分组的「本机内容尺寸」；
-     不能每帧现算 groupExtent（那会随组参数变化，等于基准一直在变）。 */
   const e = (es.grpLCS && es.grpLCS.w > 0) ? es.grpLCS : groupExtent(items);
   const k = 128 / Math.max(1, e.w);
   const fx = ddx ? 1 + ddx * k : 1;
@@ -779,12 +631,6 @@ App.applyGroupScaleAbs = function (ddx, ddy) {
   App.groupTransformApply(g => { g.sx *= fx; g.sy *= fy; });
   return true;
 };
-/* 「等比」= 保持长宽比：把**被驱动轴**的增量换算成另一轴应加的增量，使 sx:sy 的比值不变。
-   —— 原实现是两轴各加同一增量，只要 sx≠sy（被拉伸过的图案/分组占绝大多数），
-      每调一次比例就被拉歪一次，用户看到的就是「等比失效」（2026-09-25 报障）。
-   多选整组走组矩阵（组参数起始 sx/sy = 1），等量增量本来就等价于等比，原样返回。
-   增量为**带符号**（与 applyScaleWithFlip / scaleItemKeepCenterAbs 同一口径），
-   翻转图层也能得到正确的比例。 */
 App.propScalePair = function (ddx, ddy) {
   const targets = App.editTargets();
   if (targets.length !== 1) return [ddx, ddy];
@@ -806,8 +652,6 @@ App.applyEditScaleDelta = function (ddx, ddy) {
   }
   if (App.scheduleFrameUpdate) App.scheduleFrameUpdate('edit');
   else App.drawOutlines();
-  /* 不在这里刷缩略图：WASD 按住期间每帧触发，合并分组/大分组的缩略图重绘很重，
-     掉帧后 dt 被截断 → 调整大小速度变慢；编辑中图层栏隐藏，缩略图在退出编辑时统一刷新 */
 };
 function rotatePoint(p, c, deg) {
   const a = deg * D2R, cos = Math.cos(a), sin = Math.sin(a);
@@ -816,37 +660,19 @@ function rotatePoint(p, c, deg) {
     y: c.y + (p.x - c.x) * sin + (p.y - c.y) * cos
   };
 }
-/* ---------- 倾斜角写入闸门 ----------
-   skewX 的剪切量 = tan(skew)，±90° 时 tan 发散（1.63e16）：
-   矩阵元素炸飞 → x/y 漂到 ±1e17 → float64 精度全丢 → 锚点补偿/包围盒/缩略图一起崩。
-   所有**用户交互写入** skew 的地方都过这道闸，模型里永远不存进病态角度。
-
-   这里是**写入侧**闸门，只作用于「用户编辑产生的值」。
-     · 上限口径由 `App.FZA.SKEW_LIMIT`（±89.99°）单点定义，不要在本文件另设常量。
-     · 导入侧由 `App.FZA.decomposeToModel` 自己归一化（那是导入的唯一漏斗）。
-     · 矩阵侧（`layerMatrix` / `modelToFzaMatrix`）用 `App.FZA.skewTan()`，
-       只在**真奇点**（|tan| ≥ 1e15）兜底 —— 不要在矩阵里做策略性夹取，
-       否则会与渲染用的 `skewX(原始角度)` 不一致（显示一个样、算一个样）。 */
 App.clampSkew = function (deg) {
   return (App.FZA && App.FZA.normalizeSkew) ? App.FZA.normalizeSkew(deg) : deg;
 };
 
-/* ---------- 合并分组：旋转/倾斜时保持内容几何中心不动 ----------
-   merged 的锚点 (x,y) 远离内容中心（子图案整体相对锚点有偏移），
-   旋转/倾斜若只改 rot/skew 或绕 AABB 中心换算，内容会绕锚点甩动/逐帧漂移。
-   内容几何中心 = 本地包围盒中心 (lcx,lcy) 经当前变换矩阵映射到文档坐标；
-   变换后把锚点重算为 内容中心 - M'(lcx,lcy)，视觉中心即保持不动（与缩放一致）。 */
 App.mergedLocalCenter = function (it) {
   const loc = it._localBB;
   if (loc) return { lcx: (loc.pts[0][0] + loc.pts[2][0]) / 2, lcy: (loc.pts[0][1] + loc.pts[2][1]) / 2 };
-  /* _localBB 未缓存（getBBox 尚未计算/返回空）时：用模型递归包围盒兜底，
-     否则内容中心算成 (0,0)，组级旋转/倾斜时合并分组位置跑偏（"倾斜变位置"） */
   try {
     const lb = App.computeLocalBBox(it);
     if (isFinite(lb.w) && lb.w > 0 && isFinite(lb.h) && lb.h > 0) {
       return { lcx: lb.x + lb.w / 2, lcy: lb.y + lb.h / 2 };
     }
-  } catch (e) { /* ignore */ }
+  } catch (e) {   }
   return { lcx: 0, lcy: 0 };
 };
 App.mergedContentCenter = function (it) {
@@ -854,14 +680,12 @@ App.mergedContentCenter = function (it) {
   const M = App.FZA.layerMatrix({ flipH: it.flipH, flipV: it.flipV, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew });
   return { x: it.x + (M.a * lcx + M.c * lcy), y: it.y + (M.b * lcx + M.d * lcy) };
 };
-/* 把锚点重算为：内容中心落在 (ccx, ccy)（用当前 rot/skew 的矩阵） */
 App.anchorToKeepCenter = function (it, ccx, ccy) {
   const { lcx, lcy } = App.mergedLocalCenter(it);
   const M = App.FZA.layerMatrix({ flipH: it.flipH, flipV: it.flipV, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew });
   it.x = ccx - (M.a * lcx + M.c * lcy);
   it.y = ccy - (M.b * lcx + M.d * lcy);
 };
-/* 编辑手势快照：merged 额外记录手势开始时的内容中心，旋转/倾斜拖动时保持 */
 App.editTransformSnap = function (it) {
   const s = { it, x: it.x, y: it.y, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew };
   if (it.kind === 'merged') {
@@ -870,58 +694,28 @@ App.editTransformSnap = function (it) {
   }
   return s;
 };
-/* 按快照保持 merged 内容中心（rot/skew 已按快照更新后调用） */
 App.applySnapCenterKeep = function (s) {
   if (s.it.kind !== 'merged' || s.ccx === undefined) return;
   App.anchorToKeepCenter(s.it, s.ccx, s.ccy);
 };
-/* ---------- 固定点统一语义 ----------
-   一次「旋转 / 倾斜」变换的固定点判定，所有入口（鼠标拖拽 / WASD / 方向键 / 数值输入 / 滑条）
-   必须走同一套规则，否则同一种操作换条路径就会漂：
-     · 有生效锚点（anchorFixedLocal 非 null）→ **锚点是唯一固定点**，
-       变换前后该点的文档坐标严格不变。此时必须**跳过**内容中心保持
-       （applySnapCenterKeep / anchorToKeepCenter）—— 那是「无锚点」时的替代方案，
-       两者同时执行会互相覆盖，锚点补偿会被内容中心重算冲掉。
-     · 无锚点 → 沿用原有语义：merged 保持内容几何中心，普通图层绕蓝框中心。
-   落地写法（各调用点统一）：
-     const af = App.anchorFixedLocal(it);
-     if (af) { const p0 = App.itemLocalToDoc(it, af.x, af.y);
-               改变换;
-               App.placeItemAtDocPoint(it, af.x, af.y, p0.x, p0.y); }
-     else if (it.kind === 'merged') { 内容中心保持 }
-     else { 原逻辑 }
-   注意：锚点分支必须写在 merged 分支**之前**。
-   拖拽分支还要把锚点目标文档坐标在**手势起手时冻结**（App.drag.anchorDoc），
-   每帧只做「rot/skew = 快照 + 总增量 → 钉回冻结坐标」，绝不重新测量 p0。 */
 
-/* ---------- 缩放锚点（单个目标：普通图案 / 合并分组 / 背景图片） ----------
-   锚点 = 用户指定的固定点：缩放/旋转时该点在【文档坐标】中保持不动。
-   存储为目标图层的【本地坐标】{ lx, ly }（内容中心 = 原点，与 modelBBox 同系），
-   文档坐标每次由当前变换矩阵现算 —— 画布缩放/平移/切视图后锚点不会失效。
-   锚点只活在编辑会话里（App.state.anchor），不写进图层模型、不进导出、不进历史。 */
 App.anchorTarget = function () {
   const e = App.state.edit;
   if (!e) return null;
-  /* 编辑背景图片：背景也可以放锚点（本地坐标系与普通图层同一套：原点 = 图片中心）。
-     背景是**单例且模型本身没有 id**，这里补一个固定标识供锚点匹配 ——
-     不能只在 setBackgroundImage 里写：撤销/恢复、导入 SVG、切页签都会重建背景模型。 */
   if (e.type === 'bg') {
     const m = App.state.bg.image;
     if (!m) return null;
     if (!m.id) m.id = 'bg';
     return m;
   }
-  if (e.type !== 'layer') return null;            // 多选：不可用
+  if (e.type !== 'layer') return null;            
   const items = App.editTargets();
   if (items.length !== 1) return null;
   const it = items[0];
-  /* 合并分组同样可以放锚点：
-      合并分组的本地坐标系就是分组自身的变换空间，四角包围盒与本地↔文档换算与普通图层同一套 */
   if (!it || it.kind === 'bg') return null;
   return it;
 };
 App.anchorEligible = function () { return !!App.anchorTarget(); };
-/* 已固定、且仍属于当前编辑目标的锚点（否则 null） */
 App.currentAnchor = function () {
   const a = App.state.anchor;
   if (!a || !a.placed) return null;
@@ -929,9 +723,6 @@ App.currentAnchor = function () {
   if (!it || it.id !== a.layerId) return null;
   return a;
 };
-/* 当前应作为「固定点」的本地坐标：有锚点返回锚点，否则 null（调用方走原有中心路径）。
-   锚点在**大小 / 旋转 / 倾斜**三种模式下都生效（旋转绕锚点转、倾斜绕锚点斜）。
-   **移动 / 透明度保持原样** —— 这两个模式仍返回 null，一律走各自的原有算法。 */
 App.anchorFixedLocal = function (it) {
   const _am = App.state.editMode;
   if (_am !== 'size' && _am !== 'rotate' && _am !== 'skew') return null;
@@ -939,12 +730,10 @@ App.anchorFixedLocal = function (it) {
   if (!a || !it || it.id !== a.layerId) return null;
   return { x: a.lx, y: a.ly };
 };
-/* 图层本地坐标 -> 文档坐标（当前模型字段的变换矩阵） */
 App.itemLocalToDoc = function (it, lx, ly) {
   const M = App.FZA.layerMatrix(it);
   return { x: it.x + M.a * lx + M.c * ly, y: it.y + M.b * lx + M.d * ly };
 };
-/* 文档坐标 -> 图层本地坐标（矩阵求逆） */
 App.docToItemLocal = function (it, px, py) {
   const M = App.FZA.layerMatrix(it);
   const det = M.a * M.d - M.b * M.c;
@@ -952,13 +741,11 @@ App.docToItemLocal = function (it, px, py) {
   const dx = px - it.x, dy = py - it.y;
   return { x: (M.d * dx - M.c * dy) / det, y: (M.a * dy - M.b * dx) / det };
 };
-/* 改 x/y，让本地点 (lx,ly) 的文档坐标落在 (px,py)（当前 rot/skew/sx/sy 不变） */
 App.placeItemAtDocPoint = function (it, lx, ly, px, py) {
   const M = App.FZA.layerMatrix(it);
   it.x = px - (M.a * lx + M.c * ly);
   it.y = py - (M.b * lx + M.d * ly);
 };
-/* 锚点位置限制：目标图案变换后四角包围四边形内原样保留；外部投影到最近边 */
 App.clampToQuad = function (p, q) {
   if (!q || q.length < 4) return p;
   if (App.pointInQuad(p, q)) return p;
@@ -975,7 +762,6 @@ App.clampToQuad = function (p, q) {
   }
   return best || p;
 };
-/* 目标图案的四角（模型包围盒，零布局；放置期间不变 → 缓存） */
 App.anchorQuad = function (it) {
   const c = App._anchorQuadCache;
   if (c && c.id === it.id) return c.corners;
@@ -985,8 +771,7 @@ App.anchorQuad = function (it) {
   return corners;
 };
 
-/* ---------- 锚点图标（原生 SVG，无框架；屏幕尺寸恒定） ---------- */
-App.anchorIconPx = 20;        // 图标屏幕外接尺寸
+App.anchorIconPx = 20;        
 App.anchorArcPath = function (r, a0, a1) {
   const p0 = [r * Math.cos(a0 * D2R), r * Math.sin(a0 * D2R)];
   const p1 = [r * Math.cos(a1 * D2R), r * Math.sin(a1 * D2R)];
@@ -1000,7 +785,6 @@ App.ensureAnchorIcon = function () {
   const g = svgEl('g', { class: 'sve-anchor-icon', 'pointer-events': 'none' });
   const arcs = svgEl('g', { class: 'sve-anchor-arcs', 'pointer-events': 'none' });
   const R = App.anchorIconPx / 2 - 1.4;
-  /* 四段圆弧（缺口在上下左右）= “展开/瞄准”态；固定时整体收拢成环 = “合并”动画 */
   for (let i = 0; i < 4; i++) {
     arcs.appendChild(svgEl('path', {
       d: App.anchorArcPath(R, i * 90 + 24, i * 90 + 66),
@@ -1016,11 +800,10 @@ App.ensureAnchorIcon = function () {
   App.anchorArcsEl = arcs;
   return g;
 };
-/* 取消“合并”态：直接抹掉动画（不播反向展开动画，回到静态展开态） */
 App.anchorUnmerge = function () {
   const arcs = App.anchorArcsEl;
   if (!arcs) return;
-  try { arcs.getAnimations().forEach(a => a.cancel()); } catch (e) { /* 老环境无 WAAPI */ }
+  try { arcs.getAnimations().forEach(a => a.cancel()); } catch (e) {   }
 };
 App.anchorMergeAnim = function () {
   const arcs = App.anchorArcsEl;
@@ -1028,14 +811,12 @@ App.anchorMergeAnim = function () {
   try {
     arcs.animate([{ transform: 'scale(1)' }, { transform: 'scale(0.55)' }],
       { duration: 240, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'forwards' });
-  } catch (e) { /* ignore */ }
+  } catch (e) {   }
 };
-/* 每帧按状态重定位/显隐（只改 transform 与 style，不重建节点，动画不被打断） */
 App.drawAnchorIcon = function () {
   const it = App.anchorTarget();
   const a = it ? App.currentAnchor() : null;
   const placing = !!(it && App.state.anchorPlacing);
-  /* 旋转/倾斜模式下锚点图标也保留显示（移动、透明度不显示） */
   const _am = App.state.editMode;
   const show = !!it && (_am === 'size' || _am === 'rotate' || _am === 'skew') && (!!a || placing);
   if (!show) { if (App.anchorIconEl) App.anchorIconEl.style.display = 'none'; return; }
@@ -1045,20 +826,18 @@ App.drawAnchorIcon = function () {
   const doc = placing
     ? (App.anchorHoverDoc || App.itemLocalToDoc(it, 0, 0))
     : App.itemLocalToDoc(it, a.lx, a.ly);
-  const k = 1 / (App.state.view.scale || 1);   // 反向缩放：图标在屏幕上恒定尺寸
+  const k = 1 / (App.state.view.scale || 1);   
   el.setAttribute('transform', 'translate(' + fmtNum(doc.x, 3) + ' ' + fmtNum(doc.y, 3) + ') scale(' + fmtNum(k, 6) + ')');
 };
 
-/* ---------- 放置流程 ---------- */
 App.startAnchorPlacing = function () {
   const it = App.anchorTarget();
   if (!it) return false;
-  App.state.anchor = null;          // 重新放置：先丢弃旧锚点
+  App.state.anchor = null;          
   App.state.anchorPlacing = true;
   App.anchorHoverDoc = null;
   App._anchorQuadCache = null;
   App.anchorUnmerge();
-  /* 起始预览 = 图案当前几何包围盒中心（合并分组的本地原点常远离内容，不能用 (0,0)） */
   const bb = App.getItemDocBBox(it);
   const c = (bb && isFinite(bb.cx) && isFinite(bb.cy)) ? { x: bb.cx, y: bb.cy } : App.itemLocalToDoc(it, 0, 0);
   App.anchorHoverDoc = c;
@@ -1069,7 +848,6 @@ App.startAnchorPlacing = function () {
 };
 App.cancelAnchorPlacing = function () {
   if (!App.state.anchorPlacing) return;
-  /* 尚未点击固定：临时锚点直接丢弃，回到默认中心固定 */
   App.state.anchorPlacing = false;
   App.anchorHoverDoc = null;
   App.anchorHoverLocal = null;
@@ -1086,7 +864,6 @@ App.clearAnchor = function () {
   App.anchorUnmerge();
   if (App.anchorIconEl) App.anchorIconEl.style.display = 'none';
 };
-/* F 键与按钮的唯一入口：同一状态机，不产生两套逻辑 */
 App.toggleAnchor = function () {
   if (!App.anchorEligible()) return false;
   if (App.state.anchorPlacing) { App.cancelAnchorPlacing(); return true; }
@@ -1098,7 +875,6 @@ App.toggleAnchor = function () {
   }
   return App.startAnchorPlacing();
 };
-/* 放置期间鼠标移动：限制在四角四边形内并跟随 */
 App.onAnchorHover = function (clientX, clientY) {
   const it = App.anchorTarget();
   if (!it || !App.state.anchorPlacing) return;
@@ -1108,7 +884,6 @@ App.onAnchorHover = function (clientX, clientY) {
   App.anchorHoverLocal = App.docToItemLocal(it, p.x, p.y);
   App.drawAnchorIcon();
 };
-/* 点击固定：图案内部 = 点击处；图案外部 = 已限制后的边界位置 */
 App.fixAnchorAt = function (clientX, clientY) {
   const it = App.anchorTarget();
   if (!it || !App.state.anchorPlacing) return false;
@@ -1119,10 +894,9 @@ App.fixAnchorAt = function (clientX, clientY) {
   App.state.anchorPlacing = false;
   App.anchorHoverDoc = null;
   App.anchorHoverLocal = null;
-  App.anchorMergeAnim();            // 固定时播放一次“合并”动画，结束后保持合并静态态
+  App.anchorMergeAnim();            
   App.updateEditBar();
   App.drawOutlines();
-  /* 固定锚点后统一刷新编辑界面（不绕过 contentChanged 造成缓存过期） */
   if (App.contentChanged) App.contentChanged();
   return true;
 };
@@ -1135,9 +909,6 @@ function groupCenter(items) {
   });
   return { x: (minx + maxx) / 2, y: (miny + maxy) / 2 };
 }
-/* 多选组级旋转：绕组中心旋转（每个图层位置跟随 + 自身 rot 同步），
-   视觉上与合并分组整体旋转一致（不再各绕各的散开）。
-   合并分组目标用【内容中心】跟随（锚点远离内容中心，直接用锚点会跑偏） */
 App.groupRotateItems = function (items, dd, c) {
   if (!items.length) return;
   if (!c) c = groupCenter(items);
@@ -1154,8 +925,6 @@ App.groupRotateItems = function (items, dd, c) {
     App.applyItemTransform(it);
   });
 };
-/* 多选组级倾斜：绕组中心水平剪切（位置 x 偏移 + 每层 skew 同步），
-   视觉上与合并分组整体倾斜一致。合并分组目标用内容中心跟随 */
 App.groupSkewItems = function (items, dd, c) {
   if (!items.length) return;
   if (!c) c = groupCenter(items);
@@ -1178,7 +947,6 @@ App.groupSkewItems = function (items, dd, c) {
 App.applyEditRotate = function (dd) {
   const items = App.editTargets();
   if (items.length > 1) {
-    /* 多选：组矩阵模型（每个内容点绕组中心按同一矩阵旋转，与合并分组等价） */
     if (App.groupTransformApply(g => { g.rot += dd; })) {
       App.updateEditValue();
       App.refreshLayerThumbs();
@@ -1188,12 +956,10 @@ App.applyEditRotate = function (dd) {
   App.withTransformBatch(() => items.forEach(it => {
     const af = App.anchorFixedLocal(it);
     if (af) {
-      /* 锚点是唯一固定点，普通图层与合并分组走同一条路径。 */
       const p0 = App.itemLocalToDoc(it, af.x, af.y);
       it.rot += dd;
       App.placeItemAtDocPoint(it, af.x, af.y, p0.x, p0.y);
     } else if (it.kind === 'merged') {
-      /* 无锚点：合并分组保持内容几何中心（原逻辑不变） */
       const c = App.mergedContentCenter(it);
       const p = rotatePoint({ x: it.x, y: it.y }, c, dd);
       it.x = p.x; it.y = p.y; it.rot += dd;
@@ -1211,7 +977,6 @@ App.applyEditRotate = function (dd) {
 App.applyEditSkew = function (dd) {
   const items = App.editTargets();
   if (items.length > 1) {
-    /* 多选：组矩阵模型（倾斜作用在整组内容上，旋转层变形方向与合并分组一致） */
     if (App.groupTransformApply(g => { g.skew = App.clampSkew(g.skew + dd); })) {
       App.updateEditValue();
       App.refreshLayerThumbs();
@@ -1219,25 +984,17 @@ App.applyEditSkew = function (dd) {
     }
   }
   App.withTransformBatch(() => items.forEach(it => {
-    /* 「倾斜」的 WASD / 方向键调整用**固定相对于画布的速度**。
-       剪切位移 = 本机高 × tan(skew)，所以固定「度/秒」会让高图案位移快、矮图案慢。
-       这里**按本机高精确反解角度增量**：把 tan(skew) 的增量按 128/本机高 折算，
-       画布上的剪切位移速度恒定；本机高 = 128 时增量恰为 dd。
-       （用 tan/atan 反解而不是「角度 × 128/高」——后者只是一阶近似，
-         tan 的非线性会让高图案仍差千分之几。） */
     const _h = Math.max(1, App.localContentSize(it).h);
     const _th = it.skew * D2R;
     const _t0 = Math.tan(_th);
     const _t1 = _t0 + (128 / _h) * (Math.tan(_th + dd * D2R) - _t0);
     const d = Math.atan(_t1) / D2R - it.skew;
-    /* 锚点优先，且**普通图层与合并分组统一**。 */
     const af = App.anchorFixedLocal(it);
     if (af) {
       const p0 = App.itemLocalToDoc(it, af.x, af.y);
       it.skew = App.clampSkew(it.skew + d);
       App.placeItemAtDocPoint(it, af.x, af.y, p0.x, p0.y);
     } else if (it.kind === 'merged') {
-      /* 无锚点：合并分组倾斜后内容中心会随矩阵偏移，保持中心不动 */
       const c = App.mergedContentCenter(it);
       it.skew = App.clampSkew(it.skew + d);
       App.anchorToKeepCenter(it, c.x, c.y);
@@ -1261,7 +1018,6 @@ App.applyEditOpacityDelta = function (d) {
   App.refreshLayerThumbs();
 };
 
-/* ---------- 持续按键（WASD） ---------- */
 App.tick = function (dt) {
   if (!App.state.edit) return;
   const k = App.state.keys;
@@ -1276,7 +1032,6 @@ App.tick = function (dt) {
     if (k.has('right')) dx += sp * dt;
     if (dx || dy) App.applyEditMove(dx, dy);
   } else if (mode === 'size') {
-    /* 屏幕固定速度：除以画布缩放，放大/缩小多少视觉速度一致；与当前比例无关 */
     const d = (App.state.editSpeeds.size / 100) * dt / App.state.view.scale;
     if (App.state.sizeMode === 'prop') {
       let dd = 0;
@@ -1299,7 +1054,6 @@ App.tick = function (dt) {
     if (k.has('right')) d += App.state.editSpeeds.rotate * dt;
     if (d) App.applyEditRotate(d);
   } else if (mode === 'skew') {
-    /* A = 往左倾，D = 往右倾 */
     let d = 0;
     if (k.has('left')) d += App.state.editSpeeds.skew * dt;
     if (k.has('right')) d -= App.state.editSpeeds.skew * dt;
@@ -1307,25 +1061,21 @@ App.tick = function (dt) {
   } else if (mode === 'opacity') {
     const spd = (App.state.editSpeeds && isFinite(App.state.editSpeeds.opacity)) ? App.state.editSpeeds.opacity : 30;
     let d = 0;
-    if (k.has('up')) d += (spd / 100) * dt;   // W = 更不透明
-    if (k.has('down')) d -= (spd / 100) * dt;   // S = 更透明
+    if (k.has('up')) d += (spd / 100) * dt;   
+    if (k.has('down')) d -= (spd / 100) * dt;   
     if (d) App.applyEditOpacityDelta(d);
   }
 };
 
-/* ---------- 方向键微调 ---------- */
-/* dir：'up' | 'down' | 'left' | 'right'（语义方向，不依赖具体按键名，便于自定义快捷键） */
 App.arrowStep = function (dir) {
   const mode = App.state.editMode;
   if (!mode) return;
-  /* 编辑中任何操作：撤销未点「应用」的颜色预览 */
   if (App.cancelColorPreview) App.cancelColorPreview();
   const ns = App.state.nudgeSpeeds || {};
   const nv = (v, d) => (isFinite(v) ? v : d);
   App.editHist.checkpoint();
-  App.editHist.endGesture(); // 单次按键 = 一步
+  App.editHist.endGesture(); 
   if (mode === 'move') {
-    /* 屏幕固定速度：除以画布缩放（与 WASD 一致，放大/缩小后视觉位移相同） */
     const st = nv(ns.move, 0.2) / (App.state.view.scale || 1);
     let dx = 0, dy = 0;
     if (dir === 'left') dx -= st;
@@ -1334,10 +1084,6 @@ App.arrowStep = function (dir) {
     if (dir === 'down') dy += st;
     App.applyEditMove(dx, dy);
   } else if (mode === 'size') {
-    /* 方向键单步与 WASD 走同一条**绝对增量**通道（applyEditScaleDelta → scaleItemKeepCenterAbs），
-       增量同样要除以画布缩放 —— 否则视觉步长会随缩放同步变化（放大 4 倍时步长也是 4 倍）。
-       （2026-10-02 用户报障「调整速度随画布缩放变化」；实测修前 0.64/1.28/2.56/5.12 px 四档递增，
-         与 WASD 那条已除以缩放的口径不一致。） */
     const d = nv(ns.size, 0.8) / 100 / (App.state.view.scale || 1);
     if (App.state.sizeMode === 'prop') {
       if (dir === 'up' || dir === 'right') App.applyEditScaleDelta(d, d);
@@ -1345,17 +1091,15 @@ App.arrowStep = function (dir) {
     } else {
       if (dir === 'up') App.applyEditScaleDelta(0, d);
       else if (dir === 'down') App.applyEditScaleDelta(0, -d);
-      else if (dir === 'left') App.applyEditScaleDelta(d, 0);        // ← = 横向放大
-      else if (dir === 'right') App.applyEditScaleDelta(-d, 0);      // → = 横向缩小
+      else if (dir === 'left') App.applyEditScaleDelta(d, 0);        
+      else if (dir === 'right') App.applyEditScaleDelta(-d, 0);      
     }
-    /* applyEditScaleDelta 为 WASD 连续调整的性能故意不刷缩略图；单步要刷一次 */
     App.refreshLayerThumbs();
   } else if (mode === 'rotate') {
     const d = nv(ns.rotate, 0.1);
     if (dir === 'left') App.applyEditRotate(-d);
     else if (dir === 'right') App.applyEditRotate(d);
   } else if (mode === 'skew') {
-    /* 方向键与 A/D 一致：← = 往左倾，→ = 往右倾 */
     const d = nv(ns.skew, 0.1);
     if (dir === 'left') App.applyEditSkew(d);
     else if (dir === 'right') App.applyEditSkew(-d);
@@ -1366,8 +1110,6 @@ App.arrowStep = function (dir) {
   }
 };
 
-/* ---------- 鼠标 ---------- */
-/* 凸四边形（蓝框四角）内点判定：按顺时针/逆时针顺序传入 4 个角点 */
 App.pointInQuad = function (p, q) {
   let sign = 0;
   for (let i = 0; i < 4; i++) {
@@ -1382,13 +1124,6 @@ App.pointInQuad = function (p, q) {
   return true;
 };
 
-/* ================= 编辑态的「指针落在目标框内 / 框外」判定（唯一一份） =================
-   编辑目标（普通图层 / 合并分组 / 多选 / 背景）的文档包围盒四边形，命中即「框内」。
-   这条规则原本只写在旋转、倾斜两个分支里，移动与缩放各自另有一套（像素命中 / 直接 return），
-   于是「可拖区域」出现三套口径。现在统一走这里：
-     · 框内 → 移动图层（四种模式一致）
-     · 框外 → 旋转 / 倾斜 / 缩放各自的模式动作；移动模式框内外都是移动。
-   判据：矩形四边形用 pointInQuad（与手柄几何、命中判定同一个函数），不另造尺度。 */
 App.editPointerInside = function (clientX, clientY) {
   const items = App.editTargets();
   if (!items.length) return false;
@@ -1400,25 +1135,16 @@ App.editPointerInside = function (clientX, clientY) {
   return false;
 };
 
-/* 拖动速率：**四种模式里所有鼠标拖动**都走这里 —— 框外拖动、拖图层本身、拖手柄。
-   （2026-10-27 用户口径由「只管框外」改为全局。）
-   state.dragSpeeds 存的是**倍率**（1 = 跟手原速）；坏值/缺失一律回 1，坏值绝不进编辑循环。
-   ★ 边界：**画布平移（pan）不走这里** —— 它不是编辑手势，拖动速率影响不到它。 */
 App.dragSpeed = function (mode) {
   const d = (App.state && App.state.dragSpeeds) || {};
   const v = Number(d[mode]);
   return (isFinite(v) && v > 0) ? v : 1;
 };
 
-/* 手柄拖拽手势的起手（手柄命中 / 框外自由缩放共用同一份字段，
-   避免两处各写一遍 20 个字段后慢慢长歪）。
-   h：'nw'|'n'|'ne'|'e'|'se'|'s'|'sw'|'w' 或 'box'（框外自由缩放，见 onEditPointerMove） */
 App.beginHandleDrag = function (h, g, e, items) {
-  App.editHist.checkpoint(); // 手势开始前记录撤回点
+  App.editHist.checkpoint(); 
   const _g0 = App.editSession && App.editSession.grp
     ? { rot: App.editSession.grp.rot, skew: App.editSession.grp.skew, sx: App.editSession.grp.sx, sy: App.editSession.grp.sy } : null;
-  /* 有锚点（仅单目标）：手势开始时记录锚点的当前文档坐标，
-     拖动中据此重算 x/y —— 锚点屏幕位置全程不动（含 Shift 旋转/倾斜） */
   const _af = (items.length === 1) ? App.anchorFixedLocal(items[0]) : null;
   const _ad = _af ? App.itemLocalToDoc(items[0], _af.x, _af.y) : null;
   const _anchorCenter = (items.length === 1 && _ad) ? { x: _ad.x, y: _ad.y } : { x: g.cx, y: g.cy };
@@ -1429,33 +1155,27 @@ App.beginHandleDrag = function (h, g, e, items) {
     startX: e.clientX, startY: e.clientY,
     scale: App.state.view.scale,
     box: g.box,
-    handleDoc: { x: hp.x, y: hp.y }, // 手势起点的手柄文档坐标（跟手换算用，见 onEditPointerMove）
+    handleDoc: { x: hp.x, y: hp.y }, 
     center: _anchorCenter,
     anchorFix: _af,
     anchorDoc: _ad,
-    groupC: { x: g.cx, y: g.cy }, // 多选整组缩放的组中心
-    g0: _g0, // 多选组矩阵会话在手势起点的组参数快照
-    grabAngle: Math.atan2(hp.y - _anchorCenter.y, hp.x - _anchorCenter.x), // 手柄相对中心的初始角度（Shift 旋转用）
+    groupC: { x: g.cx, y: g.cy }, 
+    g0: _g0, 
+    grabAngle: Math.atan2(hp.y - _anchorCenter.y, hp.x - _anchorCenter.x), 
     rotLock: 0,
-    skewLock: 0, // Shift+上下手柄快捷倾斜的保持值
-    /* 拖动速率（2026-10-27 改回全局）：size 模式下**所有**手柄拖动
-       （四个角、四条边，以及框外自由缩放 h === 'box'）都吃 dragSpeeds.size */
+    skewLock: 0, 
     speed: App.dragSpeed('size'),
     snap: items.map(it => ({ it, x: it.x, y: it.y, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew,
       flipH: !!it.flipH, flipV: !!it.flipV }))
   };
-  try { App.svg.setPointerCapture(e.pointerId); } catch (err) { /* 合成事件无活动指针 */ }
+  try { App.svg.setPointerCapture(e.pointerId); } catch (err) {   }
   e.preventDefault();
 };
 
 App.onEditPointerDown = function (e) {
   if (App.state.spaceDown) return;
-  /* 编辑中鼠标操作：撤销未点「应用」的颜色预览 */
   if (App.cancelColorPreview) App.cancelColorPreview();
   const mode = App.state.editMode;
-  /* 正在放置锚点：画布上任意点击 = 在该处（已限制到图案四角范围内）固定锚点，
-     本次点击不进入任何拖动手势。
-     锚点在**大小 / 旋转 / 倾斜**三种模式下都保留，所以这三个模式下都要允许点击放置。 */
   if (App.state.anchorPlacing &&
       (mode === 'size' || mode === 'rotate' || mode === 'skew')) {
     App.fixAnchorAt(e.clientX, e.clientY);
@@ -1463,16 +1183,10 @@ App.onEditPointerDown = function (e) {
     return;
   }
   if (mode === 'move') {
-    /* 移动模式：**画布上按下哪儿都算**（不再要求咬住图案本身，也不要求落在背景图范围内）。
-       目标 = 当前编辑目标（普通图层 / 合并分组 / 多选 / 背景图片），整组一起走。 */
     const items = App.editTargets();
     if (!items.length) return;
-    /* 隐藏的背景图片仍然拖不动：看不见的东西不该被拖着走（与「拖哪儿都能动」不冲突 ——
-       那条讲的是**可拖区域**，这条讲的是**目标不可见时不响应**）。 */
     if (App.state.edit.type === 'bg' && App.state.bg.hidden) return;
-    App.editHist.checkpoint(); // 手势开始前记录撤回点（拖动过程中不重复记录）
-    /* 拖动速率（2026-10-27 改回全局）：move 模式下**所有**拖动都吃 dragSpeeds.move，
-       不再区分框内 / 框外 —— 拖图层本身也受速率影响。 */
+    App.editHist.checkpoint(); 
     App.drag = {
       kind: 'editmove',
       startX: e.clientX, startY: e.clientY,
@@ -1480,28 +1194,17 @@ App.onEditPointerDown = function (e) {
       speed: App.dragSpeed('move'),
       snap: items.map(it => ({ it, x: it.x, y: it.y }))
     };
-    try { App.svg.setPointerCapture(e.pointerId); } catch (err) { /* 合成事件无活动指针 */ }
+    try { App.svg.setPointerCapture(e.pointerId); } catch (err) {   }
     e.preventDefault();
   } else if (mode === 'size') {
-    /* 手柄隐藏时：命中层与角部兜底判定全部禁用（拖图案内部=移动保留） */
     const gizmo = App.state.showHandles !== false;
     const hEl = gizmo ? (e.target.closest && e.target.closest('[data-h]')) : null;
     const g = App.handleGeometry();
     if (!g) return;
-    /* 点击位置是否在图案框内：框内且没命中手柄 = 移动图案位置。
-       判定走 App.editPointerInside（与旋转/倾斜**同一份**，不再各写一遍）。 */
     const items = App.editTargets();
     const inside = App.editPointerInside(e.clientX, e.clientY);
-    /* 四角手柄**不再**按「框内/框外」一刀切。
-       以前是 `if (四角 && inside) h = null` —— 角手柄本来就骑在包围盒角上，
-       这条规则把朝内的那一半直接判死，而手柄本身只有 3~9px，实际可点只剩 4~5px；
-       更糟的是光标由 DOM 命中矩形决定，于是出现「光标已经变成手柄、点下去却在拖图层」。
-       现在命中区由 drawHandles 的命中矩形统一决定（框内框外一视同仁），
-       光标范围 = 判定范围，不再互相矛盾。2026-09-24 用户反馈。 */
     let h = hEl ? hEl.getAttribute('data-h') : null;
     if (!h && !inside && gizmo) {
-      /* 框外兜底判定：距四角 ≤ 命中区半径即视为该角手柄。
-         半径用 handleHitPx —— 与命中矩形同一个值，避免两套尺度不一致。 */
       const R = App.handleHitPx(g.box) / 2;
       let best = null, bestD = R;
       for (const k of ['nw', 'ne', 'se', 'sw']) {
@@ -1514,13 +1217,10 @@ App.onEditPointerDown = function (e) {
       h = best;
     }
     if (h) {
-      /* 手柄起手：与「框外自由缩放」共用同一份字段（App.beginHandleDrag） */
       App.beginHandleDrag(h, g, e, items);
     } else if (inside) {
-      /* 拖动蓝框内部（中心区域）= 移动图案位置（复用移动模式拖拽，中心/大小/旋转不变）
-         拖动速率（全局）：size 模式下拖图层本身也吃 dragSpeeds.size */
       if (!items.length) return;
-      App.editHist.checkpoint(); // 拖蓝框内部移动：开始前记录撤回点
+      App.editHist.checkpoint(); 
       App.drag = {
         kind: 'editmove',
         startX: e.clientX, startY: e.clientY,
@@ -1528,27 +1228,21 @@ App.onEditPointerDown = function (e) {
         speed: App.dragSpeed('size'),
         snap: items.map(it => ({ it, x: it.x, y: it.y }))
       };
-      try { App.svg.setPointerCapture(e.pointerId); } catch (err) { /* 合成事件无活动指针 */ }
+      try { App.svg.setPointerCapture(e.pointerId); } catch (err) {   }
       e.preventDefault();
     } else {
-      /* 框外：自由缩放（h = 'box'）。**不做角、只分上下左右** ——
-         横向位移 ÷ 框宽 = 宽度增量、纵向位移 ÷ 框高 = 高度增量，
-         与拖 e/w、n/s 四条边手柄完全同一口径；等比走同一套 propScalePair。 */
       if (!items.length) return;
       App.beginHandleDrag('box', g, e, items);
     }
   } else if (mode === 'rotate') {
-    /* 旋转模式鼠标拖拽：拖图案外部任意区域 = 绕中心旋转；
-       拖图案内部 = 调整位置（与移动模式同一拖拽） */
     const items = App.editTargets();
     if (!items.length) return;
     const pd = App.screenToDoc(e.clientX, e.clientY);
     const g = App.handleGeometry();
     if (!g) return;
     const inside = App.editPointerInside(e.clientX, e.clientY);
-    App.editHist.checkpoint(); // 手势开始前记录撤回点
+    App.editHist.checkpoint(); 
     if (inside) {
-      /* 拖动速率（全局）：rotate 模式下拖图层本身也吃 dragSpeeds.rotate */
       App.drag = {
         kind: 'editmove',
         startX: e.clientX, startY: e.clientY,
@@ -1557,7 +1251,6 @@ App.onEditPointerDown = function (e) {
         snap: items.map(it => ({ it, x: it.x, y: it.y }))
       };
     } else {
-      /* 有锚点（仅单目标）：旋转中心 = 锚点文档坐标（否则仍绕蓝框中心） */
       const _af = (items.length === 1) ? App.anchorFixedLocal(items[0]) : null;
       const _ad = _af ? App.itemLocalToDoc(items[0], _af.x, _af.y) : null;
       const _rc = _ad ? { x: _ad.x, y: _ad.y } : { x: g.cx, y: g.cy };
@@ -1566,25 +1259,21 @@ App.onEditPointerDown = function (e) {
         center: _rc,
         anchorFix: _af,
         anchorDoc: _ad,
-        /* 拖动速率：旋转档（只在框外起手才走到这里，框内是 editmove） */
         speed: App.dragSpeed('rotate'),
-        grabAngle: Math.atan2(pd.y - _rc.y, pd.x - _rc.x), // 指针相对中心的初始角度
+        grabAngle: Math.atan2(pd.y - _rc.y, pd.x - _rc.x), 
         g0: App.editSession && App.editSession.grp
           ? { rot: App.editSession.grp.rot, skew: App.editSession.grp.skew, sx: App.editSession.grp.sx, sy: App.editSession.grp.sy } : null,
         snap: items.map(it => App.editTransformSnap(it))
       };
     }
-    try { App.svg.setPointerCapture(e.pointerId); } catch (err) { /* 合成事件无活动指针 */ }
+    try { App.svg.setPointerCapture(e.pointerId); } catch (err) {   }
     e.preventDefault();
   } else if (mode === 'skew') {
-    /* 倾斜模式鼠标拖拽：拖图案外部 = 水平左右拖动调整倾斜角度；
-       拖图案内部 = 调整位置（与移动模式同一拖拽） */
     const items = App.editTargets();
     if (!items.length) return;
     const inside = App.editPointerInside(e.clientX, e.clientY);
-    App.editHist.checkpoint(); // 手势开始前记录撤回点
+    App.editHist.checkpoint(); 
     if (inside) {
-      /* 拖动速率（全局）：skew 模式下拖图层本身也吃 dragSpeeds.skew */
       App.drag = {
         kind: 'editmove',
         startX: e.clientX, startY: e.clientY,
@@ -1593,15 +1282,12 @@ App.onEditPointerDown = function (e) {
         snap: items.map(it => ({ it, x: it.x, y: it.y }))
       };
     } else {
-      /* 与旋转起手（上方 editrotate）完全对齐 ——
-         倾斜的鼠标拖拽同样要有锚点补偿，所以这里必须一起记下锚点的本地坐标与文档坐标。 */
       const _af = (items.length === 1) ? App.anchorFixedLocal(items[0]) : null;
       const _ad = _af ? App.itemLocalToDoc(items[0], _af.x, _af.y) : null;
       App.drag = {
         kind: 'editskew',
         startX: e.clientX, startY: e.clientY,
         scale: App.state.view.scale,
-        /* 拖动速率：倾斜档（只在框外起手才走到这里，框内是 editmove） */
         speed: App.dragSpeed('skew'),
         anchorFix: _af,
         anchorDoc: _ad,
@@ -1610,7 +1296,7 @@ App.onEditPointerDown = function (e) {
         snap: items.map(it => App.editTransformSnap(it))
       };
     }
-    try { App.svg.setPointerCapture(e.pointerId); } catch (err) { /* 合成事件无活动指针 */ }
+    try { App.svg.setPointerCapture(e.pointerId); } catch (err) {   }
     e.preventDefault();
   }
 };
@@ -1619,7 +1305,6 @@ App.onEditPointerMove = function (e) {
   if (!App.drag) return;
   const apply = fn => App.withTransformBatch ? App.withTransformBatch(fn) : fn();
   if (App.drag.kind === 'editmove') {
-    /* 拖动速率（全局）：四种模式的 editmove 起手都会写 speed（各自模式的倍率） */
     const _sp = (App.drag.speed > 0) ? App.drag.speed : 1;
     const dx = (e.clientX - App.drag.startX) / App.drag.scale * _sp;
     const dy = (e.clientY - App.drag.startY) / App.drag.scale * _sp;
@@ -1630,24 +1315,19 @@ App.onEditPointerMove = function (e) {
     if (App.scheduleFrameUpdate) App.scheduleFrameUpdate('edit');
     else App.drawOutlines();
   } else if (App.drag.kind === 'editrotate') {
-    /* 旋转模式拖图案外：指针绕中心的角度变化 = 旋转量（快照 + 增量，与方向键/WASD 共用撤回点） */
     const pd = App.screenToDoc(e.clientX, e.clientY);
-    /* 拖动速率：只在框外起手带 speed（框内是 editmove，走不到这里） */
     const _rsp = (App.drag.speed > 0) ? App.drag.speed : 1;
     const rotD = (Math.atan2(pd.y - App.drag.center.y, pd.x - App.drag.center.x) - App.drag.grabAngle) * 180 / Math.PI * _rsp;
     if (App.drag.snap.length > 1) {
-      /* 多选：组矩阵模型——组旋转 = 手势起点 + 指针总角（每个内容点同矩阵旋转，与合并分组一致） */
       const g0 = App.drag.g0;
       if (g0) { App.editSession.grp.rot = g0.rot + rotD; App.groupDecompose(); }
     } else {
       apply(() => App.drag.snap.forEach(s => {
         s.it.rot = s.rot + rotD;
-        /* 有锚点：旋转中心是锚点 —— 每帧把 x/y 重算回锚点文档坐标（锚点屏幕位置不动） */
         if (App.drag.anchorFix && App.drag.anchorDoc) {
           App.placeItemAtDocPoint(s.it, App.drag.anchorFix.x, App.drag.anchorFix.y, App.drag.anchorDoc.x, App.drag.anchorDoc.y);
         } else {
-          /* 只有【无锚点】时才按内容中心保持。 */
-          App.applySnapCenterKeep(s); // merged：内容几何中心保持不动
+          App.applySnapCenterKeep(s); 
         }
         App.applyItemTransform(s.it);
       }));
@@ -1655,25 +1335,19 @@ App.onEditPointerMove = function (e) {
     if (App.scheduleFrameUpdate) App.scheduleFrameUpdate('edit');
     else { App.drawOutlines(); App.updateEditValue(); }
   } else if (App.drag.kind === 'editskew') {
-    /* 倾斜模式拖图案外：水平位移 → 倾斜角（每拖 200 文档单位 = 60°）。
-       方向与 WASD/Shift 快捷一致：左拖（dx<0）→ 倾斜角增大，右拖（dx>0）→ 减小 */
     const dx = (e.clientX - App.drag.startX) / App.drag.scale;
-    /* 拖动速率：只在框外起手带 speed（框内是 editmove，走不到这里） */
     const _ksp = (App.drag.speed > 0) ? App.drag.speed : 1;
     const skewD = -(dx / 200) * 60 * _ksp;
     if (App.drag.snap.length > 1) {
-      /* 多选：组矩阵模型——组倾斜 = 手势起点 + 拖动总量（旋转层变形方向与合并分组一致） */
       const g0 = App.drag.g0;
       if (g0) { App.editSession.grp.skew = App.clampSkew(g0.skew + skewD); App.groupDecompose(); }
     } else {
       apply(() => App.drag.snap.forEach(s => {
         s.it.skew = App.clampSkew(s.skew + skewD);
-        /* 有锚点 → 锚点文档坐标每帧恢复原位；
-           无锚点 → merged 才按内容中心保持（普通图层跳过，与旋转分支同一套规则）。 */
         if (App.drag.anchorFix && App.drag.anchorDoc) {
           App.placeItemAtDocPoint(s.it, App.drag.anchorFix.x, App.drag.anchorFix.y, App.drag.anchorDoc.x, App.drag.anchorDoc.y);
         } else {
-          App.applySnapCenterKeep(s); // merged：内容几何中心保持不动
+          App.applySnapCenterKeep(s); 
         }
         App.applyItemTransform(s.it);
       }));
@@ -1681,36 +1355,21 @@ App.onEditPointerMove = function (e) {
     if (App.scheduleFrameUpdate) App.scheduleFrameUpdate('edit');
     else { App.drawOutlines(); App.updateEditValue(); }
   } else if (App.drag.kind === 'edithandle') {
-    /* 拖动速率（全局）：手柄（四个角/四条边）与框外自由缩放都按 dragSpeeds.size 缩放位移 */
     const _hsp = (App.drag.speed > 0) ? App.drag.speed : 1;
     const dx = (e.clientX - App.drag.startX) / App.drag.scale * _hsp;
     const dy = (e.clientY - App.drag.startY) / App.drag.scale * _hsp;
     const h = App.drag.h;
-    /* 把画布位移投影到图层本地轴（只按旋转转动；翻转不参与投影——
-       手柄在 AABB 边缘 = 视觉方向，拖拽方向与内容镜像无关。
-       否则翻转后拖 W/E、N/S 手柄的缩放方向会反） */
     const items = App.editTargets();
     const it = items[0];
     let dxx = 1, dxy = 0, dyx = 0, dyy = 1;
     if (it && it.w && it.h) {
       const th = (it.rot || 0) * D2R;
-      dxx = Math.cos(th); dxy = Math.sin(th); // 本地 +x 轴（单位向量，仅旋转）
-      dyx = -Math.sin(th); dyy = Math.cos(th); // 本地 +y 轴（单位向量，仅旋转）
+      dxx = Math.cos(th); dxy = Math.sin(th); 
+      dyx = -Math.sin(th); dyy = Math.cos(th); 
     }
-    const lx = dx * dxx + dy * dxy; // 沿本地 x 的拖拽分量
-    const ly = dx * dyx + dy * dyy; // 沿本地 y 的拖拽分量
+    const lx = dx * dxx + dy * dxy; 
+    const ly = dx * dyx + dy * dyy; 
     const _lcs = App.localContentSize(it);
-    /* ★★ 缩放换算**只有这一份**：给一个（虚拟）手柄的本地偏移，算出它两个分母。
-       上下左右四条边、四个角、以及「框外拖动」，全部调它 —— 不存在第二套公式。
-       手柄直接跟手：被拖的手柄走多远 = 鼠标走多远（都按本地轴投影）。
-       换算分母 = 手柄相对「缩放固定点」的偏移量，在「缩放参数 = 1」的那个尺度上量：
-         · 单个目标（普通图层 / 合并分组 / 背景）：固定点 = 锚点或内容中心，
-           偏移就是内容半宽/半高；
-         · 多选整组：组缩放参数从 1 起算，偏移就是「手柄相对组内容中心的旋转后偏移」。
-       分母与 sx/sy、翻转都无关 —— 它们同时出现在「偏移」和「缩放参数」里，正好约掉。
-       ★ 2026-10-30：倾斜改成「在缩放外层」之后，角手柄的水平偏移 = sx·hx + tan·sy·hy，
-         **对 sx 求导只剩 hx**（tan·sy·hy 那一项不再随宽度变）⇒ 分母里不许再带 tan 分量，
-         否则倾斜过的图案拖角手柄会跟不上鼠标。 */
     const _hc = (it && it.kind === 'merged') ? App.mergedLocalCenter(it) : { lcx: 0, lcy: 0 };
     const _denFor = function (hx, hy) {
       let denX = 2 * Math.abs(hx);
@@ -1721,18 +1380,12 @@ App.onEditPointerMove = function (e) {
         denX = 2 * Math.abs(_ox);
         denY = 2 * Math.abs(_oy);
       }
-      /* 退化保护：手柄正好落在固定点上时分母趋零，退回一个安全的等效尺度 */
       if (!isFinite(denX) || Math.abs(denX) < 1e-6) denX = Math.max(1, _lcs.w);
       if (!isFinite(denY) || Math.abs(denY) < 1e-6) denY = Math.max(1, _lcs.h);
       return { denX: denX, denY: denY };
     };
     let gx = 0, gy = 0;
     if (h === 'box') {
-      /* 框外拖动：**不做角，只做上下左右判定**，且两侧固定取同一条边：
-           · 左右缩放固定用**左手柄（w）**的判定：分母 = _denFor(-半宽, 0)，方向也照 w —— 往左拖变大；
-           · 竖直缩放固定用**上手柄（n）**的判定：分母 = _denFor(0, -半高)，方向也照 n —— 往上拖变大。
-         也就是「左上角跟着鼠标走」。分母只取单轴半宽/半高，**不带 skew 的横向分量** ——
-         这是「只分上下左右」的口径（与拖 w / n 手柄逐位一致，判据 D9/D12/D15 比对）。 */
       const _bw = (App.drag.snap.length > 1) ? Math.max(1, App.drag.box.w || 1) : _lcs.w;
       const _bh = (App.drag.snap.length > 1) ? Math.max(1, App.drag.box.h || 1) : _lcs.h;
       gx = -lx / _denFor(-_bw / 2, 0).denX;
@@ -1742,8 +1395,6 @@ App.onEditPointerMove = function (e) {
       const _sy = h.includes('s') ? 1 : h.includes('n') ? -1 : 0;
       const _d = _denFor(_sx * _lcs.w / 2, _sy * _lcs.h / 2);
       if (App.drag.snap.length > 1 && App.drag.handleDoc && App.drag.groupC) {
-        /* 多选整组：固定点 = 组内容中心；组参数从手势起点 g0 起算，
-           所以偏移要按 g0.rot 转回组本地轴（skew 在组参数里会与偏移里的项相消）。 */
         const _th0 = ((App.drag.g0 && App.drag.g0.rot) || 0) * D2R;
         const _ox = App.drag.handleDoc.x - App.drag.groupC.x;
         const _oy = App.drag.handleDoc.y - App.drag.groupC.y;
@@ -1759,23 +1410,14 @@ App.onEditPointerMove = function (e) {
     }
     if (App.state.sizeMode === 'prop') {
       if (App.drag.snap.length === 1 && it) {
-        /* 单图层「等比」= 保持长宽比：被拖的那根轴沿用原来的等量增量手感，
-           另一根轴按**同一比例**跟随（换算见 App.propScalePair）。
-           原来两轴各加同一增量 —— sx≠sy 的图案/分组（被拉伸过的占绝大多数）
-           每拖一次比例就被拉歪一次，用户看到的就是「等比失效」（2026-09-25 报障）。
-           多选整组走组矩阵（组参数起始 sx/sy = 1），等量增量本来就等价于等比，保持原样。 */
         const p = App.propScalePair(gx, gy);
         gx = p[0]; gy = p[1];
       } else {
-        /* 多选整组：组参数起点 sx/sy = 1，两轴取**同一个增量**即等比。
-           框外拖动没有“抓的是哪条边”，取位移更大的那一轴当主导（两轴接近时数值也接近，不会抖）。 */
         const g = (h === 'box') ? (Math.abs(gx) >= Math.abs(gy) ? gx : gy)
           : ((h.includes('e') || h.includes('w')) ? gx : gy);
         gx = g; gy = g;
       }
     }
-    /* Shift+角手柄：不调大小，改为绕中心旋转——手柄跟着鼠标走（旋转角度 = 指针角 - 初始角）；
-       松开 Shift 后旋转保持，继续拖动恢复调大小 */
     let rotD = 0;
     if (App.state.shiftDown && (h === 'nw' || h === 'ne' || h === 'sw' || h === 'se')) {
       gx = 0; gy = 0;
@@ -1786,13 +1428,6 @@ App.onEditPointerMove = function (e) {
     } else {
       rotD = App.drag.rotLock || 0;
     }
-    /* Shift+上下手柄（竖直方向边中点）左右拖 = 快捷改倾斜。
-       规则：**被抓住的那条边跟着鼠标走**（直接操作）。
-       skewX(+) 的剪切是「下半部分右移、上半部分左移」，所以上下手柄的符号必须相反：
-         · 上手柄 n：往左拖 → 倾斜角增大 → 上边左移，跟着鼠标；
-         · 下手柄 s：往右拖 → 倾斜角增大 → 下边右移，跟着鼠标。
-       （2026-09-24 修：以前两者共用 -lx，下手柄拖右时下边往左跑，与鼠标反向。）
-       每拖一个图案高度的距离 ≈ 60°，松 Shift 后保持 */
     let skewD = 0;
     if (App.state.shiftDown && (h === 'n' || h === 's')) {
       gx = 0; gy = 0;
@@ -1803,8 +1438,6 @@ App.onEditPointerMove = function (e) {
       skewD = App.drag.skewLock || 0;
     }
     if (App.drag.snap.length > 1) {
-      /* 多选整组：组矩阵模型——目标组参数 = 手势起点快照 + 当前手柄总量
-         （缩放 ×(1+2g)，Shift 旋转/倾斜加总量；每个内容点同矩阵变形，与合并分组一致） */
       const g0 = App.drag.g0;
       if (g0 && App.editSession && App.editSession.grp) {
         App.editSession.grp.rot = g0.rot + (rotD || 0);
@@ -1815,23 +1448,8 @@ App.onEditPointerMove = function (e) {
       }
     } else {
     apply(() => App.drag.snap.forEach(s => {
-      /* 中心固定：缩放以图案正中心对称进行，中心坐标保持不变；
-         单边手柄拖动时对面镜像（缩放增量 ×2），拖动距离与速度感不变。
-         缩放值一律带符号计算：保留当前 flipH/flipV（Tab 翻转/工具栏翻转后
-         拖手柄不再翻回去），过零时镜像切换照常 */
-      /* 缩放基准 = **手势起点**的带符号缩放（含起手时的翻转）。
-         ★ 这里的 flipH/flipV 必须取手势快照 `s.flipH/s.flipV`，**不能读实时的 `s.it.flipH`**：
-         `s.sx` 是起手快照，一旦实时翻转标志跟着过零翻过来，符号基准会整体反号 ——
-         表现为「手柄拖过中心后第二帧起尺寸暴涨」：
-           起手 sx=1、w=128，往左拖到 -100 文档单位
-             正确 |1 − 2·100/128| = 0.5625
-             实测（实时 flipH）|−1 − 1.5625| = 2.5625  ← 之后每帧继续线性暴涨
-         （2026-09-30 用户报障：把左右手柄拖到图案另一侧，尺寸会爆掉。） */
       const ssx = (s.flipH ? -1 : 1) * (s.sx || 1);
       const ssy = (s.flipV ? -1 : 1) * (s.sy || 1);
-      /* 有锚点（单目标，含合并分组）：固定点 = 锚点本地坐标。
-         缩放 / Shift 转角旋转 / Shift 上下手柄倾斜全程保持锚点文档坐标不动，
-         x/y 每帧从手势起点的锚点位置重算（不累积漂移） */
       if (App.drag.anchorFix && App.drag.anchorDoc) {
         const af = App.drag.anchorFix, ad = App.drag.anchorDoc;
         s.it.rot = rotD ? s.rot + rotD : s.it.rot;
@@ -1839,10 +1457,6 @@ App.onEditPointerMove = function (e) {
         App.applyScaleWithFlip(s.it, ssx + 2 * gx, ssy + 2 * gy);
         App.placeItemAtDocPoint(s.it, af.x, af.y, ad.x, ad.y);
       } else if (s.it.kind === 'merged') {
-        /* 合并分组：锚点远离内容中心（尤其旋转/倾斜后），用矩阵精确换算位置，
-           保证缩放/旋转/倾斜时【视觉中心不动】。
-           注意 x/y 必须用本帧最终 rot/skew 计算（不能沿用上帧值），
-           否则内容中心每帧滞后一个增量 → 旋转/倾斜时位置抽搐 */
         const cx = App.drag.center.x, cy = App.drag.center.y;
         const nsx = ssx + 2 * gx, nsy = ssy + 2 * gy;
         const { lcx, lcy } = App.mergedLocalCenter(s.it);
@@ -1853,14 +1467,12 @@ App.onEditPointerMove = function (e) {
         s.it.y = cy - (M.b * lcx + M.d * lcy);
         App.applyScaleWithFlip(s.it, nsx, nsy);
       } else {
-        /* 普通图层（无锚点）：中心固定——x/y 不动，缩放以图案正中心对称进行 */
         s.it.x = s.x;
         s.it.y = s.y;
         App.applyScaleWithFlip(s.it, ssx + 2 * gx, ssy + 2 * gy);
         if (rotD) s.it.rot = s.rot + rotD;
         if (skewD) s.it.skew = App.clampSkew(s.skew + skewD);
       }
-      /* 合并分组走「内容中心」分支时，rot/skew 在这里补写（锚点分支已在上面写好） */
       if (s.it.kind === 'merged' && !(App.drag.anchorFix && App.drag.anchorDoc)) {
         if (rotD) s.it.rot = s.rot + rotD;
         if (skewD) s.it.skew = App.clampSkew(s.skew + skewD);
@@ -1875,26 +1487,15 @@ App.onEditPointerMove = function (e) {
 };
 
 App.onEditPointerUp = function () {
-  /* ★ 多选整组会话里「拖拽移动」是**直接改 x/y**（不走组参数 G），
-     所以手势一结束必须重锚点（groupRebase：组参数清零 + 以当前状态为新 M0）。
-     否则下一次组级操作（大小/旋转/倾斜）会拿**会话开始时**的旧 M0 重算，
-     把这次移动整段抹掉 —— 用户看到的就是「移动后又瞬移回原来的地方」
-     （2026-10-03 报障）。单目标会话 groupRebase 直接返回，不受影响。 */
   if (App.drag && App.drag.kind === 'editmove') App.groupRebase();
   App.drag = null;
-  App.editHist.endGesture(); // 手势结束：下一次手势开始前记录新撤回点
+  App.editHist.endGesture(); 
 };
 
-/* ---------- Y：复制当前编辑图层（位置、大小、旋转、倾斜、透明度不变） ---------- */
-/* 副本插入到正在编辑的图层正下方（layers 数组与 DOM 顺序一致）；白框保持在编辑图层上。
-   锚点状态下（单个普通图案 + 已固定锚点）：只复制这一层，副本插到原图层下方，
-   当前编辑目标仍是原图层，原图层锚点信息保持不变；副本不共享可变的锚点对象
-   （锚点活在编辑会话 App.state.anchor 上，不是图层字段），也不继承「正在放置」状态。 */
 App.duplicateEditing = function () {
   if (!App.state.edit || App.state.edit.type === 'bg') return;
   const items = App.editTargets();
   if (!items.length) return;
-  /* 先收尾进行中的手势，保证这次一定拿到一个新撤回点（撤回点 = 复制前的状态） */
   App.editHist.endGesture();
   const cp = App.editHist.checkpoint();
   App.editHist.endGesture();
@@ -1906,21 +1507,15 @@ App.duplicateEditing = function () {
   copies.forEach((c, i) => {
     const it = items[i];
     if (!c.el) App.buildLayerElement(c);
-    /* 插到正在编辑的图层下方（先画=在下层；不经过 addLayer 的 appendChild） */
     App.layersRoot.insertBefore(c.el, it.el);
     App.state.layers.splice(App.state.layers.indexOf(it), 0, c);
     App.registerChildren(c);
     c.thumbDirty = true;
     if (c.kind === 'merged' && App.maybeBakeProxy) App.maybeBakeProxy(c);
   });
-  /* 撤回点带上本次新建的图层：编辑内 Ctrl+Z 会连同副本一起移除（原图层与锚点不受影响） */
   if (cp) cp.despawn = copies.map(c => c.id);
   App.refreshPanel();
   App.refreshCount();
-  /* 白框保持在正在编辑的图层上（复制不改变编辑目标）。
-     序号必须按**面板顺序**取：分组内编辑时图层栏被过滤（只显示组内层），
-     用「整表长度 − 数组下标」换算会越界，clamp 之后白框就落到别的图层上了
-     （2026-09-25 用户报障：分组内编辑里按 y 复制，白框跳到其他图层）。 */
   const first = items[0];
   const boxIdx = App.panelLayers().indexOf(first);
   if (boxIdx >= 0) App.lastWheelIdx = boxIdx;
@@ -1930,22 +1525,15 @@ App.duplicateEditing = function () {
   showToast(App.i18n.tf('toast.edit.copied', { n: copies.length }));
 };
 
-/* ---------- Tab：翻转循环（编辑模式） ----------
-   第1次=水平翻转，第2次=水平+垂直，第3次=垂直，第4次=无翻转（循环） */
 App.editFlipCycle = function () {
   const items = App.editTargets();
   if (!items.length) return;
   App.editHist.checkpoint();
   App.editHist.endGesture();
-  App.state.editFlipStep = (App.state.editFlipStep + 1) % 4; // 1,2,3,0
+  App.state.editFlipStep = (App.state.editFlipStep + 1) % 4; 
   const names = ['edit.flip.none', 'edit.flip.h', 'edit.flip.hv', 'edit.flip.v'];
   const wantH = App.state.editFlipStep === 1 || App.state.editFlipStep === 2;
   const wantV = App.state.editFlipStep === 2 || App.state.editFlipStep === 3;
-  /* ★ 多选整组：翻转必须与「合并分组」完全一致 —— **整组绕组内容中心镜像**（成员连位置一起镜像）。
-     逐层就地翻只翻各自图形、排列不变，与分组结果差一整个组宽：
-     实测同样 Tab×1，多选后内容仍在左侧、分组后镜像到了右侧（2026-10-03 用户要求「不能有任何区别」）。
-     组矩阵里镜像 = 组参数 sx/sy 取负号（G = T(C)·R·S·K·T(-C)，负号即绕组内容中心 C 镜像），
-     与合并分组「翻转后重算位置保持内容中心不动」是同一个几何结果。 */
   if (items.length >= 2 && App.editSession && App.editSession.grp) {
     App.groupTransformApply(g => {
       g.sx = Math.abs(g.sx) * (wantH ? -1 : 1);
@@ -1957,9 +1545,7 @@ App.editFlipCycle = function () {
     return;
   }
   items.forEach(it => {
-    /* 合并分组：翻转后重算锚点保持内容几何中心不动（否则内容绕锚点镜像跳到远处） */
     const c = it.kind === 'merged' && App.mergedContentCenter ? App.mergedContentCenter(it) : null;
-    /* 有缩放锚点时：翻转绕锚点进行（锚点屏幕位置保持不动，与缩放/旋转同一固定点语义） */
     const af = App.anchorFixedLocal(it);
     const p0 = af ? App.itemLocalToDoc(it, af.x, af.y) : null;
     it.flipH = wantH;
@@ -1972,9 +1558,6 @@ App.editFlipCycle = function () {
   App.drawOutlines();
   App.refreshLayerThumbs();
   if (App.contentChanged) App.contentChanged();
-  /* ★ 翻转也是直接改 flipH/flipV（不走组参数）⇒ 多选会话必须重锚点，
-     否则随后的大小/旋转/倾斜会用旧 M0 把翻转**翻回去**（2026-10-03 报障「翻转也失效了」）。
-     注意：上面的多选分支走组参数（sx/sy 取负号），已经不需要重锚点，这里只服务单目标路径。 */
   App.groupRebase();
   showToast(App.i18n.tf('toast.edit.flip', { v: App.i18n.t(names[App.state.editFlipStep]) }));
 };

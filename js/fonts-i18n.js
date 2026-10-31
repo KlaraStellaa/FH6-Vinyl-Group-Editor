@@ -1,7 +1,4 @@
 'use strict';
-/* 「设置 → 更改字体」的词条（加载时并入 App.i18n.dicts，与 shortcuts / keymap / help 同一套做法）。
-   该功能按需求**只对中文开放**：非中文语言下设置里那一行整行置灰、不可进入；
-   词条仍按 5 语言给全，避免切语言时任何一处 t() 落到裸 key 上。 */
 App.FONT_I18N = {
   'zh-CN': {
     'settings.font': '更改字体',
