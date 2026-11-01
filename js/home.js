@@ -68,6 +68,8 @@ App.Home = {
       this.refresh();
       showToast(App.i18n.t('toast.home.refreshed'));
     });
+    const folderBtn = document.getElementById('btnHomeOpenFolder');
+    if (folderBtn) folderBtn.addEventListener('click', () => this.openSvgFolder());
     window.addEventListener('sve-dirty', () => this.refresh());
     this.__evDropdownsInit = true;
     document.querySelectorAll('#homeSort, #forzaAccountSel').forEach(sel => {
@@ -364,6 +366,14 @@ App.Home = {
     const n = (r.imported || []).length;
     showToast(App.i18n.tf('toast.home.imported', { n: n, names: (r.imported || []).join('、') }));
     this.refresh();
+  },
+
+  async openSvgFolder() {
+    if (!window.sveApi || !window.sveApi.homeOpenFolder) return;
+    let r = null;
+    try { r = await window.sveApi.homeOpenFolder(); }
+    catch (e) { showToast(App.i18n.tf('toast.home.openFolderFail', { v: String(e && e.message || e) })); return; }
+    if (!r || !r.ok) showToast(App.i18n.tf('toast.home.openFolderFail', { v: (r && r.error) || '' }));
   },
 
   async delSelected() {

@@ -31,6 +31,8 @@ contextBridge.exposeInMainWorld('sveApi', Object.assign({
   settingsGet: () => ipcRenderer.invoke('settings-get'),
   settingsSet: (s) => ipcRenderer.invoke('settings-set', s),
   updateInstall: (payload) => ipcRenderer.invoke('update-install', payload || {}),
+  updatePickExe: (arg) => ipcRenderer.invoke('update-pick-exe', arg || {}),    
+  homeOpenFolder: () => ipcRenderer.invoke('home-open-folder'),
   updateOpenRepo: () => ipcRenderer.invoke('update-open-repo'),
   onUpdateAvailable: (cb) => {
     if (typeof cb !== 'function') return function () { };

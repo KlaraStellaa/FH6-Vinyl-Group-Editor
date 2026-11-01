@@ -1138,6 +1138,8 @@ html[data-scheme="light"] #shortcutPanel .sc-keys kbd { color: var(--text); }
   white-space: pre-wrap; word-break: break-word; user-select: text;
 }
 .upd-hint { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--dim); }
+.upd-box .anchor-btns .upd-pick { margin-right: auto; }
+.upd-box .anchor-btns .upd-pick.disabled { opacity: .5; cursor: default; }
 
 .settings-box.ft-mode { width: 470px; }
 #settingsFontView { display: flex; flex-direction: column; min-height: 0; }

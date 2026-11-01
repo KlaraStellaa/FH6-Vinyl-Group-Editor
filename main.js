@@ -78,7 +78,7 @@ function downloadToFile(url, dest, onPct) {
           out.once('drain', () => { try { res.resume(); } catch (e) {   } });
         }
         if (total) report(Math.min(99, Math.round(got / total * 100)), got, total);
-        else report(0, got, total);           
+        else report(-1, got, total);
       });
       res.on('end', () => {
         if (idleTimer) { try { clearTimeout(idleTimer); } catch (e) {   } idleTimer = null; }
@@ -96,6 +96,105 @@ function downloadToFile(url, dest, onPct) {
     req.on('error', fail);
     req.end();
   });
+}
+
+
+function portableExePath() {
+  const p = process.env.PORTABLE_EXECUTABLE_FILE || (app.isPackaged ? app.getPath('exe') : '');
+  return p || '';
+}
+
+const EXE_MIN_BYTES = 20 * 1024 * 1024;
+
+function checkExePackage(file) {
+  let st;
+  try { st = fs.statSync(file); } catch (e) { return { ok: false, error: 'not-found' }; }
+  if (!st.isFile()) return { ok: false, error: 'not-exe' };
+  if (st.size < EXE_MIN_BYTES) return { ok: false, error: 'too-small', size: st.size };
+  let fd = null;
+  try {
+    fd = fs.openSync(file, 'r');
+    const head = Buffer.alloc(2);
+    fs.readSync(fd, head, 0, 2, 0);
+    if (head[0] !== 0x4d || head[1] !== 0x5a) return { ok: false, error: 'not-exe' };   
+    const needle = Buffer.from('FH6 Vinyl Group Editor', 'utf16le');
+    const chunk = Buffer.alloc(1 << 20);
+    const tail = Buffer.alloc(needle.length - 1);
+    let pos = 0, found = false;
+    while (!found && pos < st.size) {
+      const n = fs.readSync(fd, chunk, 0, chunk.length, pos);
+      if (n <= 0) break;
+      const hay = pos === 0 ? chunk.subarray(0, n) : Buffer.concat([tail, chunk.subarray(0, n)]);
+      if (hay.indexOf(needle) >= 0) found = true;
+      hay.copy(tail, 0, Math.max(0, hay.length - tail.length));
+      pos += n;
+    }
+    const nameOk = found || /(fh6|vinyl).*(editor|group)/i.test(path.basename(file));
+    if (!nameOk) return { ok: false, error: 'wrong-app' };
+    return { ok: true, size: st.size, name: path.basename(file), byContent: found };
+  } catch (e) {
+    return { ok: false, error: 'unreadable', message: String(e && e.message || e).slice(0, 120) };
+  } finally {
+    try { if (fd !== null) fs.closeSync(fd); } catch (e) {   }
+  }
+}
+
+function moveIntoPlace(src, dst) {
+  try {
+    fs.renameSync(src, dst);
+    return 'rename';
+  } catch (e) {
+    if (!e || e.code !== 'EXDEV') throw e;
+    fs.copyFileSync(src, dst);
+    try { fs.unlinkSync(src); }
+    catch (e2) { appendLog('warn', '手动安装：源文件删不掉（已复制，安装继续）', { file: path.basename(src), message: String(e2 && e2.message || e2).slice(0, 120) }); }
+    return 'copy+unlink';
+  }
+}
+
+function scheduleExeReplace(newExe, targetExe) {
+  const bat = path.join(os.tmpdir(), 'sve-replace-' + Date.now() + '.bat');
+  const script = [
+    '@echo off',
+    'setlocal',
+    'set "TGT=%~1"',
+    'set "NEW=%~2"',
+    'set "OPID=%~3"',
+    'set /a N=0',
+    ':WAIT',
+    'tasklist /FI "PID eq %OPID%" /NH 2>nul | find "%OPID%" >nul',
+    'if errorlevel 1 goto REPLACE',
+    'set /a N+=1',
+    'if %N% GTR 120 goto REPLACE',
+    'ping -n 2 127.0.0.1 >nul',
+    'goto WAIT',
+    ':REPLACE',
+    'set /a N=0',
+    ':MV',
+    'move /y "%NEW%" "%TGT%" >nul 2>&1',
+    'if not errorlevel 1 goto STARTIT',
+    'set /a N+=1',
+    'if %N% GTR 60 goto FAILED',
+    'ping -n 1 127.0.0.1 >nul',
+    'goto MV',
+    ':STARTIT',
+    'start "" "%TGT%"',
+    'goto CLEAN',
+    ':FAILED',
+    'del "%NEW%" >nul 2>&1',
+    'start "" "%TGT%"',
+    ':CLEAN',
+    'del "%~f0"',
+    'exit /b'
+  ].join('\r\n');
+  fs.writeFileSync(bat, script, 'ascii');
+  const child = require('child_process').spawn(
+    'cmd.exe',
+    ['/c', bat, targetExe, newExe, String(process.pid)],
+    { detached: true, stdio: 'ignore', windowsHide: true }
+  );
+  child.unref();
+  return bat;
 }
 
 const ISOLATE = process.env.SVGBIANJI_ISOLATE === '1';
@@ -650,9 +749,19 @@ app.whenReady().then(() => {
     if (exePath) {
       const dir = path.dirname(exePath);
       fs.readdirSync(dir).forEach(n => {
-        if (/\.old\.exe$/i.test(n)) { try { fs.unlinkSync(path.join(dir, n)); } catch (e) {   } }
+        if (/\.old\.exe$/i.test(n) || /^update-(manual-)?\d+\.exe$/i.test(n)) {
+          try { fs.unlinkSync(path.join(dir, n)); } catch (e) {   }
+        }
       });
     }
+  } catch (e) {   }
+  try {
+    const tmpDir = os.tmpdir();
+    fs.readdirSync(tmpDir).forEach(n => {
+      if (/^sve-(replace|update-restart)-\d+\.bat$/i.test(n)) {
+        try { fs.unlinkSync(path.join(tmpDir, n)); } catch (e) {   }
+      }
+    });
   } catch (e) {   }
   protocol.handle('app', (request) => {
     const u = new URL(request.url);
@@ -1139,10 +1248,10 @@ app.whenReady().then(() => {
       try { if (sender && !sender.isDestroyed()) sender.send('update-progress', { pct: pct, got: got || 0, total: total || 0 }); }
       catch (err) {   }
     };
+    const exePath = portableExePath();
+    if (!exePath) return { ok: false, error: 'no-exe-path' };
+    const tmp = path.join(path.dirname(exePath), 'update-' + Date.now() + '.exe');
     try {
-      const exePath = process.env.PORTABLE_EXECUTABLE_FILE || app.getPath('exe');
-      const dir = path.dirname(exePath);
-      const tmp = path.join(dir, 'update-' + Date.now() + '.exe');
       appendLog('info', '自动更新：开始下载', { url: String(url).slice(0, 120), to: tmp });
       let lastErr = null;
       for (let attempt = 1; attempt <= 3; attempt++) {
@@ -1159,31 +1268,72 @@ app.whenReady().then(() => {
         }
       }
       if (lastErr) throw lastErr;
-      const oldPath = exePath.replace(/\.exe$/i, '') + '.old.exe';
-      try { if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath); } catch (err) {   }
-      fs.renameSync(exePath, oldPath);           
-      try {
-        fs.renameSync(tmp, exePath);             
-      } catch (err) {
-        try { fs.renameSync(oldPath, exePath); } catch (err2) {   }
-        throw err;
+      const chk = checkExePackage(tmp);
+      if (!chk.ok) {
+        try { fs.unlinkSync(tmp); } catch (e2) {   }
+        appendLog('warn', '自动更新：安装包校验未通过', chk);
+        return { ok: false, error: 'bad-package', detail: chk.error };
       }
-      appendLog('info', '自动更新：已替换，准备重启', { exe: exePath });
-      try {
-        const bat = path.join(os.tmpdir(), 'sve-update-restart-' + Date.now() + '.bat');
-        fs.writeFileSync(bat, '@echo off\r\ntimeout /t 2 /nobreak >nul\r\nstart "" "' + exePath + '"\r\ndel "%~f0"\r\n', 'utf8');
-        const child = require('child_process').spawn('cmd.exe', ['/c', bat], { detached: true, stdio: 'ignore', windowsHide: true });
-        child.unref();
-      } catch (e) {
-        appendLog('warn', '重启脚本失败，退回 relaunch', { message: String(e && e.message || e).slice(0, 160) });
-        try { app.relaunch({ execPath: exePath }); } catch (e2) { app.relaunch(); }
-      }
-      setTimeout(() => { app.exit(0); }, 300);
-      return { ok: true };
+      appendLog('info', '自动更新：安装包校验通过，安排退出后替换', { size: chk.size, byContent: chk.byContent });
+      scheduleExeReplace(tmp, exePath);
+      setTimeout(() => { try { app.exit(0); } catch (e2) {   } }, 400);
+      return { ok: true, size: chk.size };
     } catch (err) {
+      try { fs.unlinkSync(tmp); } catch (e2) {   }
       appendLog('warn', '自动更新失败', { message: String(err && err.message || err).slice(0, 200) });
       return { ok: false, error: String(err && err.message || err) };
     }
+  });
+
+  ipcMain.handle('update-pick-exe', async (e, payload) => {
+    if (!app.isPackaged) return { ok: false, error: 'dev' };
+    const exePath = portableExePath();
+    if (!exePath) return { ok: false, error: 'no-exe-path' };
+    let src = '';
+    const forced = (process.env.SVGBIANJI_TEST && payload && payload.file) ? String(payload.file) : '';
+    if (forced) {
+      src = forced;
+    } else {
+      const win = BrowserWindow.fromWebContents(e.sender);
+      let r;
+      try {
+        r = await dialog.showOpenDialog(win, {
+          title: dt('dlg.pickExe'),
+          filters: [{ name: dt('dlg.filterExe'), extensions: ['exe'] }],
+          properties: ['openFile']
+        });
+      } catch (err) {
+        return { ok: false, error: String(err && err.message || err).slice(0, 160) };
+      }
+      if (!r || r.canceled || !r.filePaths || !r.filePaths.length) return { ok: false, canceled: true };
+      src = r.filePaths[0];
+    }
+    if (path.resolve(src).toLowerCase() === path.resolve(exePath).toLowerCase()) {
+      return { ok: false, error: 'same-file' };
+    }
+    const chk = checkExePackage(src);
+    if (!chk.ok) {
+      appendLog('warn', '手动安装：所选文件校验未通过', { file: path.basename(src), error: chk.error });
+      return { ok: false, error: chk.error };
+    }
+    const tmp = path.join(path.dirname(exePath), 'update-manual-' + Date.now() + '.exe');
+    try {
+      moveIntoPlace(src, tmp);
+    } catch (err) {
+      try { fs.unlinkSync(tmp); } catch (e2) {   }
+      appendLog('warn', '手动安装：搬移安装包失败', { message: String(err && err.message || err).slice(0, 160) });
+      return { ok: false, error: String(err && err.message || err).slice(0, 160) };
+    }
+    appendLog('info', '手动安装：已搬入本地安装包（源文件已移除），安排退出后替换',
+      { file: path.basename(src), size: chk.size });
+    try {
+      scheduleExeReplace(tmp, exePath);
+    } catch (err) {
+      try { fs.unlinkSync(tmp); } catch (e2) {   }
+      return { ok: false, error: String(err && err.message || err).slice(0, 160) };
+    }
+    setTimeout(() => { try { app.exit(0); } catch (e2) {   } }, 400);
+    return { ok: true, size: chk.size };
   });
 
   ipcMain.handle('update-open-repo', async () => {
@@ -1301,6 +1451,20 @@ app.whenReady().then(() => {
       return { ok: true, canceled: false, imported: imported, dir: dir };
     } catch (err) {
       return { ok: false, error: String(err && err.message || err) };
+    }
+  });
+  ipcMain.handle('home-open-folder', async () => {
+    const dir = ensureDataDir(DATA_DIRS.svg);
+    try {
+      const err = await shell.openPath(dir);
+      if (err) {
+        try { shell.showItemInFolder(dir); } catch (e2) {   }
+        appendLog('warn', '打开 SVGImages 目录失败', { dir: dir, error: String(err).slice(0, 160) });
+        return { ok: false, error: String(err), dir: dir };
+      }
+      return { ok: true, dir: dir };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message || err), dir: dir };
     }
   });
   ipcMain.handle('file-recent', async () => {
