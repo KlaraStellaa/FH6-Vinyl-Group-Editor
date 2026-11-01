@@ -1,13 +1,16 @@
 'use strict';
+
 App.initPanels = function () {
   App.layerListEl = $('#layerList');
   App.layerListEl.addEventListener('click', e => {
+    
     if (App.lastPanelDragEnd && Date.now() - App.lastPanelDragEnd < 200) return;
     const item = e.target.closest('.layer-item');
     if (!item) return;
     const id = parseInt(item.getAttribute('data-id'), 10);
     App.onLayerItemClick(id);
   });
+  
   App.layerListEl.addEventListener('dblclick', e => {
     const item = e.target.closest('.layer-item');
     if (!item || App.state.tabDown) return;
@@ -22,6 +25,7 @@ App.initPanels = function () {
   App.initLayerDragReorder();
   App.initPlusRow();          
   App.initRightPanel();
+  
   document.addEventListener('keydown', e => {
     if (e.key !== 'Enter' || !App.state.plusAnchorActive || App.state.edit) return;
     const t = e.target;
@@ -32,8 +36,10 @@ App.initPanels = function () {
     e.stopPropagation();
     App.openPlusPicker();
   });
+  
   App.layerListEl.addEventListener('scroll', () => App.fillVisibleThumbs(), { passive: true });
 };
+
 
 App.initPlusRow = function () {
   const list = App.layerListEl;
@@ -42,6 +48,7 @@ App.initPlusRow = function () {
   const row = document.createElement('div');
   row.className = 'layer-plus';           
   row.id = 'layerPlusRow';
+  
   row.setAttribute('data-i18n', 'panel.plusTip');
   row.setAttribute('data-i18n-attr', 'title');
   row.title = App.i18n.t('panel.plusTip');
@@ -49,6 +56,7 @@ App.initPlusRow = function () {
   row.addEventListener('click', e => {
     e.preventDefault();
     e.stopPropagation();
+    
     if (App.state.plusAnchorActive) App.openPlusPicker();
     else App.setPlusAnchor(true);
   });
@@ -67,6 +75,7 @@ App.refreshPlusRow = function () {
   if (!list || !App.plusRowEl) return;
   if (list.firstChild !== App.plusRowEl) list.insertBefore(App.plusRowEl, list.firstChild);
 };
+
 App.setPlusAnchor = function (on) {
   on = !!on;
   if (!!App.state.plusAnchorActive === on) return;
@@ -74,6 +83,7 @@ App.setPlusAnchor = function (on) {
   if (on) {
     App.lastWheelIdx = undefined;   
     App.state.selBarDismissed = true;
+    
   }
   if (App.plusRowEl) App.plusRowEl.classList.toggle('anchor', on);
   App.syncPanelSelectionClasses();
@@ -81,6 +91,8 @@ App.setPlusAnchor = function (on) {
   App.requestFlashRefresh();
   App.alignWheelScroll();
 };
+
+
 App.openPlusPicker = async function () {
   const text = await App.fzaPickSvgLibrary();
   if (text === null) return;
@@ -91,17 +103,20 @@ App.onLayerItemClick = function (id) {
   const layer = App.findLayer(id);
   if (!layer) return;
   if (App.state.tabDown) {
+    
     App.rollbackTabAutoSel();
     App.state.tabGestureUsed = true;
     App.toggleLayerSelection(layer);
     App.scrollItemToTop(layer);
   } else if (App.state.selected.size > 1 || (App.state.selectedByTab && App.state.selected.size >= 1)) {
+    
     App.state.selBarDismissed = false;
     App.scrollItemToTop(layer);
     App.syncPanelSelectionClasses();
     App.updateSelToolbar();
     App.requestFlashRefresh();
   } else {
+    
     if (App.setPlusAnchor) App.setPlusAnchor(false);   
     App.state.selectedByTab = false;
     App.lastWheelIdx = undefined;
@@ -111,8 +126,10 @@ App.onLayerItemClick = function (id) {
   }
 };
 
+
 App.lastWheelIdx = undefined;
-App._progScrollTop = null;    
+App._progScrollTop = null;   
+
 App.layerRowH = function () {
   const items = $$('.layer-item', App.layerListEl);
   if (items.length >= 2) {
@@ -126,21 +143,27 @@ App.layerRowH = function () {
   }
   return 76;
 };
+
 App.alignWheelScroll = function () {
   const list = App.layerListEl;
   const wb = $('#wheelBox');
   if (!list || !wb) return;
+  
   if (!list.clientHeight) return;
   const rh = App.layerRowH();
   const plusH = App.plusRowH();   
   const n = App.panelLayers().length;
+  
   list.style.paddingTop = (1 * rh) + 'px';
   list.style.paddingBottom = Math.max(0, list.clientHeight - 2 * rh) + 'px';
+  
   wb.style.top = (1 * rh + plusH) + 'px';
   wb.style.height = Math.max(40, rh - 4) + 'px';
-  wb.classList.remove('hidden');    
+  wb.classList.remove('hidden');   
   if (!n) {
+    
     list.style.paddingBottom = '0px';
+    
     if (!App.state.plusAnchorActive && App.setPlusAnchor) {
       App.state.plusAnchorEmptyForce = true;
       App.setPlusAnchor(true);
@@ -151,14 +174,16 @@ App.alignWheelScroll = function () {
   }
   if (App.state.plusAnchorEmptyForce && App.state.plusAnchorActive) {
     App.state.plusAnchorEmptyForce = false;
-    if (App.setPlusAnchor) App.setPlusAnchor(false);    
+    if (App.setPlusAnchor) App.setPlusAnchor(false);   
   }
+  
   if (App.state.plusAnchorActive) {
     if (App.plusRowEl) App.plusRowEl.style.marginTop = plusH + 'px';
     list.scrollTop = 0;
     return;
   }
   if (App.plusRowEl) App.plusRowEl.style.marginTop = '';
+  
   let idx;
   if (App.lastWheelIdx !== undefined) idx = clamp(App.lastWheelIdx, 0, n - 1);
   else if (App.state.selected.size === 1) {
@@ -170,7 +195,9 @@ App.alignWheelScroll = function () {
   }
   App.lastWheelIdx = idx;
   const max = Math.max(0, list.scrollHeight - list.clientHeight);
-  const target = clamp(idx * rh, 0, max);    
+  
+  const target = clamp(idx * rh, 0, max);   
+  
   if (Math.abs(list.scrollTop - target) > 0.5) { App._progScrollTop = target; list.scrollTop = target; }
 };
 App.initLayerWheelNav = function () {
@@ -180,10 +207,12 @@ App.initLayerWheelNav = function () {
     e.stopPropagation();
     App.stepWhiteBox(e.deltaY > 0 ? 1 : -1);
   }, { passive: false });
+  
   App.layerListEl.addEventListener('scrollend', () => {
     const list = App.layerListEl;
     const n = App.panelLayers().length;
     if (!n) return;
+    
     if (App._progScrollTop !== null && Math.abs(list.scrollTop - App._progScrollTop) < 0.5) {
       App._progScrollTop = null;
       return;
@@ -191,6 +220,7 @@ App.initLayerWheelNav = function () {
     App._progScrollTop = null;
     const rh = App.layerRowH();
     if (App.state.plusAnchorActive) {
+      
       if (list.scrollTop > 0) {
         App.lastWheelIdx = clamp(Math.round(list.scrollTop / rh), 0, n - 1);
         App.setPlusAnchor(false);
@@ -204,23 +234,29 @@ App.initLayerWheelNav = function () {
       App.requestFlashRefresh();
       App.updateSelToolbar();
     }
+    
     if (list.scrollTop <= 0) { App.setPlusAnchor(true); return; }
     App.alignWheelScroll();
   });
 };
+
 App.stepWhiteBox = function (dir) {
   const n = App.panelLayers().length;
   if (!n) return;
   const ids = App.panelLayers().map(l => l.id); 
   let ni;
+  
   if (App.state.plusAnchorActive) {
     if (dir !== 1) return;
+    
     ni = 0;
     App.lastWheelIdx = ni;
     App.setPlusAnchor(false);
+    
   } else {
     let i;
     if (App.lastWheelIdx !== undefined) {
+      
       i = App.lastWheelIdx;
     } else if (App.state.tabDown) {
       const selIdx = Array.from(App.state.selected).map(id => ids.indexOf(id)).filter(j => j >= 0);
@@ -233,14 +269,18 @@ App.stepWhiteBox = function (dir) {
     }
     ni = clamp(i + dir, 0, n - 1);
     if (ni === i) {
+      
       if (dir === -1 && i === 0) App.setPlusAnchor(true);
       return; 
     }
     App.lastWheelIdx = ni;
   }
   if (App.state.tabDown) {
+    
     App.state.tabGestureUsed = true;
+    
     App.state.tabAutoSel = null;
+    
     if (!App.state.sweepMode) {
       App.state.sweepMode = App.state.selected.has(ids[ni]) ? 'remove' : 'add';
     }
@@ -270,21 +310,28 @@ App.stepWhiteBox = function (dir) {
       }
     }
   } else {
+    
     App.syncPanelSelectionClasses();
   }
+  
   App.alignWheelScroll();
+  
   App.requestFlashRefresh();
+  
   if (!App.state.tabDown) {
     App.state.selBarDismissed = true;
     App.updateSelToolbar();
   }
 };
 
+
 App.requestFlashRefresh = function (animate) {
   if (App.state.batching) return;
+  
   App.ensureFlashRunning(animate !== false);
   App.updateFlashOverlays(animate);
 };
+
 
 App.initLayerDragReorder = function () {
   const list = App.layerListEl;
@@ -294,6 +341,7 @@ App.initLayerDragReorder = function () {
   list.appendChild(App.dropIndicator);
 
   list.addEventListener('pointerdown', e => {
+    
     if (e.button !== 0 || App.state.edit || App.state.tabDown) return;
     const item = e.target.closest('.layer-item');
     if (!item) return;
@@ -325,6 +373,7 @@ App.initLayerDragReorder = function () {
     if (!wasActive) return;
     const q = App.dropIndexAt(e.clientY);
     if (q !== null && q !== undefined) App.reorderLayer(id, q);
+    
     App.lastPanelDragEnd = Date.now();
   });
   window.addEventListener('pointercancel', () => {
@@ -335,6 +384,7 @@ App.initLayerDragReorder = function () {
     App.clearDropMark();
   });
 };
+
 App.showDragGhost = function (item, x, y) {
   App.hideDragGhost();
   const src = item.querySelector('img');
@@ -384,6 +434,7 @@ App.clearDropMark = function () {
     it.classList.remove('drop-before', 'drop-after', 'drag-ghost'));
 };
 
+
 App.reorderLayer = function (id, q) {
   const i = App.state.layers.findIndex(l => l.id === id);
   if (i < 0) return;
@@ -393,11 +444,14 @@ App.reorderLayer = function (id, q) {
   const arrIdx = clamp(after - q, 0, after);
   App.state.layers.splice(arrIdx, 0, l);
   App.state.layers.forEach(x => App.layersRoot.appendChild(x.el));
+  
   if (App.invalidateEditStatic && App.editStatic && App.editStatic.active) App.invalidateEditStatic();
   App.refreshPanel();
   App.clearDropMark();
+  
   if (App.contentChanged) App.contentChanged();
 };
+
 
 App.panelLayers = function () {
   const ex = App.currentExcluded ? App.currentExcluded() : null;
@@ -408,6 +462,7 @@ App.panelLayers = function () {
 App.refreshPanel = function () {
   if (!App.layerListEl) return;
   const list = App.panelLayers(); 
+  
   const existing = new Map();
   $$('.layer-item', App.layerListEl).forEach(el => {
     existing.set(parseInt(el.getAttribute('data-id'), 10), el);
@@ -449,6 +504,7 @@ App.refreshPanel = function () {
     } else if (badge) {
       badge.remove();
     }
+    
     let mb = item.querySelector('.mask-badge');
     if (layer.isMask) {
       if (!mb) {
@@ -461,17 +517,21 @@ App.refreshPanel = function () {
     }
     App.layerListEl.appendChild(item); 
   });
+  
   if (App.dropIndicator) App.layerListEl.appendChild(App.dropIndicator);
   App.refreshPlusRow();
   App.syncPanelSelectionClasses();
   App.fillVisibleThumbs(); 
   App.alignWheelScroll(); 
+  
   if (App.syncGroupBackBtn) App.syncGroupBackBtn();
 };
+
 
 App.fillVisibleThumbs = function () {
   const list = App.layerListEl;
   if (!list) return;
+  
   if (!list.clientHeight) return;
   const st = list.scrollTop, vh = list.clientHeight;
   $$('.layer-item', list).forEach(item => {
@@ -480,6 +540,7 @@ App.fillVisibleThumbs = function () {
     const id = parseInt(item.getAttribute('data-id'), 10);
     const layer = App.findLayer(id);
     if (!layer) return;
+    
     if (App.state.edit && layer.kind === 'merged') return;
     const img = $('img', item);
     if (img && img.getAttribute('src') && !layer.thumbDirty) return;
@@ -503,7 +564,9 @@ App.syncPanelSelectionClasses = function () {
   $$('.layer-item', App.layerListEl).forEach((item) => {
     const id = parseInt(item.getAttribute('data-id'), 10);
     const inSel = App.state.selected.has(id);
+    
     const showTri = inSel && (App.state.selected.size > 1 || App.state.tabDown || (App.state.selected.size === 1 && App.state.selectedByTab));
+    
     if (item.classList.contains('multi-sel') !== inSel) item.classList.toggle('multi-sel', inSel);
     const selectedBg = item.querySelector('.layer-select-bg');
     if (selectedBg) {
@@ -521,10 +584,12 @@ App.syncPanelSelectionClasses = function () {
       tri.remove();
     }
   });
+  
   if (App.state.hideOthers && App.syncHideOthersSelection) App.syncHideOthersSelection();
 };
 
 App.refreshCount = function () {
+  
   const all = App.countPatterns();
   const ex = App.currentExcluded ? App.currentExcluded() : null;
   let text;
@@ -538,6 +603,7 @@ App.refreshCount = function () {
   if (App.updateHideLayersButton) App.updateHideLayersButton();
   if (App.updateLayersDisplaySlider) App.updateLayersDisplaySlider();
 };
+
 
 App.scrollItemToTop = function (layer, instant) {
   if (!App.layerListEl || !layer) return;
@@ -553,6 +619,7 @@ App.updateBaseButtons = function () {
   $('#btnBase').textContent = App.i18n.t(App.state.bg.base === 'light' ? 'toolbar.baseLight' : 'toolbar.baseDark');
   $('#btnGrid').textContent = App.i18n.t(App.state.bg.grid ? 'toolbar.gridOn' : 'toolbar.gridOff');
   $('#btnBgImage').textContent = App.i18n.t(App.state.bg.image ? 'toolbar.bgSet' : 'toolbar.bgNone');
+  
   if (App.refreshToolbarIcons) App.refreshToolbarIcons();
 };
 
@@ -560,12 +627,14 @@ App.switchTab = function (name) {
   const radio = document.querySelector('#panelTabs input[value="' + name + '"]');
   if (radio) radio.checked = true;
   const libEl = $('#libTab'), colorEl = $('#colorTab');
+  
   const target = name === 'lib' ? libEl : (name === 'color' ? colorEl : null);
   const willShow = !!(target && target.classList.contains('hidden'));
   [libEl, colorEl].forEach(el => { if (el) el.classList.remove('sve-tab-from-left', 'sve-tab-from-right'); });
   if (willShow) target.classList.add(name === 'lib' ? 'sve-tab-from-left' : 'sve-tab-from-right');
   if (libEl) libEl.classList.toggle('hidden', name !== 'lib');
   if (colorEl) colorEl.classList.toggle('hidden', name !== 'color');
+  
   const track = document.querySelector('#panelTabs .ev-tabs-track');
   if (track) {
     const checked = track.querySelector('input:checked');
@@ -576,8 +645,10 @@ App.switchTab = function (name) {
       glider.style.transform = 'translateX(' + label.offsetLeft + 'px)';
     }
   }
+  
   if (App.cancelColorPreview) App.cancelColorPreview();
 };
+
 
 
 App.initRightPanel = function () {
@@ -599,6 +670,7 @@ App.initRightPanel = function () {
     window.addEventListener('pointerup', up);
   });
   btn.addEventListener('click', () => App.toggleRightPanel());
+  
   let _autoT = null;
   window.addEventListener('mousemove', e => {
     if (!rp.classList.contains('minimized')) { clearTimeout(_autoT); _autoT = null; return; }
@@ -612,6 +684,7 @@ App.initRightPanel = function () {
     clearTimeout(_autoT); _autoT = null;
     if (rp.dataset.autoOpen === '1') App.toggleRightPanel(false, true);
   });
+  
   const track = document.querySelector('#panelTabs .ev-tabs-track');
   if (track) {
     track.querySelectorAll('input[type="radio"]').forEach(r => {
@@ -621,11 +694,12 @@ App.initRightPanel = function () {
   }
 };
 
+
 App.toggleRightPanel = function (open, auto) {
   const rp = $('#rightPanel'), btn = $('#panelMinBtn');
   if (!rp || !btn) return;
   const min = rp.classList.contains('minimized');
-  const wantMin = (open === undefined) ? !min : !open;    
+  const wantMin = (open === undefined) ? !min : !open;   
   if (wantMin === min) { if (auto !== undefined) rp.dataset.autoOpen = auto ? '1' : ''; return; }
   rp.classList.add('sve-panel-anim');
   setTimeout(() => rp.classList.remove('sve-panel-anim'), 280);
@@ -635,6 +709,7 @@ App.toggleRightPanel = function (open, auto) {
     btn.textContent = '▶';
     if (auto !== undefined) rp.dataset.autoOpen = auto ? '1' : ''; else delete rp.dataset.autoOpen;
   } else {
+    
     const cur = parseInt(rp.style.width, 10) || parseInt(rp.dataset.lastWidth, 10) || 312;
     if (cur > 60) rp.dataset.lastWidth = String(cur);
     rp.classList.add('minimized');
@@ -642,6 +717,7 @@ App.toggleRightPanel = function (open, auto) {
     delete rp.dataset.autoOpen;
   }
 };
+
 
 App.refreshClipboardPanel = function () {
   const panel = $('#clipboardPanel');
@@ -665,6 +741,7 @@ App.refreshClipboardPanel = function () {
   App.renderClipboardComposite(slims).then(async res => {
     if (seq !== App._clipboardPanelSeq || !res || !res.url) return;
     const img = $('#cpThumbImg');
+    
     const loaded = await App.showThumbImage(box, img, res.url, loader);
     if (!loaded || seq !== App._clipboardPanelSeq) return;
     const w = res.bw, h = res.bh;
@@ -677,6 +754,7 @@ App.refreshClipboardPanel = function () {
     console.warn('[thumb] 粘贴板缩略图生成失败', String(e && e.message || e).slice(0, 160));
   }).finally(() => App.finishThumbLoading(box, loader));
 };
+
 
 App.renderClipboardComposite = async function (slims) {
   let g = null;
@@ -696,11 +774,14 @@ App.renderClipboardComposite = async function (slims) {
     });
     const fake = { kind: 'merged', children, el: g, sx: 1, sy: 1, rot: 0, skew: 0, x: 0, y: 0 };
     (App.hiddenThumbHost || App.svg).appendChild(g);
+    
     const lb = App.mergedThumbGeometry(fake).lb;
     const bw = lb.w || 1, bh = lb.h || 1;
+    
     const size = Math.min(1024, Math.max(160, Math.round(Math.max(bw, bh) * 0.5)));
+    
     await Promise.all(symLayers.map(l => App.symbolColorUrl(l)));
-    const url = await App.mergedThumbUrl(fake, size);              
+    const url = await App.mergedThumbUrl(fake, size);             
     return { url, bw, bh };
   } catch (e) {
     console.warn('[thumb] renderClipboardComposite 失败', String(e && e.message || e).slice(0, 160));

@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('sveThumbHost', {
     const fp = path.resolve(String(filePath || ''));
     const name = path.basename(fp);
     const parent = path.basename(path.dirname(fp));
+    
     const bare = parent === 'svg-thumb-cache' && /^[a-f0-9]{40}\.png$/i.test(name);
     const namespaced = path.basename(path.dirname(path.dirname(fp))) === 'thumb-cache' &&
       /^[a-z0-9_-]{1,24}$/i.test(parent) && /^[a-f0-9]{40}\.png$/i.test(name);

@@ -1,3 +1,4 @@
+
 App.LIB_CAT_I18N = {
   'zh-CN': {
     'lib.cat.all': '全部分组',
@@ -105,6 +106,7 @@ App.LIB_CAT_I18N = {
     'lib.cat.pattern': '채우기 패턴'
   }
 };
+
 Object.keys(App.LIB_CAT_I18N).forEach(function (lang) {
   if (App.i18n.dicts[lang]) Object.assign(App.i18n.dicts[lang], App.LIB_CAT_I18N[lang]);
 });

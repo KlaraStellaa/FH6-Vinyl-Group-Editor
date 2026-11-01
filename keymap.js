@@ -1,19 +1,24 @@
 'use strict';
 
+
 var ACTIONS = [
   { id: 'pan', ctx: 'global', def: ['space'], label: 'km.a.pan' },
   { id: 'highlight', ctx: 'global', def: ['Tab'], label: 'km.a.highlight' },
   { id: 'undo', ctx: 'global', def: ['ctrl+z'], label: 'km.a.undo' },
   { id: 'redo', ctx: 'global', def: ['ctrl+shift+z'], label: 'km.a.redo' },
   { id: 'base', ctx: 'global', def: ['p'], label: 'km.a.base' },
+  
   { id: 'hideLayers', ctx: 'global', def: ['v'], label: 'km.a.hideLayers' },
   { id: 'hideBg', ctx: 'global', def: ['b'], label: 'km.a.hideBg' },
+  
   { id: 'hideOthers', ctx: 'global', def: ['c'], label: 'km.a.hideOthers' },
+  
   { id: 'opacityLayersDown', ctx: 'global', def: ['-'], label: 'km.a.opacityLayersDown' },
   { id: 'opacityLayersUp', ctx: 'global', def: ['='], label: 'km.a.opacityLayersUp' },
   { id: 'opacityBgDown', ctx: 'global', def: ['['], label: 'km.a.opacityBgDown' },
   { id: 'opacityBgUp', ctx: 'global', def: [']'], label: 'km.a.opacityBgUp' },
   { id: 'escape', ctx: 'global', def: ['Escape'], label: 'km.a.escape' },
+  
   { id: 'tabPrev', ctx: 'global', def: [], label: 'km.a.tabPrev' },
   { id: 'tabNext', ctx: 'global', def: [], label: 'km.a.tabNext' },
 
@@ -29,12 +34,14 @@ var ACTIONS = [
   { id: 'editDup', ctx: 'edit', def: ['y'], label: 'km.a.editDup' },
   { id: 'anchor', ctx: 'edit', def: ['f'], label: 'km.a.anchor' },
   { id: 'sizeMode', ctx: 'edit', def: ['Backspace'], label: 'km.a.sizeMode' },
+  
   { id: 'editFlip', ctx: 'edit', def: ['Tab'], label: 'km.a.editFlip', overrides: 'highlight' },
   { id: 'mode1', ctx: 'edit', def: ['1'], label: 'km.a.mode1' },
   { id: 'mode2', ctx: 'edit', def: ['2'], label: 'km.a.mode2' },
   { id: 'mode3', ctx: 'edit', def: ['3'], label: 'km.a.mode3' },
   { id: 'mode4', ctx: 'edit', def: ['4'], label: 'km.a.mode4' },
   { id: 'mode5', ctx: 'edit', def: ['5'], label: 'km.a.mode5' },
+  
   { id: 'modePrev', ctx: 'edit', def: [], label: 'km.a.modePrev' },
   { id: 'modeNext', ctx: 'edit', def: [], label: 'km.a.modeNext' },
   { id: 'nudgeUp', ctx: 'edit', def: ['ArrowUp'], label: 'km.a.nudgeUp' },
@@ -47,6 +54,7 @@ var ACTIONS = [
   { id: 'moveRight', ctx: 'edit', def: ['d'], label: 'km.a.moveRight' }
 ];
 
+
 var GROUPS = [
   { ctx: 'global', title: 'km.g.global' },
   { ctx: 'canvas', title: 'km.g.canvas' },
@@ -56,12 +64,14 @@ var GROUPS = [
 var ACTIONS_BY_ID = {};
 ACTIONS.forEach(function (a) { ACTIONS_BY_ID[a.id] = a; });
 
+
 var REJECT_KEYS = { 'Dead': 1, 'Unidentified': 1, 'Process': 1, 'Compose': 1 };
 var MODS = ['ctrl', 'alt', 'shift'];
 
 function isAction(id) { return !!ACTIONS_BY_ID[id]; }
 function defaultCombo(id) { var a = ACTIONS_BY_ID[id]; return a ? a.def.slice() : null; }
 function contextOf(id) { var a = ACTIONS_BY_ID[id]; return a ? a.ctx : null; }
+
 
 function normalizeKey(e) {
   if (!e) return null;
@@ -71,6 +81,7 @@ function normalizeKey(e) {
   if (k.length === 1) k = k.toLowerCase();
   else if (k === 'Esc') k = 'Escape';
   var parts = [];
+  
   if (e.ctrlKey || e.metaKey) parts.push('ctrl');
   if (e.altKey) parts.push('alt');
   if (e.shiftKey) parts.push('shift');
@@ -85,6 +96,7 @@ function splitCombo(combo) {
   parts.forEach(function (p) { if (mods[p] !== undefined) mods[p] = true; });
   return { mods: mods, key: key, hasMod: parts.length > 0 };
 }
+
 
 function isValidCombo(combo) {
   if (typeof combo !== 'string' || !combo) return false;
@@ -103,11 +115,13 @@ function matchesEvent(combo, e) {
   if (!ev) return false;
   if (ev === combo) return true;
   var s = splitCombo(combo);
-  if (s.hasMod) return false;             
+  if (s.hasMod) return false;            
+  
   var evs = splitCombo(ev);
   if (evs.mods.ctrl || evs.mods.alt) return false;
   return evs.key === s.key;
 }
+
 
 function matchSet(combo) {
   if (!isValidCombo(combo)) return [];
@@ -120,6 +134,7 @@ function sameBinding(a, b) {
   var A = matchSet(a), B = matchSet(b);
   return A.some(function (x) { return B.indexOf(x) >= 0; });
 }
+
 
 function resolve(saved) {
   var out = {};
@@ -134,10 +149,11 @@ function resolve(saved) {
       if (!isValidCombo(canon)) return;
       if (keep.indexOf(canon) < 0) keep.push(canon);
     });
-    out[a.id] = keep.length ? keep : def;     
+    out[a.id] = keep.length ? keep : def;    
   });
   return out;
 }
+
 
 function toSaved(map) {
   var out = {};
@@ -150,6 +166,7 @@ function toSaved(map) {
   return out;
 }
 
+
 function canConflict(idA, idB) {
   if (idA === idB) return false;
   var a = ACTIONS_BY_ID[idA], b = ACTIONS_BY_ID[idB];
@@ -159,6 +176,7 @@ function canConflict(idA, idB) {
   if (b.ctx !== 'global' && b.overrides === a.id) return false;
   return true;
 }
+
 
 function conflicts(map) {
   var list = [];
@@ -176,6 +194,7 @@ function conflicts(map) {
   return list;
 }
 
+
 var SPECIAL = {
   'space': { i18n: 'sc.k.space' }, 'ArrowUp': { text: '↑' }, 'ArrowDown': { text: '↓' },
   'ArrowLeft': { text: '←' }, 'ArrowRight': { text: '→' }, 'Escape': { text: 'Esc' },
@@ -190,6 +209,7 @@ function displayParts(combo) {
     return { text: p.length === 1 ? p.toUpperCase() : p };
   });
 }
+
 
 function comboFromEvent(e) { return normalizeKey(e); }
 

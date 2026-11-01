@@ -1,4 +1,5 @@
 'use strict';
+
 App.initBackground = function () {
   App.updateBaseButtons();
   App.applyBaseStyle();
@@ -16,6 +17,7 @@ App.initBackground = function () {
   });
   $('#btnHideBg').addEventListener('click', App.toggleBgHidden);
   $('#btnHideLayers').addEventListener('click', App.toggleLayersHidden);
+  
   $('#btnHideOthers').addEventListener('click', App.toggleHideOthers);
   $('#bgOpacityRange').addEventListener('input', App.onLayersDisplayOpacityInput);
   $('#bgOpacityBgRange').addEventListener('input', App.onBgDisplayOpacityInput);
@@ -24,10 +26,12 @@ App.initBackground = function () {
   App.updateLayersDisplaySlider();
   App.updateBgOpacitySlider();
 };
+
 App.onLayersDisplayOpacityInput = function () {
   const v0 = parseFloat($('#bgOpacityRange').value);
   const v = isNaN(v0) ? 100 : clamp(v0, 0, 100);
   App.state.layersDisplayOpacity = v / 100;
+  
   if (App.state.eyeMode) App.eyeOpacityUserChanged = true;
   App.applyLayersDisplayOpacity();
 };
@@ -45,10 +49,12 @@ App.updateLayersDisplaySlider = function () {
   else if (document.activeElement !== s) s.value = Math.round((App.state.layersDisplayOpacity ?? 1) * 100);
   App.applyLayersDisplayOpacity();
 };
+
 App.onBgDisplayOpacityInput = function () {
   const v0 = parseFloat($('#bgOpacityBgRange').value);
   const v = isNaN(v0) ? 100 : clamp(v0, 0, 100);
   App.state.bgDisplayOpacity = v / 100;
+  
   if (App.state.eyeMode) App.eyeOpacityUserChanged = true;
   App.applyBgDisplayOpacity();
 };
@@ -66,6 +72,7 @@ App.updateBgOpacitySlider = function () {
   else if (document.activeElement !== s) s.value = Math.round((App.state.bgDisplayOpacity ?? 1) * 100);
   App.applyBgDisplayOpacity();
 };
+
 App.nudgeLayersDisplayOpacity = function (dir) {
   const s = $('#bgOpacityRange');
   if (!s || s.disabled) return;
@@ -88,10 +95,13 @@ App.nudgeBgDisplayOpacity = function (dir) {
   if (App.state.eyeMode) App.eyeOpacityUserChanged = true;
   App.applyBgDisplayOpacity();
 };
+
 App.toggleLayersHidden = function () {
+  
   if (App.state.eyeMode === 'bg') { showToast(App.i18n.t('toast.bg.eyeBusyLayers')); return; }
   if (!App.state.layers.length) { showToast(App.i18n.t('toast.bg.noLayers')); return; }
   App.state.layersHidden = !App.state.layersHidden;
+  
   if (App.state.layersHidden) App.state.hideOthers = false;
   App.updateHideLayersButton();
 };
@@ -103,13 +113,18 @@ App.updateHideLayersButton = function () {
   b.classList.toggle('disabled', !has);
   if (!has) b.textContent = App.i18n.t('canvas.hideLayers');
   else b.textContent = App.i18n.t(App.state.layersHidden ? 'canvas.showLayers' : 'canvas.hideLayers');
+  
   App.updateHideOthers();
+  
   App.layersRoot.style.display = (App.state.layersHidden || App.state.eyeMode === 'bg') ? 'none' : '';
+  
   if (App.state.layersHidden) App.flashG.style.display = 'none';
   else if (App.flashOverlayMap && App.flashOverlayMap.size) App.animateFlash();
 };
+
 App.hideOthersTargets = function () {
   if (App.state.edit && App.state.edit.type !== 'bg') return App.editTargets();
+  
   if (App.state.selected.size >= 2) return App.selectedItems();
   return App.operationTargets();
 };
@@ -118,14 +133,18 @@ App.toggleHideOthers = function () {
   if (!App.state.hideOthers && !App.hideOthersTargets().length) return;
   App.state.hideOthers = !App.state.hideOthers;
   if (App.state.hideOthers) {
+    
     App.state.layersHidden = false;
+    
     if (App.autoStaticRelease) App.autoStaticRelease();
     if (App.editStatic && (App.editStatic.active || App.editStatic.baking) && App.endEditStatic) App.endEditStatic();
   }
   App.updateHideLayersButton();
 };
+
 App.applyHideOthersDisplay = function (full) {
   if (!App.state.hideOthers) {
+    
     const hid = App._hideOthersHidden;
     if (hid && hid.size) {
       hid.forEach(l => { if (l && l.el && l.el.style.display === 'none') l.el.style.display = ''; });
@@ -139,6 +158,7 @@ App.applyHideOthersDisplay = function (full) {
   const prevT = App._hideOthersTargets;
   const prevH = App._hideOthersHidden;
   if (!full && prevT && prevH) {
+    
     prevH.forEach(l => {
       if (targets.has(l)) { if (l.el && l.el.style.display === 'none') l.el.style.display = ''; prevH.delete(l); }
     });
@@ -148,6 +168,7 @@ App.applyHideOthersDisplay = function (full) {
     App._hideOthersTargets = targets;
     return;
   }
+  
   const hid = new Set();
   App.state.layers.forEach(l => {
     if (!l || !l.el) return;
@@ -157,11 +178,14 @@ App.applyHideOthersDisplay = function (full) {
   App._hideOthersTargets = targets;
   App._hideOthersHidden = hid;
 };
+
 App.syncHideOthersSelection = function () {
   if (!App.state.hideOthers) return;
   const on = App.refreshHideOthersButton();
+  
   App.applyHideOthersDisplay(on ? false : true);
 };
+
 App.refreshHideOthersButton = function () {
   const ob = $('#btnHideOthers');
   const has = App.hideOthersTargets().length > 0;
@@ -179,6 +203,7 @@ App.updateHideOthers = function () {
   App.applyHideOthersDisplay(true);
 };
 App.toggleBgHidden = function () {
+  
   if (App.state.eyeMode === 'bg') { showToast(App.i18n.t('toast.bg.eyeBusyBg')); return; }
   if (!App.state.bg.image) { showToast(App.i18n.t('toast.bg.noBg')); return; }
   App.state.bg.hidden = !App.state.bg.hidden;
@@ -192,6 +217,7 @@ App.updateHideBgButton = function () {
   b.classList.toggle('disabled', !has);
   if (!has) b.textContent = App.i18n.t('canvas.hideBg');
   else b.textContent = App.i18n.t(App.state.bg.hidden ? 'canvas.showBg' : 'canvas.hideBg');
+  
   App.bgG.style.display = (App.state.eyeMode === 'bg') ? '' : ((has && App.state.bg.hidden) ? 'none' : '');
 };
 
@@ -202,6 +228,7 @@ App.applyBaseStyle = function () {
 App.toggleBase = function () {
   App.state.bg.base = App.state.bg.base === 'light' ? 'dark' : 'light';
   App.applyBaseStyle();
+  
   App.ensureMaskIndDef();
   const mark = l => {
     if (l.isMask) { l.thumbDirty = true; l.thumbCache = null; }
@@ -216,6 +243,7 @@ App.toggleGrid = function () {
   App.updateGridVisibility();
   App.updateBaseButtons();
 };
+
 App.toggleWheelZoom = function () {
   App.state.wheelZoomEnabled = !App.state.wheelZoomEnabled;
   App.updateZoomWheelButton();
@@ -226,6 +254,7 @@ App.updateZoomWheelButton = function () {
   b.textContent = App.i18n.t(App.state.wheelZoomEnabled ? 'toolbar.zoomOn' : 'toolbar.zoomOff');
   b.classList.toggle('active', !App.state.wheelZoomEnabled);
 };
+
 App.GRID_MIN_CELL_PX = 8;
 App.updateGridVisibility = function () {
   if (!App.gridRect) return false;
@@ -234,7 +263,7 @@ App.updateGridVisibility = function () {
   const autoHidden = on && cellPx < App.GRID_MIN_CELL_PX;
   const want = (on && !autoHidden) ? '' : 'none';
   if (App.gridRect.style.display !== want) App.gridRect.style.display = want;
-  App._gridAutoHidden = autoHidden;    
+  App._gridAutoHidden = autoHidden;   
   return on && !autoHidden;
 };
 
@@ -288,11 +317,13 @@ App.setBackgroundImage = function (dataUrl) {
 App.applyBgTransform = function (m) {
   if (!m.el) return;
   const sfx = m.flipH ? -1 : 1, sfy = m.flipV ? -1 : 1;
+  
   m.el.setAttribute('transform',
     'translate(' + m.x + ' ' + m.y + ') rotate(' + m.rot + ') skewX(' + m.skew + ') scale(' + (m.sx * sfx) + ' ' + (m.sy * sfy) + ')');
   m.el.setAttribute('opacity', m.opacity);
   m.el.setAttribute('pointer-events', App.state.edit && App.state.edit.type === 'bg' && App.state.editMode === 'move' ? 'all' : 'none');
 };
+
 
 App.hitBgImageAt = function (clientX, clientY) {
   const e = App.state.edit;
@@ -319,6 +350,7 @@ App.removeBackground = function () {
   App.updateBgOpacitySlider();
 };
 
+
 App.sampleBackgroundColor = function (clientX, clientY) {
   const m = App.state.bg.image;
   if (!m || !m.imgEl) return null;
@@ -334,6 +366,7 @@ App.sampleBackgroundColor = function (clientX, clientY) {
   cx.clearRect(0, 0, w, h);
   cx.setTransform(v.scale, 0, 0, v.scale, -v.x * v.scale, -v.y * v.scale);
   cx.translate(m.x, m.y);
+  
   cx.rotate(m.rot * D2R);
   cx.transform(1, 0, Math.tan(m.skew * D2R), 1, 0, 0);
   cx.scale(m.sx * (m.flipH ? -1 : 1), m.sy * (m.flipV ? -1 : 1));
@@ -341,6 +374,7 @@ App.sampleBackgroundColor = function (clientX, clientY) {
   const px = clamp(Math.round(clientX - r.left), 0, w - 1);
   const py = clamp(Math.round(clientY - r.top), 0, h - 1);
   const d = cx.getImageData(px, py, 1, 1).data;
+  
   if (d[3] === 0) return null;
   return rgbToHex(d[0], d[1], d[2]);
 };

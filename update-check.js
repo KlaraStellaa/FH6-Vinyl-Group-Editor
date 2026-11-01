@@ -1,23 +1,27 @@
 'use strict';
+
 const { app, dialog, net, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-const CHECK_DELAY_MS = 8000;     
-const TIMEOUT_MS = 10000;        
+const CHECK_DELAY_MS = 8000;    
+const TIMEOUT_MS = 10000;       
 const API_ROOT = 'https://api.github.com/repos';
+
 
 function readRepo() {
   try {
     const pkg = require('./package.json');
     const r = pkg.repository;
     const url = typeof r === 'string' ? r : (r && r.url) || '';
+    
     const m = /github\.com[/:]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/.exec(String(url).trim());
     return m ? { owner: m[1], repo: m[2] } : null;
   } catch (e) {
     return null;
   }
 }
+
 
 function isNewer(a, b) {
   const pa = String(a).replace(/^v/i, '').split('.');
@@ -29,6 +33,7 @@ function isNewer(a, b) {
   }
   return false;
 }
+
 
 function fetchLatestRelease(owner, repo) {
   return new Promise((resolve, reject) => {
@@ -43,10 +48,10 @@ function fetchLatestRelease(owner, repo) {
     try {
       req.setHeader('User-Agent', 'VinylFH6-UpdateCheck');
       req.setHeader('Accept', 'application/vnd.github+json');
-    } catch (e) {   }
+    } catch (e) {  }
 
     const timer = setTimeout(() => {
-      try { req.abort(); } catch (e) {   }
+      try { req.abort(); } catch (e) {  }
       reject(new Error('request timeout'));
     }, TIMEOUT_MS);
 
@@ -54,7 +59,7 @@ function fetchLatestRelease(owner, repo) {
     req.on('response', res => {
       if (res.statusCode !== 200) {
         clearTimeout(timer);
-        resolve(null);    
+        resolve(null);   
         return;
       }
       res.on('data', chunk => { body += chunk; });
@@ -68,6 +73,7 @@ function fetchLatestRelease(owner, repo) {
     req.end();
   });
 }
+
 
 function skipFilePath() {
   try { return path.join(app.getPath('userData'), 'update-skip.json'); }
@@ -85,15 +91,17 @@ function writeSkipped(v) {
   const f = skipFilePath();
   if (!f) return;
   try { fs.writeFileSync(f, JSON.stringify({ skipVersion: String(v) }, null, 2), 'utf8'); }
-  catch (e) {   }
+  catch (e) {  }
 }
+
 
 function check(opts) {
   const onLog = (opts && opts.onLog) || null;
   const onAvailable = (opts && opts.onAvailable) || null;
+  
   const t = (opts && opts.t) || function (k, prm) { return prm ? k : k; };
   const log = (level, msg, data) => {
-    try { if (onLog) onLog(level, msg, data); } catch (e) {   }
+    try { if (onLog) onLog(level, msg, data); } catch (e) {  }
   };
 
   setTimeout(async () => {
@@ -106,6 +114,7 @@ function check(opts) {
     try {
       rel = await fetchLatestRelease(target.owner, target.repo);
     } catch (e) {
+      
       log('warn', '更新检查失败（已忽略）', { message: String(e && e.message || e).slice(0, 160) });
       return;
     }
@@ -120,6 +129,7 @@ function check(opts) {
       log('info', '更新检查：已是最新版本', { local, remote });
       return;
     }
+    
     const notes = String(rel.body || rel.name || '').trim();
     const assets = Array.isArray(rel.assets) ? rel.assets : [];
     const exeAsset = assets.find(a => /\.exe$/i.test(String(a && a.name || ''))) || null;

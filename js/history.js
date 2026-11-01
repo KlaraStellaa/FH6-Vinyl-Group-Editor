@@ -1,4 +1,5 @@
 'use strict';
+
 App.history = {
   undoStack: [],
   redoStack: [],
@@ -16,12 +17,15 @@ App.history = {
       } : null,
       lastColor: App.state.lastColor,
       clipboard: App.state.clipboard.map(s => JSON.parse(JSON.stringify(s))),
+      
       selIndexes: Array.from(App.state.selected).map(id => App.state.layers.findIndex(l => l.id === id)).filter(i => i >= 0),
       selectedByTab: !!App.state.selectedByTab,
       selBarDismissed: !!App.state.selBarDismissed,
+      
       groupEdit: (App.state.groupEdit && App.state.groupEdit.length)
         ? App.state.groupEdit.map(fr => ({
             excluded: App.state.layers.map((l, i) => (fr.excluded.has(l) ? i : -1)).filter(i => i >= 0),
+            
             anchor: fr.anchor ? App.state.layers.indexOf(fr.anchor) : -1
           }))
         : null
@@ -30,6 +34,7 @@ App.history = {
   trim: function () {
     if (this.undoStack.length > this.max) this.undoStack.shift();
   },
+  
   markContinuous: function () {
     if (this.gesture) return;
     const s = this.snapshot();
@@ -40,6 +45,7 @@ App.history = {
     this.gesture = true;
     if (App.Tabs && App.Tabs.markDirty) App.Tabs.markDirty();
   },
+  
   markDiscrete: function () {
     this.endGesture();
     this.undoStack.push(this.snapshot());
@@ -55,6 +61,7 @@ App.history = {
       if (!App.state.edit) this.endGesture();
     }, 600);
   },
+  
   cancelTop: function () {
     const start = (App.editHistStart !== undefined && App.editHistStart >= 0) ? App.editHistStart : this.undoStack.length;
     if (this.undoStack.length > start) {
@@ -66,6 +73,7 @@ App.history = {
     App.editHistStart = undefined;
   },
   restore: function (snap) {
+    
     if (App.invalidateEditStatic) App.invalidateEditStatic();
     App.clearAllLayers();
     snap.layers.forEach(slim => {
@@ -76,6 +84,7 @@ App.history = {
       App.state.layers.push(l);
       App.registerChildren(l);
     });
+    
     App.bgSeq++;
     const cur = App.state.bg.image;
     if (cur && cur.el && cur.el.parentNode) cur.el.parentNode.removeChild(cur.el);
@@ -94,14 +103,17 @@ App.history = {
       App.state.bg.image = null;
     }
     App.updateBaseButtons();
+    
     if (App.updateHideLayersButton) App.updateHideLayersButton();
     if (App.updateHideBgButton) App.updateHideBgButton();
     if (App.updateBgOpacitySlider) App.updateBgOpacitySlider();
     App.state.lastColor = snap.lastColor;
     App.state.clipboard = snap.clipboard.map(s => JSON.parse(JSON.stringify(s)));
+    
     App.state.selected = new Set((snap.selIndexes || []).map(i => (App.state.layers[i] ? App.state.layers[i].id : null)).filter(Boolean));
     App.state.selectedByTab = !!snap.selectedByTab;
     App.state.selBarDismissed = !!snap.selBarDismissed;
+    
     App.state.groupEdit = (snap.groupEdit || []).map(fr => {
       const set = new Set();
       (fr.excluded || []).forEach(i => { const l = App.state.layers[i]; if (l) set.add(l); });
@@ -115,12 +127,15 @@ App.history = {
     App.updateSelToolbar();
     App.refreshLayerThumbs();
     if (App.contentChanged) App.contentChanged({ preserveAutoStatic: false });
+    
     if (App.maybeBakeProxy) App.state.layers.forEach(l => { if (l.kind === 'merged') App.maybeBakeProxy(l); });
+    
     if (App.stopFlash) App.stopFlash();
     if (App.state.selected.size && App.requestFlashRefresh) App.requestFlashRefresh();
   },
   undo: function () {
     if (!this.undoStack.length) return false;
+    
     if (App.cancelColorPreview) App.cancelColorPreview();
     this.endGesture();
     this.redoStack.push(this.snapshot());
@@ -130,6 +145,7 @@ App.history = {
   },
   redo: function () {
     if (!this.redoStack.length) return false;
+    
     if (App.cancelColorPreview) App.cancelColorPreview();
     this.endGesture();
     this.undoStack.push(this.snapshot());

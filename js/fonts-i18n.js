@@ -1,4 +1,5 @@
 'use strict';
+
 App.FONT_I18N = {
   'zh-CN': {
     'settings.font': '更改字体',

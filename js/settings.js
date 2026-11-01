@@ -1,10 +1,16 @@
 'use strict';
+
 App.settings = {
   lang: 'zh-CN',
+  
   theme: 'light',
+  
+  
   customTheme: null,
+  
   helpHintAck: false,
   themeOf(id) { return App.theme.presetOf(id) || (id === App.theme.CUSTOM_ID ? { id: id, scheme: App.theme.schemeOf((this.customTheme || {}).bg || '#F8FAFD') } : null); },
+  
   applyTheme(id, seeds) {
     let r;
     if (id === App.theme.CUSTOM_ID) {
@@ -16,19 +22,22 @@ App.settings = {
     this.theme = r.id;
     return r;
   },
+  
   panNeedsSpace: true,
 
+  
   autoSave: { enabled: true, intervalMin: 15, limit: 15 },
 
+  
   presetPreview(id) {
     const want = id === 'dark' ? ':root' : 'html[data-theme="' + id + '"]';
     for (const sheet of Array.from(document.styleSheets || [])) {
       let rules = null;
-      try { rules = sheet.cssRules; } catch (e) { continue; }    
+      try { rules = sheet.cssRules; } catch (e) { continue; }   
       for (const r of Array.from(rules || [])) {
         if (r.selectorText !== want || !r.style) continue;
         const bg = r.style.getPropertyValue('--bg').trim();
-        if (!bg) continue;                                        
+        if (!bg) continue;                                       
         return {
           bg: bg,
           panel: r.style.getPropertyValue('--panel').trim(),
@@ -40,6 +49,7 @@ App.settings = {
     return null;
   },
 
+  
   themeName(id) {
     const t = App.theme.presetOf(id);
     if (t) return (App.i18n && App.i18n.t(t.key)) || t.zh;
@@ -55,7 +65,8 @@ App.settings = {
       const style = p.bg ? ' style="--pv-bg:' + p.bg + ';--pv-panel:' + p.panel + ';--pv-accent:' + p.accent + '"' : '';
       return '<button type="button" class="tm-tile" data-theme-id="' + th.id + '"' + style + '>' +
         '<span class="tm-mock"><i class="tm-m-bg"></i><i class="tm-m-panel"></i><i class="tm-m-accent"></i></span>' +
-        '<span class="tm-name">' + ((App.i18n && App.i18n.t(th.key)) || th.zh) + '</span>' +
+        
+        '<span class="tm-name" data-i18n="' + th.key + '">' + ((App.i18n && App.i18n.t(th.key)) || th.zh) + '</span>' +
         '</button>';
     };
     el.innerHTML =
@@ -84,6 +95,9 @@ App.settings = {
       '</div>' +
       '<div class="tm-foot"><button id="tmBack" data-i18n="theme.back">返回</button></div>';
     el.dataset.built = '1';
+    
+    if (App.i18n && App.i18n.apply) App.i18n.apply(el);
+    
     el.querySelectorAll('.tm-tile').forEach(b => {
       b.addEventListener('click', () => {
         this.applyTheme(b.getAttribute('data-theme-id'));
@@ -97,6 +111,7 @@ App.settings = {
       Object.keys(seedIds).forEach(k => { o[k] = el.querySelector('#' + seedIds[k]).value; });
       return o;
     };
+    
     el.querySelectorAll('.tm-seed input').forEach(inp => {
       inp.addEventListener('input', () => this.previewCustom(readSeeds()));
       inp.addEventListener('change', () => { this.applyTheme(App.theme.CUSTOM_ID, readSeeds()); this.save(); this.syncPanel(); });
@@ -115,6 +130,7 @@ App.settings = {
     return el;
   },
 
+  
   previewCustom(seeds) {
     const el = document.getElementById('tmPreview');
     if (!el) return;
@@ -134,6 +150,7 @@ App.settings = {
     }
   },
 
+  
   openThemeView() {
     const box = document.getElementById('settingsPanel');
     if (!box) return false;
@@ -144,9 +161,12 @@ App.settings = {
     if (main) main.classList.add('hidden');
     if (key) key.classList.add('hidden');
     if (el) el.classList.remove('hidden');
+    
+    if (el && App.i18n && App.i18n.apply) App.i18n.apply(el);
     const cb = box.querySelector('.confirm-box');
     if (cb) cb.classList.add('tm-mode');
     if (title) { title.setAttribute('data-i18n', 'settings.theme'); title.textContent = App.i18n.t('settings.theme'); }
+    
     const seeds = this.theme === App.theme.CUSTOM_ID && this.customTheme
       ? Object.assign({}, App.theme.defaultSeeds(), this.customTheme)
       : App.theme.defaultSeeds();
@@ -157,6 +177,7 @@ App.settings = {
     return true;
   },
 
+  
   syncThemeView() {
     const el = document.getElementById('settingsThemeView');
     if (!el || el.dataset.built !== '1') return;
@@ -167,6 +188,7 @@ App.settings = {
     if (now) now.textContent = this.themeName(this.theme);
   },
 
+  
   showMainView() {
     if (App.keymapUI) App.keymapUI.showMainView();
     const box = document.getElementById('settingsPanel');
@@ -195,6 +217,7 @@ App.settings = {
     p.innerHTML =
       '<div class="confirm-box settings-box">' +
         '<div class="anchor-title" id="settingsTitle" data-i18n="settings.title">设置</div>' +
+        
         '<div id="settingsMainView">' +
         '<div class="settings-row">' +
           '<label for="settingLang" data-i18n="settings.lang">语言 / Language</label>' +
@@ -213,12 +236,15 @@ App.settings = {
             '<button id="btnTheme" class="settings-change" data-i18n="settings.change">更改</button>' +
           '</span>' +
         '</div>' +
+        
         '<div class="settings-row" id="settingsFontRow">' +
           '<label data-i18n="settings.font">更改字体</label>' +
           '<span class="settings-now">' +
+            
             '<button id="btnFont" class="settings-change" data-i18n="settings.change">更改</button>' +
           '</span>' +
         '</div>' +
+        
         '<div class="settings-row">' +
           '<label data-i18n="settings.speedAll">调整编辑速率</label>' +
           '<button id="btnSpeedAll" class="settings-change" data-i18n="settings.change">更改</button>' +
@@ -244,31 +270,40 @@ App.settings = {
     document.body.appendChild(p);
     p.addEventListener('click', e => { if (e.target === p) App.hideOverlay(p); });
     p.querySelector('#btnSettingsClose').addEventListener('click', () => App.hideOverlay(p));
+    
     if (App.evDropdown) { App.evDropdown(p.querySelector('#settingLang')); }
     p.querySelector('#settingLang').addEventListener('change', e => {
       const v = e.target.value;
       if (App.i18n && App.i18n.dicts[v]) { this.lang = v; App.i18n.set(v); }
     });
+    
     const btnTheme = p.querySelector('#btnTheme');
     if (btnTheme) btnTheme.addEventListener('click', () => this.openThemeView());
+    
     const btnFont = p.querySelector('#btnFont');
     if (btnFont) btnFont.addEventListener('click', () => { if (App.fonts) App.fonts.open(); });
+    
     const b1 = p.querySelector('#btnSpeedAll');
     if (b1) b1.addEventListener('click', () => { App.hideOverlay(p); App.speedOverview.open(); });
+    
     const bk = p.querySelector('#btnKeymap');
     if (bk && App.keymapUI) bk.addEventListener('click', () => App.keymapUI.open());
+    
     const ba = p.querySelector('#btnAutoSave');
     if (ba) ba.addEventListener('click', () => { App.hideOverlay(p); App.autoSaveEditor.open(); });
     if (App.keymapUI) App.keymapUI.build(p.querySelector('.confirm-box'));
+    
     App.attachDlgClose(p.querySelector('.confirm-box'), () => { App.hideOverlay(p); return true; });
     this.syncPanel();
   },
 
+  
   syncPanel() {
     const now = document.getElementById('themeNowName');
     if (now) now.textContent = this.themeName(this.theme);
     const l = document.getElementById('settingLang');
     if (l && l.value !== this.lang) l.value = this.lang;
+    
     if (App.evDropdownSyncAll) App.evDropdownSyncAll();
     this.syncThemeView();
     if (App.fonts) App.fonts.syncPanel();
@@ -278,6 +313,7 @@ App.settings = {
     const p = document.getElementById('settingsPanel');
     if (!p) return;
     if (p.classList.contains('hidden')) {
+      
       this.showMainView();
       this.syncPanel(); App.showOverlay(p);
     } else App.hideOverlay(p);
@@ -297,17 +333,23 @@ App.settings = {
       const r = await window.sveApi.settingsGet();
       const s = (r && r.settings) || r || {};
       if (s.lang && App.i18n && App.i18n.dicts[s.lang]) this.lang = s.lang;
+      
       if (s.customTheme && typeof s.customTheme === 'object') this.customTheme = s.customTheme;
+      
       if (this.themeOf(s.theme)) this.theme = s.theme;
+      
       if (s.panNeedsSpace === false) this.panNeedsSpace = false;
       this.applyAutoSave(s.autoSave);
       this.applySpeeds(s);
       this.applyKeymap(s);
+      
       if (App.Favorites) App.Favorites.load(s.favorites);
       if (App.gpmap) App.gpmap.load(s.gpmap);
       if (App.fonts) App.fonts.load(s);
+      
       if (s.helpHintAck === true) this.helpHintAck = true;
-    } catch (e) {   }
+    } catch (e) {  }
+    
     try {
       const ls = JSON.parse(localStorage.getItem('sve-settings') || '{}');
       if (!window.sveApi.settingsGet) {
@@ -318,16 +360,20 @@ App.settings = {
         this.applyAutoSave(ls.autoSave);
       }
       this.applySpeeds(ls);
-      if (!window.sveApi.settingsGet) this.applyKeymap(ls);    
+      if (!window.sveApi.settingsGet) this.applyKeymap(ls);   
+      
       if (App.Favorites && !window.sveApi.settingsGet) App.Favorites.load(ls.favorites);
       if (App.gpmap && !window.sveApi.settingsGet) App.gpmap.load(ls.gpmap);
-    } catch (e) {   }
+    } catch (e) {  }
+    
     if (App.restartHistAnchors) App.restartHistAnchors();
     this.applyAll();
-    this.syncPanel();    
+    this.syncPanel();   
+    
     if (App.helpHint) App.helpHint.check();
   },
 
+  
   applyAutoSave(a) {
     const d = App.autoSaveDefaults;
     const num = (v, lo, hi, fb) => {
@@ -344,6 +390,7 @@ App.settings = {
     return this.autoSave;
   },
 
+  
   applySpeeds(s) {
     if (!s || !App.state) return;
     const put = (kind, key, store) => {
@@ -355,20 +402,24 @@ App.settings = {
     };
     put('wasm', 'editSpeeds', s.editSpeeds);
     put('nudge', 'nudgeSpeeds', s.nudgeSpeeds);
+    
     put('drag', 'dragSpeeds', s.dragSpeeds);
   },
 
+  
   applyKeymap(s) {
     if (!App.keymap) return;
     App.keymap.load(s && s.keymap);
-    if (App.refreshShortcutPanel) App.refreshShortcutPanel();    
+    if (App.refreshShortcutPanel) App.refreshShortcutPanel();   
   },
 
   save() {
     const payload = {
       lang: this.lang, theme: this.theme,
+      
       customTheme: this.theme === App.theme.CUSTOM_ID ? Object.assign({}, this.customTheme) : undefined,
       panNeedsSpace: this.panNeedsSpace !== false,
+      
       autoSave: {
         enabled: this.autoSave.enabled !== false,
         intervalMin: this.autoSave.intervalMin,
@@ -376,14 +427,20 @@ App.settings = {
       },
       editSpeeds: Object.assign({}, App.state.editSpeeds),
       nudgeSpeeds: Object.assign({}, App.state.nudgeSpeeds),
+      
       dragSpeeds: Object.assign({}, App.state.dragSpeeds),
       keymap: App.keymap ? App.keymap.payload() : undefined,
+      
       gpmap: App.gpmap ? App.gpmap.payload() : undefined,
+      
       favorites: App.Favorites ? App.Favorites.payload() : [],
+      
       helpHintAck: this.helpHintAck === true,
+      
       font: App.fonts ? App.fonts.payload() : undefined
     };
-    try { localStorage.setItem('sve-settings', JSON.stringify(payload)); } catch (e) {   }
+    try { localStorage.setItem('sve-settings', JSON.stringify(payload)); } catch (e) {  }
+    
     try {
       if (window.sveApi && window.sveApi.settingsSet) {
         return Promise.resolve(window.sveApi.settingsSet(payload)).then(r => {
@@ -405,9 +462,11 @@ App.settings = {
   }
 };
 
+
 App.speedFieldsByKind = {
   wasm: ['move', 'size', 'rotate', 'skew', 'opacity'],
   nudge: ['move', 'size', 'rotate', 'skew', 'opacity'],
+  
   drag: ['move', 'size', 'rotate', 'skew']
 };
 App.speedFields = App.speedFieldsByKind.wasm;   
@@ -419,8 +478,10 @@ App.speedDefaults = {
 App.speedRanges = {
   wasm: { move: [1, 5000], size: [1, 5000], rotate: [1, 5000], skew: [1, 5000], opacity: [1, 5000] },
   nudge: { move: [0.001, 200], size: [0.001, 200], rotate: [0.001, 180], skew: [0.001, 180], opacity: [0.001, 100] },
+  
   drag: { move: [0.01, 20], size: [0.01, 20], rotate: [0.01, 20], skew: [0.01, 20] }
 };
+
 App.normalizeSpeed = function (kind, field, v, fallback) {
   const r = (App.speedRanges[kind] || {})[field] || [0.0001, 1e6];
   const n = Number(v);
@@ -447,6 +508,7 @@ App.speedEditor = {
     const cells = App.speedFields.map(f =>
       '<div class="speed-cell" data-f="' + f + '">' +
         '<label class="speed-label" data-i18n="speed.' + f + '"></label>' +
+        
         '<input class="speed-input" type="number" step="0.1" data-speed="' + f + '">' +
       '</div>').join('');
     w.innerHTML = '<div class="speed-box">' +
@@ -458,7 +520,9 @@ App.speedEditor = {
         '<button class="speed-ok" data-i18n="speed.ok"></button>' +
       '</div></div>';
     host.appendChild(w);
+    
     if (App.i18n && App.i18n.apply) App.i18n.apply(w);
+    
     w.addEventListener('input', e => {
       const inp = e.target && e.target.closest ? e.target.closest('.speed-input') : null;
       if (!inp || !this.kind) return;
@@ -473,7 +537,9 @@ App.speedEditor = {
     });
     w.querySelector('.speed-cancel').addEventListener('click', () => this.cancel({ back: true }));
     w.querySelector('.speed-ok').addEventListener('click', () => this.commit({ back: true }));
+    
     w.querySelector('.speed-reset').addEventListener('click', () => this.resetToDefaults());
+    
     w.addEventListener('keydown', e => {
       if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); this.cancel({ back: true }); return; }
       if (e.key === 'Enter') {
@@ -481,6 +547,7 @@ App.speedEditor = {
         if (inp) { e.stopPropagation(); e.preventDefault(); inp.blur(); }
       }
     });
+    
     App.attachDlgClose(w.querySelector('.speed-box'), () => this.cancel({ back: true }));
     this.el = w;
     return w;
@@ -488,6 +555,7 @@ App.speedEditor = {
 
   open(kind, opts) {
     if (!App.speedFieldsByKind[kind]) return false;
+    
     if (this.kind) { this.backTo = null; this.cancel(); }
     const w = this.build();
     this.kind = kind;
@@ -495,11 +563,13 @@ App.speedEditor = {
     const fields = App.speedFieldsByKind[kind];
     const cfg = App.speedConfig(kind);
     this.snapshot = {};
+    
     App.speedFields.forEach(f => {
       const cell = w.querySelector('.speed-cell[data-f="' + f + '"]');
       if (cell) cell.style.display = fields.indexOf(f) >= 0 ? '' : 'none';
     });
     fields.forEach(f => { this.snapshot[f] = App.normalizeSpeed(kind, f, cfg[f], App.speedDefaults[kind][f]); });
+    
     fields.forEach(f => {
       const inp = w.querySelector('.speed-input[data-speed="' + f + '"]');
       if (inp) { inp.value = String(this.snapshot[f]); inp.classList.remove('speed-bad'); }
@@ -512,6 +582,7 @@ App.speedEditor = {
     return true;
   },
 
+  
   resetToDefaults() {
     if (!this.kind) return false;
     const w = this.el;
@@ -527,6 +598,7 @@ App.speedEditor = {
     return true;
   },
 
+  
   cancel(opts) {
     if (!this.kind) return false;
     const cfg = App.speedConfig(this.kind);
@@ -540,6 +612,7 @@ App.speedEditor = {
     return true;
   },
 
+  
   commit(opts) {
     if (!this.kind) return false;
     this.kind = null;
@@ -560,6 +633,7 @@ App.speedEditor = {
 
   isOpen() { return !!this.kind; }
 };
+
 
 App.speedOverview = {
   el: null,
@@ -589,6 +663,7 @@ App.speedOverview = {
       b.addEventListener('click', () => {
         const kind = b.getAttribute('data-speed-open');
         this.close();
+        
         App.speedEditor.open(kind, { backTo: 'overview' });
       });
     });
@@ -599,8 +674,10 @@ App.speedOverview = {
 
   open() {
     const p = this.build();
+    
     if (App.i18n && App.i18n.apply) App.i18n.apply(p);
     App.showOverlay(p);
+    
     if (!this._esc) {
       this._esc = e => {
         if (e.key === 'Escape' && this.isOpen()) {
@@ -612,6 +689,7 @@ App.speedOverview = {
     return true;
   },
 
+  
   close() {
     if (this.el) App.hideOverlay(this.el);
     if (this._esc) { document.removeEventListener('keydown', this._esc, true); this._esc = null; }
@@ -623,6 +701,7 @@ App.speedOverview = {
   }
 };
 
+
 App.autoSaveDefaults = { enabled: true, intervalMin: 15, limit: 15 };
 App.autoSaveRanges = { intervalMin: [1, 1440], limit: [1, 1000] };
 
@@ -631,6 +710,7 @@ App.autoSaveEditor = {
 
   build() {
     if (this.el && this.el.isConnected) return this.el;
+    
     const host = document.body;
     const w = document.createElement('div');
     w.id = 'autoSavePanel';
@@ -655,11 +735,13 @@ App.autoSaveEditor = {
         '<button class="autosave-ok" data-i18n="autosave.ok"></button>' +
       '</div></div>';
     host.appendChild(w);
+    
     if (App.i18n && App.i18n.apply) App.i18n.apply(w);
     w.querySelector('.autosave-toggle').addEventListener('click', () => this.toggleEnabled());
     w.querySelector('.autosave-reset').addEventListener('click', () => this.resetToDefaults());
     w.querySelector('.autosave-cancel').addEventListener('click', () => this.cancel());
     w.querySelector('.autosave-ok').addEventListener('click', () => this.commit());
+    
     w.addEventListener('input', e => {
       const t = e.target;
       if (!t || !t.classList || !t.classList.contains('speed-input')) return;
@@ -672,11 +754,13 @@ App.autoSaveEditor = {
         if (inp) { e.stopPropagation(); e.preventDefault(); this.commit(); }
       }
     });
+    
     App.attachDlgClose(w.querySelector('.speed-box'), () => { this.cancel(); return true; });
     this.el = w;
     return w;
   },
 
+  
   readForm() {
     const w = this.el;
     if (!w) return null;
@@ -704,6 +788,7 @@ App.autoSaveEditor = {
     bad(w.querySelector('#autoSaveLimit'), App.autoSaveRanges.limit);
   },
 
+  
   setToggleUI(on) {
     const b = this.el && this.el.querySelector('.autosave-toggle');
     if (!b) return;
@@ -745,11 +830,13 @@ App.autoSaveEditor = {
     return true;
   },
 
+  
   cancel() {
     if (this.el) App.hideOverlay(this.el);
     return true;
   },
 
+  
   commit() {
     const f = this.readForm();
     if (!f) { this.markBad(); showToast(App.i18n.t('toast.autosave.badValue')); return false; }
@@ -757,11 +844,13 @@ App.autoSaveEditor = {
     const prev = App.settings.autoSave || App.autoSaveDefaults;
     App.settings.autoSave = { enabled: enabled, intervalMin: f.intervalMin, limit: f.limit };
     if (this.el) App.hideOverlay(this.el);
+    
     if (App.restartHistAnchors) App.restartHistAnchors();
     const p = App.settings.save();
     if (p && p.then) {
       p.then(r => {
         if (r && r.ok === false) {
+          
           showToast(App.i18n.tf('toast.autosave.saveFail', { v: r.error || '' }));
           return;
         }
@@ -774,6 +863,20 @@ App.autoSaveEditor = {
 
   isOpen() { return !!(this.el && !this.el.classList.contains('hidden')); }
 };
+
+
+if (App.i18n && typeof App.i18n.onApply === 'function') {
+  App.i18n.onApply(function () {
+    try {
+      const now = document.getElementById('themeNowName');
+      if (now && App.settings) now.textContent = App.settings.themeName(App.settings.theme);
+    } catch (e) {  }
+    try {
+      const tn = document.getElementById('themeName');
+      if (tn && App.settings) tn.textContent = App.settings.themeName(App.settings.theme);
+    } catch (e) {  }
+  });
+}
 
 App.settings.initPanel();
 App.settings.load();

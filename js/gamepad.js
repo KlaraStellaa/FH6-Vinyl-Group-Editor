@@ -1,9 +1,12 @@
 'use strict';
+
 App.gpFocus = {
   active: false,
+  
   mem: null,
   el: null,
 
+  
   bar() {
     if (!App.state) return null;
     if (App.state.edit) return null;
@@ -16,6 +19,7 @@ App.gpFocus = {
     if (bar.classList.contains('hidden') || bar.classList.contains('sve-bar-out')) return null;
     return bar;
   },
+  
   buttons(scope) {
     return Array.prototype.slice.call(scope.querySelectorAll('button:not(:disabled)'))
       .filter(b => b.getClientRects().length);
@@ -28,9 +32,10 @@ App.gpFocus = {
     if (!el) { this.el = null; return; }
     this.el = el;
     el.classList.add('gp-focus');
-    try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) {   }
+    try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) {  }
   },
 
+  
   wake() {
     const bar = this.bar();
     if (!bar) return false;
@@ -38,12 +43,13 @@ App.gpFocus = {
     if (!list.length) return false;
     let target = null;
     if (this.mem) target = list.find(b => b.id === this.mem) || null;
-    this.mem = null;               
+    this.mem = null;              
     this.active = true;
     this.setFocus(target || list[0]);
     return true;
   },
 
+  
   press(btnId) {
     if (!this.bar()) return false;
     if (!this.active || !this.el || !this.el.isConnected) { this.wake(); return true; }
@@ -52,6 +58,7 @@ App.gpFocus = {
     return true;
   },
 
+  
   move(dir) {
     const bar = this.bar();
     if (!bar || !this.el) return;
@@ -73,6 +80,7 @@ App.gpFocus = {
     if (target) this.setFocus(target);
   },
 
+  
   pressA() {
     const el = this.el;
     if (!el || !el.isConnected || el.disabled) return false;
@@ -80,6 +88,7 @@ App.gpFocus = {
     return true;
   },
 
+  
   deactivate() {
     if (!this.active) return;
     if (this.el && this.el.id) this.mem = this.el.id;
@@ -88,6 +97,7 @@ App.gpFocus = {
     this.el = null;
   },
 
+  
   clear() {
     this.active = false;
     this.mem = null;
@@ -95,6 +105,7 @@ App.gpFocus = {
     this.clearRing();
   },
 
+  
   tick() {
     const bar = this.bar();
     if (!bar) {
@@ -109,22 +120,26 @@ App.gpFocus = {
 
 App.gamepad = {
   enabled: true,
+  
   DEAD: 0.18,
+  
   HYST: 8,
   _pad: null,
-  _pressed: new Set(),   
-  _stickDir: null,       
-  _stickAct: null,       
+  _pressed: new Set(),  
+  _stickDir: null,      
+  _stickAct: null,      
   _analogOn: false,
   _lastT: 0,
-  _bp: {},               
+  _bp: {},              
   _btnAct: {},          
+  _capPrev: {},         
 
-  _capPrev: {},          
-
+  
   DIR_CENTER: [0, 90, 180, -90],
+  
   STICK_ACT: { canvas: [null, 'up', null, 'down'], edit: ['moveRight', 'moveUp', 'moveLeft', 'moveDown'] },
 
+  
   ev() {
     return {
       repeat: false, key: '', code: '', shiftKey: false, ctrlKey: false, altKey: false, metaKey: false,
@@ -132,11 +147,13 @@ App.gamepad = {
     };
   },
 
+  
   ctx() { return (App.state && App.state.edit) ? 'edit' : 'canvas'; },
   actionOf(btn) {
     if (!App.gpmap) return null;
     return App.gpmap.actionFor(btn, this.ctx());
   },
+  
   openToolbarByRight() {
     if (!App.dispatchAction) return false;
     if (App.state && App.state.edit) return false;
@@ -145,31 +162,33 @@ App.gamepad = {
     App.dispatchAction('toolbar', this.ev());
     return true;
   },
+  
   _refs: {},
   act(A) {
     if (!A) return;
     const n = this._refs[A] || 0;
     this._refs[A] = n + 1;
-    if (n) return;                        
+    if (n) return;                       
     this._pressed.add(A);
     if (App.dispatchAction) App.dispatchAction(A, this.ev());
   },
   unact(A) {
     if (!A) return;
     const n = this._refs[A] || 0;
-    if (n > 1) { this._refs[A] = n - 1; return; }    
+    if (n > 1) { this._refs[A] = n - 1; return; }   
     delete this._refs[A];
     if (!this._pressed.has(A)) return;
     this._pressed.delete(A);
     if (App.releaseAction) App.releaseAction(A, this.ev());
   },
   releaseAll() {
-    this._refs = {};                                    
+    this._refs = {};                                   
     Array.from(this._pressed).forEach(a => this.unact(a));
     this._btnAct = {};
     this._stickDir = null;
     this._stickAct = null;
   },
+  
   pressBtn(id, A) {
     if (!A) { delete this._btnAct[id]; return; }
     this._btnAct[id] = A;
@@ -181,6 +200,7 @@ App.gamepad = {
     if (A) this.unact(A);
   },
 
+  
   blocked() {
     const t = document.activeElement;
     if (!t) return false;
@@ -198,10 +218,12 @@ App.gamepad = {
     return this.editingLayer() && App.state.editMode === 'move';
   },
 
+  
   btnDown(i) {
     const p = this._pad;
     return !!(p && p.buttons && p.buttons[i] && p.buttons[i].pressed);
   },
+  
   edge(id, i) {
     const d = this.btnDown(i);
     const was = !!this._bp[id];
@@ -213,23 +235,29 @@ App.gamepad = {
     const GP = App.gpmap;
     if (!GP) return;
 
+    
     const bar = App.gpFocus.bar();
     ['DUp', 'DDown', 'DLeft', 'DRight'].forEach(id => {
       const st = this.edge(id, GP.idxOf(id));
       if (st.d && bar) {
+        
         if (st.e) App.gpFocus.press(id);
         this.releaseBtn(id);
       } else if (st.d) {
+        
         if (id === 'DRight' && st.e && this.openToolbarByRight()) { this.releaseBtn(id); return; }
+        
         if (st.e) this.pressBtn(id, this.actionOf(id));
       } else {
         this.releaseBtn(id);
       }
     });
 
+    
     ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'L3', 'R3'].forEach(id => {
       const st = this.edge(id, GP.idxOf(id));
       if (!st.d) { this.releaseBtn(id); return; }
+      
       if (id === 'A' && App.gpFocus.active) {
         this.releaseBtn(id);
         if (st.e) App.gpFocus.pressA();
@@ -239,11 +267,13 @@ App.gamepad = {
     });
   },
 
+  
   stickMag(pad) {
     const ax = (pad.axes && pad.axes[0]) || 0;
     const ay = (pad.axes && pad.axes[1]) || 0;
     return Math.sqrt(ax * ax + ay * ay);
   },
+  
   _diagT: 0, _diagPad: '',
   diag(pad, ax, ay, mag) {
     const now = performance.now();
@@ -251,7 +281,7 @@ App.gamepad = {
     if (id !== this._diagPad) {
       this._diagPad = id;
       this._diagT = now;
-      try { App.log('info', '手柄已连接', { id: pad.id, mapping: pad.mapping, axes: (pad.axes || []).length, buttons: (pad.buttons || []).length }); } catch (e) {   }
+      try { App.log('info', '手柄已连接', { id: pad.id, mapping: pad.mapping, axes: (pad.axes || []).length, buttons: (pad.buttons || []).length }); } catch (e) {  }
       return;
     }
     if (now - this._diagT < 1000) return;
@@ -262,7 +292,7 @@ App.gamepad = {
         ax: Math.round(ax * 1000) / 1000, ay: Math.round(ay * 1000) / 1000,
         mag: Math.round(mag * 1000) / 1000, dpad: dpad, mode: this.inMoveMode() ? 'analog' : 'digital'
       });
-    } catch (e) {   }
+    } catch (e) {  }
   },
   handleStick(pad) {
     const ax = (pad.axes && pad.axes[0]) || 0;
@@ -275,6 +305,7 @@ App.gamepad = {
       return;
     }
     if (this.inMoveMode()) {
+      
       this.releaseStickKeys();
       this.analogMove(ax, ay, mag);
     } else {
@@ -282,12 +313,13 @@ App.gamepad = {
       this.digitalStick(ax, ay);
     }
   },
+  
   digitalStick(ax, ay) {
-    const ang = Math.atan2(-ay, ax) * 180 / Math.PI;    
+    const ang = Math.atan2(-ay, ax) * 180 / Math.PI;   
     let dir = this._stickDir;
     if (dir !== null) {
       const dev = Math.abs(this.norm180(ang - this.DIR_CENTER[dir]));
-      if (dev <= 45 + this.HYST) {   }
+      if (dev <= 45 + this.HYST) {  }
       else dir = this.nearestDir(ang);
     } else {
       dir = this.nearestDir(ang);
@@ -295,6 +327,7 @@ App.gamepad = {
     this._stickDir = dir;
     const table = this.STICK_ACT[this.ctx()];
     const want = table ? table[dir] : null;
+    
     const prev = this._stickAct;
     if (prev && prev !== want) this.unact(prev);
     this._stickAct = want;
@@ -314,6 +347,7 @@ App.gamepad = {
     this._stickDir = null;
   },
 
+  
   analogMove(ax, ay, mag) {
     const now = performance.now();
     if (!this._lastT) this._lastT = now;
@@ -339,6 +373,7 @@ App.gamepad = {
     if (App.editHist && App.editHist.endGesture) App.editHist.endGesture();
   },
 
+  
   captureTick() {
     const GP = App.gpmap;
     if (!GP || !GP.capturing) return;
@@ -351,8 +386,10 @@ App.gamepad = {
     }
   },
 
+  
   poll() {
     if (!this.enabled) return;
+    
     App.gpFocus.tick();
 
     let pad = null;
@@ -371,6 +408,7 @@ App.gamepad = {
       return;
     }
     this._pad = pad;
+    
     if (App.gpmap && App.gpmap.capturing) {
       this.releaseAll();
       this.stopAnalog();
@@ -394,6 +432,7 @@ App.gamepad = {
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
+    
     window.addEventListener('keydown', () => App.gpFocus.deactivate(), true);
     window.addEventListener('pointerdown', () => App.gpFocus.deactivate(), true);
     window.addEventListener('mousedown', () => App.gpFocus.deactivate(), true);

@@ -1,5 +1,7 @@
 'use strict';
 
+
+
 App.KM_I18N = {
   'zh-CN': {
     'settings.keymap': '自定义快捷键',
@@ -161,9 +163,10 @@ Object.keys(App.KM_I18N).forEach(function (lang) {
   if (App.i18n.dicts[lang]) Object.assign(App.i18n.dicts[lang], App.KM_I18N[lang]);
 });
 
+
 App.keymap = {
   map: null,
-  index: null,      
+  index: null,     
 
   init() {
     this.map = window.SVE_KEYMAP.resolve(null);
@@ -171,12 +174,14 @@ App.keymap = {
     return this.map;
   },
 
+  
   load(saved) {
     this.map = window.SVE_KEYMAP.resolve(saved || null);
     this.reindex();
     return this.map;
   },
 
+  
   reindex() {
     const KM = window.SVE_KEYMAP;
     const idx = { global: {}, canvas: {}, edit: {} };
@@ -192,6 +197,7 @@ App.keymap = {
 
   combos(id) { return (this.map[id] || []).slice(); },
 
+  
   actionFor(e, ctx) {
     if (!this.index) return null;
     const canon = window.SVE_KEYMAP.normalizeKey(e);
@@ -201,6 +207,7 @@ App.keymap = {
     return this.index.global[canon] || null;
   },
 
+  
   setCombo(id, slot, combo) {
     const KM = window.SVE_KEYMAP;
     const mine = this.map[id];
@@ -220,6 +227,7 @@ App.keymap = {
     return swapped;
   },
 
+  
   addCombo(id, combo) {
     const KM = window.SVE_KEYMAP;
     if (!KM || !this.map[id] || !KM.isValidCombo(combo)) return null;
@@ -241,21 +249,25 @@ App.keymap = {
   resetToDefaults() { this.map = window.SVE_KEYMAP.resolve(null); this.reindex(); },
   isDefault() { return Object.keys(window.SVE_KEYMAP.toSaved(this.map)).length === 0; },
   conflicts() { return window.SVE_KEYMAP.conflicts(this.map); },
+  
   payload() { return window.SVE_KEYMAP.toSaved(this.map); },
+  
   display(id) {
     return this.combos(id).map(c => window.SVE_KEYMAP.displayParts(c));
   }
 };
 App.keymap.init();
 
+
 App.keymapUI = {
-  el: null,           
-  box: null,          
-  capturing: null,    
-  gpCap: null,        
+  el: null,          
+  box: null,         
+  capturing: null,   
+  gpCap: null,       
   snapshot: null,
   gpSnapshot: null,
-  mode: 'key',        
+  mode: 'key',       
+  
   PENDING: ['tabPrev', 'tabNext'],
 
   build(box) {
@@ -264,11 +276,13 @@ App.keymapUI = {
     if (!view) return null;
     this.el = view;
     view.innerHTML =
+      
       '<div class="km-opt-row">' +
         '<label class="km-opt-label" for="kmPanSpace" data-i18n="km.panSpace"></label>' +
         '<label class="sve-switch"><input type="checkbox" id="kmPanSpace">' +
           '<span class="sve-switch-track" aria-hidden="true"></span></label>' +
       '</div>' +
+      
       '<div class="km-mode-row">' +
         '<div class="ev-tabs"><div class="ev-tabs-track">' +
           '<input type="radio" id="kmModeKey" name="kmMode" value="key" checked>' +
@@ -287,6 +301,7 @@ App.keymapUI = {
         '<button class="km-ok" data-i18n="speed.ok"></button>' +
       '</div>';
     if (App.i18n && App.i18n.apply) App.i18n.apply(view);
+    
     const panSw = view.querySelector('#kmPanSpace');
     if (panSw) {
       panSw.checked = App.settings.panNeedsSpace !== false;
@@ -295,6 +310,7 @@ App.keymapUI = {
         App.settings.save();
       });
     }
+    
     const modeWrap = view.querySelector('.km-mode-row');
     if (modeWrap) {
       const posGlider = () => {
@@ -308,7 +324,7 @@ App.keymapUI = {
       };
       modeWrap.querySelectorAll('input[type="radio"]').forEach(r => {
         r.addEventListener('change', () => {
-          this.stopCapture();           
+          this.stopCapture();          
           this.mode = r.value;
           posGlider();
           this.render();
@@ -320,44 +336,51 @@ App.keymapUI = {
     view.querySelector('.km-reset').addEventListener('click', () => this.reset());
     view.querySelector('.km-cancel').addEventListener('click', () => this.cancel());
     view.querySelector('.km-ok').addEventListener('click', () => this.commit());
+    
     view.querySelector('#kmList').addEventListener('click', e => {
       const b = e.target && e.target.closest ? e.target.closest('.km-key') : null;
       if (!b) return;
       e.preventDefault();
+      
       if (this.mode === 'pad') {
-        if (this.gpCap && this.gpCap.btn === b) { this.stopCapture(); return; }    
+        if (this.gpCap && this.gpCap.btn === b) { this.stopCapture(); return; }   
         const gadd = b.getAttribute('data-gp-add');
-        if (gadd) { this.startGpCapture(gadd, 0, b, true); return; }               
+        if (gadd) { this.startGpCapture(gadd, 0, b, true); return; }              
         const gid = b.getAttribute('data-gp-act');
         if (gid) this.startGpCapture(gid, parseInt(b.getAttribute('data-gp-slot'), 10), b);
         return;
       }
       const id = b.getAttribute('data-act'), slot = parseInt(b.getAttribute('data-slot'), 10);
-      if (this.capturing && this.capturing.btn === b) { this.stopCapture(); return; }    
+      if (this.capturing && this.capturing.btn === b) { this.stopCapture(); return; }   
       this.startCapture(id, slot, b, b.getAttribute('data-add') === '1');
     });
     this.render();
     return view;
   },
 
+  
   render() {
     if (!this.el) return;
     const list = this.el.querySelector('#kmList');
     if (!list) return;
     if (this.mode === 'pad') this.renderPad(list);
     else this.renderKeys(list);
+    
     if (App.refreshEditBarKeys) App.refreshEditBarKeys();
   },
 
+  
 
+  
   renderList(list, combosOf, makeChip, makeAdd) {
     const t = k => App.i18n.t(k);
     const PENDING = this.PENDING;
     list.innerHTML = '';
     window.SVE_KEYMAP.GROUPS.forEach(g => {
+      
       const acts = window.SVE_KEYMAP.ACTIONS.filter(a =>
         a.ctx === g.ctx && (combosOf(a.id).length || PENDING.indexOf(a.id) >= 0));
-      if (!acts.length) return;                   
+      if (!acts.length) return;                  
       const box = document.createElement('div');
       box.className = 'km-group';
       box.setAttribute('data-km-ctx', g.ctx);
@@ -377,7 +400,7 @@ App.keymapUI = {
         keys.className = 'km-keys';
         const vals = combosOf(a.id);
         vals.forEach((v, slot) => keys.appendChild(makeChip(a.id, v, slot)));
-        if (!vals.length) keys.appendChild(makeAdd(a.id));    
+        if (!vals.length) keys.appendChild(makeAdd(a.id));   
         row.appendChild(keys);
         box.appendChild(row);
       });
@@ -387,6 +410,7 @@ App.keymapUI = {
     else this.renderConflicts();
   },
 
+  
   renderKeys(list) {
     this.renderList(list, id => App.keymap.combos(id), (id, combo, slot) => {
       const b = document.createElement('button');
@@ -405,6 +429,7 @@ App.keymapUI = {
     });
   },
 
+  
   renderPad(list) {
     const GP = App.gpmap;
     this.renderList(list, id => GP.combos(id), (id, btn, slot) => {
@@ -457,10 +482,12 @@ App.keymapUI = {
     warn.classList.remove('hidden');
   },
 
+  
   showMainView() {
     this.stopCapture();
     this.snapshot = null;
     this.gpSnapshot = null;
+    
     if (this.el) this.setMode('key'); else this.mode = 'key';
     const box = document.getElementById('settingsPanel');
     if (!box) return;
@@ -471,12 +498,14 @@ App.keymapUI = {
     if (key) key.classList.add('hidden');
     if (this.box) this.box.classList.remove('km-mode');
     if (title) { title.setAttribute('data-i18n', 'settings.title'); title.textContent = App.i18n.t('settings.title'); }
+    
     if (this.box && App.attachDlgClose) {
       const panel = document.getElementById('settingsPanel');
       App.attachDlgClose(this.box, () => { App.hideOverlay(panel || box); return true; });
     }
   },
 
+  
   setMode(mode) {
     this.mode = mode === 'pad' ? 'pad' : 'key';
     const r = this.el && this.el.querySelector('#' + (this.mode === 'pad' ? 'kmModePad' : 'kmModeKey'));
@@ -484,31 +513,36 @@ App.keymapUI = {
     if (this.posModeGlider) this.posModeGlider();
   },
 
+  
   syncPanSwitch() {
     const sw = this.el && this.el.querySelector('#kmPanSpace');
     if (sw) sw.checked = App.settings.panNeedsSpace !== false;
   },
 
+  
   open() {
     const box = document.getElementById('settingsPanel');
     if (!box) return false;
     if (!this.el) this.build(box.querySelector('.confirm-box') || box);
     this.snapshot = App.keymap.snapshot();
     this.gpSnapshot = App.gpmap ? App.gpmap.snapshot() : null;
+    
     this.setMode('key');
     const main = box.querySelector('#settingsMainView');
     const key = box.querySelector('#settingsKeyView');
     const title = box.querySelector('#settingsTitle');
     if (main) main.classList.add('hidden');
     if (key) key.classList.remove('hidden');
-    if (this.box) this.box.classList.add('km-mode');    
+    if (this.box) this.box.classList.add('km-mode');   
     if (title) { title.setAttribute('data-i18n', 'settings.keymap'); title.textContent = App.i18n.t('settings.keymap'); }
+    
     if (this.box && App.attachDlgClose) App.attachDlgClose(this.box, () => this.cancel());
     this.syncPanSwitch();
     this.render();
     return true;
   },
 
+  
   reset() {
     this.stopCapture();
     App.keymap.resetToDefaults();
@@ -517,6 +551,7 @@ App.keymapUI = {
     return true;
   },
 
+  
   cancel() {
     this.stopCapture();
     if (this.snapshot) { App.keymap.restore(this.snapshot); this.snapshot = null; }
@@ -526,12 +561,14 @@ App.keymapUI = {
     return true;
   },
 
+  
   commit() {
     this.stopCapture();
     this.snapshot = null;
     this.gpSnapshot = null;
     const box = document.getElementById('settingsPanel');
     if (box) App.hideOverlay(box);
+    
     if (App.refreshShortcutPanel) App.refreshShortcutPanel();
     if (App.refreshEditBarKeys) App.refreshEditBarKeys();
     const p = App.settings.save();
@@ -544,9 +581,10 @@ App.keymapUI = {
     return true;
   },
 
+  
   startCapture(id, slot, btn, isNew) {
     this.stopCapture();
-    this.capturing = { id, slot, btn, isNew: !!isNew };    
+    this.capturing = { id, slot, btn, isNew: !!isNew };   
     btn.classList.add('km-capturing');
     btn.innerHTML = '';
     const kbd = document.createElement('kbd');
@@ -558,6 +596,7 @@ App.keymapUI = {
     btn.appendChild(tip);
   },
 
+  
   startGpCapture(id, slot, btn, isNew) {
     this.stopCapture();
     this.gpCap = { id, slot, btn, isNew: !!isNew };
@@ -566,8 +605,9 @@ App.keymapUI = {
     btn.textContent = App.i18n.t('km.gp.press');
   },
 
+  
   onGpCapture(cap, btn) {
-    this.gpCap = null;                      
+    this.gpCap = null;                     
     const t = k => App.i18n.t(k);
     const name = id => t((window.SVE_KEYMAP.ACTIONS_BY_ID[id] || {}).label || id);
     if (cap.isNew) {
@@ -581,6 +621,7 @@ App.keymapUI = {
   },
 
   stopCapture() {
+    
     const g = this.gpCap;
     this.gpCap = null;
     if (g) {
@@ -591,11 +632,13 @@ App.keymapUI = {
     this.capturing = null;
     if (!c || !c.btn) return;
     c.btn.classList.remove('km-capturing');
+    
     const cur = App.keymap.combos(c.id)[c.slot];
     if (cur) this.fillButton(c.btn, cur);
-    else if (c.isNew) { c.btn.textContent = '+'; }    
+    else if (c.isNew) { c.btn.textContent = '+'; }   
   },
 
+  
   onKeydown(e) {
     const c = this.capturing;
     if (!c) return false;
@@ -605,9 +648,11 @@ App.keymapUI = {
     if (e.key === 'Escape') { this.stopCapture(); return true; }
     const combo = window.SVE_KEYMAP.comboFromEvent(e);
     if (!combo) return true;
+    
     const parts = combo.split('+');
     if (parts.length === 1 && ['ctrl', 'alt', 'shift'].indexOf(parts[0]) >= 0) return true;
     const name = id => App.i18n.t((window.SVE_KEYMAP.ACTIONS_BY_ID[id] || {}).label || id);
+    
     if (c.isNew) {
       const clash = App.keymap.addCombo(c.id, combo);
       this.stopCapture();
@@ -624,11 +669,13 @@ App.keymapUI = {
     return true;
   },
 
+  
   isOpen() {
     const box = document.getElementById('settingsPanel');
     return !!(box && !box.classList.contains('hidden'));
   }
 };
+
 
 App.refreshEditBarKeys = function () {
   if (!App.keymap || !window.SVE_KEYMAP) return;
@@ -643,18 +690,22 @@ App.refreshEditBarKeys = function () {
 };
 App.refreshEditBarKeys();
 
+
 window.addEventListener('keydown', function (e) {
   if (App.keymapUI && App.keymapUI.capturing) { App.keymapUI.onKeydown(e); return; }
+  
   if (e.key === 'Escape' && App.keymapUI && App.keymapUI.isOpen()) {
     const key = document.getElementById('settingsKeyView');
     if (key && !key.classList.contains('hidden')) {
       e.preventDefault(); e.stopPropagation();
       if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+      
       if (App.keymapUI.gpCap) { App.keymapUI.stopCapture(); return; }
       App.keymapUI.cancel();
     }
   }
 }, true);
+
 
 if (App.i18n && App.i18n.onApply) {
   App.i18n.onApply(function () {

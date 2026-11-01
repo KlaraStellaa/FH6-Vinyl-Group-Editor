@@ -1,8 +1,10 @@
 'use strict';
+
 App.symbols = [];        
 App.symbolMap = new Map();
 App.categories = [];     
 App.patterns = [];       
+
 
 App.LIB_CAT_MAP = {
   '01_Primitives': { id: 'c01', key: 'lib.cat.01' },
@@ -41,6 +43,7 @@ App.LIB_CAT_MAP = {
   '34_Upper_Letters_11': { id: 'font11', key: 'lib.cat.font11' },
   '35_Lower_Letters_11': { id: 'font11', key: 'lib.cat.font11' }
 };
+
 App.LIB_HIDE_PATTERN_GROUP = true;
 App.libText = null;
 App.symbolUri = s => 'data:image/jpeg;base64,' + App.libText.slice(s.uriStart, s.uriEnd);
@@ -51,6 +54,7 @@ App.loadLibrary = async function () {
     fetch('assets/FH6_Vinyl_Patterns.svg').then(r => { if (!r.ok) throw new Error('patterns fetch ' + r.status); return r.text(); })
   ]);
   App.libText = symText;
+  
   try {
     const r = window.sveApi && window.sveApi.libAssetVer ? await window.sveApi.libAssetVer() : null;
     App.libAssetVer = (r && r.ok && r.ver) ? r.ver : ('len:' + symText.length + ':' + patText.length);
@@ -60,11 +64,13 @@ App.loadLibrary = async function () {
   App.parseSymbols();
   App.parsePatterns(patText);
   App.ensureMaskIndDef();
+  
   await App.loadLibThumbManifest();
   App.buildLibraryPanel();
   App.state.loaded = true;
   $('#loadingOverlay').classList.add('hidden');
 };
+
 
 App.loadLibThumbManifest = function () {
   if (!App.LIB_THUMB_PRE_URL) App.LIB_THUMB_PRE_URL = 'assets/lib-thumbs/index.json';
@@ -78,11 +84,14 @@ App.loadLibThumbManifest = function () {
       return;
     }
     App.LIB_THUMB_PRE = new Set(man.keys);
+    
     App.LIB_THUMB_PRE_BASE = new URL('assets/lib-thumbs/', location.href).href;
     if (App.kickLibraryThumbQueue) App.kickLibraryThumbQueue();
-  }).catch(() => {   });
+  }).catch(() => {  });
+  
   return Promise.race([load, new Promise(r => setTimeout(r, 400))]);
 };
+
 
 App.libThumbPreUrl = function (symbol) {
   if (!App.LIB_THUMB_PRE || !symbol || !symbol.key) return '';
@@ -156,9 +165,11 @@ App.parsePatterns = function (text) {
   console.log('[library] patterns:', App.patterns.length);
 };
 
+
 App.maskThemeKey = function () {
   return App.state.bg.base === 'dark' ? 'mask_indicator_dark' : 'mask_indicator_light';
 };
+
 
 App.ensureMaskIndDef = function () {
   if (!App.defs) return;
@@ -191,7 +202,8 @@ App.ensureMaskIndDef = function () {
   App.defs.appendChild(node);
 };
 
-App.libFilter = null;    
+App.libFilter = null;   
+
 
 App.libClickLog = [];
 App.libClickTraceOn = true;
@@ -199,11 +211,11 @@ App.libClickTrace = function (cat, item, tile, path, act) {
   if (!App.libClickTraceOn) { act(); return null; }
   const scroll = $('#libScroll');
   const rec = {
-    groupKey: (cat && cat.id) || null,    
+    groupKey: (cat && cat.id) || null,   
     renderedIndex: -1,
     scrollOffset: scroll ? Math.round(scroll.scrollTop) : 0,
     tileId: item && item.key,
-    previewId: item && item.key,      
+    previewId: item && item.key,     
     committedId: null,
     path: path
   };
@@ -233,6 +245,7 @@ App.buildLibraryPanel = function () {
   if (!App.LIB_HIDE_PATTERN_GROUP) cats.push({ id: 'pattern', key: 'lib.cat.pattern', items: App.patterns, isPattern: true });
   const catLabel = id => { const c = cats.find(x => x.id === id); return App.i18n.t(c && c.key ? c.key : String(id)); };
 
+  
   const filterBar = document.createElement('div');
   filterBar.className = 'lib-filter-bar';
   const filterBtn = document.createElement('div');
@@ -250,7 +263,7 @@ App.buildLibraryPanel = function () {
       App.libFilter = value;
       filterBtn.textContent = label;
       filterPanel.classList.remove('open');
-      App.buildLibraryPanel();    
+      App.buildLibraryPanel();   
     });
     filterPanel.appendChild(item);
   };
@@ -278,6 +291,7 @@ App.buildLibraryPanel = function () {
   };
   const pumpThumbs = () => {
     if (thumbEpoch !== App.libThumbEpoch) return;
+    
     if (App.Home && App.Home.shown) return;
     if (App.renderInteractionBusy && App.renderInteractionBusy()) {
       scheduleThumbPump(100);
@@ -337,12 +351,14 @@ App.buildLibraryPanel = function () {
       tile.title = isPat ? item.name : item.label;
       const img = document.createElement('img');
       img.draggable = false;
+      
       tile.appendChild(img);
       tile.addEventListener('dragstart', e => {
         e.dataTransfer.setData('text/plain', 'SVE:' + JSON.stringify({ kind: isPat ? 'pattern' : 'symbol', key: item.key }));
         e.dataTransfer.effectAllowed = 'copy';
       });
       tile.addEventListener('click', () => {
+        
         if (App.state.edit) {
           App.libClickTrace(cat, item, tile, 'edit', () =>
             App.replacePatternInEdit({ kind: isPat ? 'pattern' : 'symbol', key: item.key }));
@@ -354,10 +370,12 @@ App.buildLibraryPanel = function () {
         }
       });
       grid.appendChild(tile);
+      
       const pre = (isPat ? '' : App.libThumbPreUrl({ key: item.key }));
       if (pre) {
         img.loading = 'lazy';
         img.decoding = 'async';
+        
         img.onerror = () => {
           img.onerror = null;
           tile.classList.remove('sve-thumb-pre');
@@ -374,11 +392,13 @@ App.buildLibraryPanel = function () {
   });
 };
 
+
 App.refreshLibraryPanel = function () {
   if (App.state && App.state.loaded) App.buildLibraryPanel();
 };
 
 App.findSymbol = key => App.symbolMap.get(key);
+
 
 App.applyPatternToLayer = function (layer, spec) {
   if (!layer || !spec) return false;
@@ -389,6 +409,7 @@ App.applyPatternToLayer = function (layer, spec) {
     layer.symbolKey = spec.key;
     layer.name = sym.label;
     layer.dataUri = App.symbolUri(sym);
+    
     App.normalizeSymbolSize(layer);
   } else {
     const pat = App.patterns.find(p => p.key === spec.key);
@@ -407,11 +428,13 @@ App.applyPatternToLayer = function (layer, spec) {
   return true;
 };
 
+
 App.samePattern = function (layer, spec) {
   if (!layer || !spec) return false;
   if (spec.kind === 'symbol') return layer.kind === 'symbol' && layer.symbolKey === spec.key;
   return layer.kind === 'pattern' && layer.patternKey === spec.key;
 };
+
 
 App.replacePatternInEdit = function (spec) {
   if (!App.state.edit || !spec) return false;
@@ -423,7 +446,7 @@ App.replacePatternInEdit = function (spec) {
   if (spec.kind === 'pattern' && !App.patterns.find(p => p.key === spec.key)) return false;
   if (App.samePattern(layer, spec)) return false;
   if (App.editHist) {
-    App.editHist.endGesture();       
+    App.editHist.endGesture();      
     App.editHist.checkpoint();
     App.editHist.endGesture();
   }
@@ -432,6 +455,7 @@ App.replacePatternInEdit = function (spec) {
   return ok;
 };
 
+
 App.replaceSelectedPattern = function (spec) {
   const sel = App.operationTargets();
   if (sel.length !== 1) { showToast(App.i18n.t('toast.lib.oneLayerOnly')); return; }
@@ -439,6 +463,7 @@ App.replaceSelectedPattern = function (spec) {
   if (layer.kind === 'merged') { showToast(App.i18n.t('toast.lib.mergedNoReplace')); return; }
   App.history.markDiscrete();
   if (!App.applyPatternToLayer(layer, spec)) return;
+  
   App.setReplacing(false);
   if (App.requestFlashRefresh) App.requestFlashRefresh();
 };

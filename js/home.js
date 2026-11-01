@@ -1,5 +1,6 @@
 'use strict';
 
+
 App.Home = {
   items: [],  tab: 'all',      
   sort: 'recent',  
@@ -13,9 +14,11 @@ App.Home = {
       const flags = await window.sveApi.appFlags();
       this.testMode = !!(flags && flags.testMode);
     } catch (e) { this.testMode = false; }
+    
     document.querySelectorAll('#homeRail [data-home-act]').forEach(b => {
       b.addEventListener('click', () => this.rail(b.getAttribute('data-home-act')));
     });
+    
     const homeTabs = document.getElementById('homeTabs');
     if (homeTabs) {
       const posGlider = () => {
@@ -34,20 +37,24 @@ App.Home = {
           this.render();
         });
       });
+      
       requestAnimationFrame(posGlider);
       window.addEventListener('resize', () => requestAnimationFrame(posGlider));
     }
+    
     if (App.Favorites && App.Favorites.onChange) {
       App.Favorites.onChange(() => {
         if (this.shown) this.render();
         this.syncFavBtn(this.selectedItem);
       });
     }
+    
     if (App.i18n && App.i18n.onApply) App.i18n.onApply(() => this.syncFavBtn(this.selectedItem));
     const sort = document.getElementById('homeSort');
     sort.addEventListener('change', () => { this.sort = sort.value; this.render(); });
     const search = document.getElementById('homeSearch');
     search.addEventListener('input', () => { this.query = search.value.trim().toLowerCase(); this.render(); });
+    
     const opBtn = document.getElementById('btnHomeOpen');
     if (opBtn) opBtn.addEventListener('click', () => {
       const it = this.selectedItem;
@@ -61,6 +68,7 @@ App.Home = {
     exBtn.addEventListener('click', () => this.exportAs());
     const delBtn = document.getElementById('btnHomeDelete');
     delBtn.addEventListener('click', () => this.delSelected());
+    
     const impBtn = document.getElementById('btnHomeImport');
     if (impBtn) impBtn.addEventListener('click', () => this.importFiles());
     const refBtn = document.getElementById('btnHomeRefresh');
@@ -68,14 +76,18 @@ App.Home = {
       this.refresh();
       showToast(App.i18n.t('toast.home.refreshed'));
     });
+    
     const folderBtn = document.getElementById('btnHomeOpenFolder');
     if (folderBtn) folderBtn.addEventListener('click', () => this.openSvgFolder());
+    
     window.addEventListener('sve-dirty', () => this.refresh());
+    
     this.__evDropdownsInit = true;
     document.querySelectorAll('#homeSort, #forzaAccountSel').forEach(sel => {
       if (App.evDropdown) App.evDropdown(sel);
     });
 
+    
     const wait = setInterval(() => {
       if (App.state && App.state.loaded) {
         clearInterval(wait);
@@ -87,23 +99,30 @@ App.Home = {
   show() {
     if (this.shown) return;
     this.shown = true;
+    
     if (App.speedEditor) App.speedEditor.cancel();
+    
     if (App.speedOverview) App.speedOverview.close();
     this.refresh();
+    
     this.parkCanvas(true);
     App.showOverlay(document.getElementById('homeOverlay'));
+    
     if (App.Tabs && App.Tabs.renderBar) App.Tabs.renderBar();
+    
     if (App.state && App.state.edit) App.exitEdit(false);
   },
   hide() {
     this.shown = false;
     this.cancelThumbQueue();
+    
     this.parkCanvas(false);
     App.hideOverlay(document.getElementById('homeOverlay'));
     if (App.kickLibraryThumbQueue) App.kickLibraryThumbQueue();
     if (App.Tabs && App.Tabs.renderBar) App.Tabs.renderBar();
   },
 
+  
   parkCanvas(on) {
     const main = document.getElementById('main');
     if (main) main.classList.toggle('sve-home-parked', !!on);
@@ -112,6 +131,7 @@ App.Home = {
 
   async refresh() {
     if (!this.shown) return;
+    
     try {
       const r = await window.sveApi.fileRecent();
       if (r && r.ok) this.items = r.items;
@@ -124,6 +144,7 @@ App.Home = {
       b.classList.toggle('active', b.getAttribute('data-home-act') === act));
     if (act === 'new') { this.newDoc(); return; }
     if (act === 'open') { this.openDialog(); return; }
+    
     this.refresh();
   },
 
@@ -138,13 +159,14 @@ App.Home = {
   },
 
   openDialog() {
-    App.openSVG();  
+    App.openSVG(); 
   },
 
   filtered() {
     let list = this.items.slice();
     if (this.tab === 'workcopy') list = list.filter(i => i.type === 'workcopy');
     else if (this.tab === 'svg') list = list.filter(i => i.type === 'svg');
+    
     else if (this.tab === 'favorites') list = list.filter(i => i.type === 'svg' && App.Favorites && App.Favorites.has(i.name));
     if (this.query) list = list.filter(i => i.name.toLowerCase().indexOf(this.query) >= 0);
     const name = a => a.name.toLowerCase();
@@ -154,6 +176,7 @@ App.Home = {
     return list;
   },
 
+  
   thumbKey(it) { return it.type + ':' + it.name + '@' + it.mtime; },
   cachedThumb(it) {
     if (!this._thumbCache) this._thumbCache = new Map();
@@ -208,6 +231,7 @@ App.Home = {
     const img = card.querySelector('.home-card-thumb');
     const loader = card.__thumbLoader || App.startThumbLoading(cover);
     try {
+      
       let url = this.cachedThumb(it);
       if (!url) {
       if (it.type === 'svg' && window.sveApi && App.fzaSvgThumb) {
@@ -239,6 +263,7 @@ App.Home = {
     }
   },
 
+  
   relTime(ms) {
     const T = k => App.i18n.t(k);
     const diff = Date.now() - ms;
@@ -292,7 +317,9 @@ App.Home = {
       card.querySelector('.home-card-name').title = it.name;
       card.querySelector('.home-card-meta').textContent = this.relTime(it.mtime) + ' · ' + this.fmtSize(it.size);
       card.title = it.name + '\n' + stamp;
+      
       thumbCards.push({ it, card });
+      
       card.addEventListener('click', () => this.selectItem(it));
       card.addEventListener('dblclick', () => this.openItem(it));
       frag.appendChild(card);
@@ -311,9 +338,12 @@ App.Home = {
     } else {
       thumbCards.forEach(x => this.enqueueThumb(x.it, x.card, thumbEpoch));
     }
+    
     this.updateSelBar();
   },
 
+  
+  
   updateSelBar() {
     const bar = document.getElementById('homeSelBar');
     if (!bar) return;
@@ -325,8 +355,10 @@ App.Home = {
       const b = document.getElementById(id);
       if (b) b.disabled = !it;
     });
+    
     this.syncFavBtn(it);
   },
+  
   syncFavBtn(it) {
     const b = document.getElementById('btnHomeFav');
     if (!b) return;
@@ -356,6 +388,7 @@ App.Home = {
     this.updateSelBar();
     document.querySelectorAll('#homeGrid .home-card.sel').forEach(c => c.classList.remove('sel'));
   },
+  
   async importFiles() {
     if (!window.sveApi || !window.sveApi.homeImportDialog) return;
     let r = null;
@@ -368,6 +401,7 @@ App.Home = {
     this.refresh();
   },
 
+  
   async openSvgFolder() {
     if (!window.sveApi || !window.sveApi.homeOpenFolder) return;
     let r = null;
@@ -379,6 +413,7 @@ App.Home = {
   async delSelected() {
     const it = this.selectedItem;
     if (!it) return;
+    
     const ok = await fzaConfirm(App.i18n.t('dlg.delTitle'),
       App.i18n.tf('dlg.delMsg', { name: it.name }), App.i18n.t('dlg.delOk'));
     if (!ok) return;
@@ -389,6 +424,7 @@ App.Home = {
     this.refresh();
   },
 
+  
   async renameSelected() {
     const it = this.selectedItem;
     if (!it) return;
@@ -405,8 +441,10 @@ App.Home = {
     const r = await window.sveApi.fileRename(it.type === 'svg' ? 'svg' : 'workcopy', it.name, nm + ext);
     if (!r.ok) { showToast(App.i18n.tf('toast.home.renameFail', { v: (r.error || '') })); return; }
     showToast(App.i18n.tf('toast.home.renamed', { v: r.name }));
+    
     const cur = (App.Tabs && App.Tabs.current) ? App.Tabs.current.svgSource : App.currentSvgSource;
     if (cur === it.name && App.recordSvgSource) App.recordSvgSource(r.name);
+    
     const curDoc = App.Tabs && App.Tabs.current;
     if (it.type === 'workcopy' && curDoc && curDoc.workSource && curDoc.workSource.name === it.name) {
       curDoc.workSource.name = r.name;
@@ -431,6 +469,7 @@ App.Home = {
     if (s && !s.canceled) showToast(App.i18n.tf('toast.home.savedAs', { v: s.path }));
   },
 
+  
   async buildSvgFromWorkCopy(name) {
     return App.buildSvgFromWorkCopy(name);
   },
@@ -441,6 +480,7 @@ App.Home = {
     if (it.type === 'workcopy') {
       const r = await window.sveApi.fileRead('workcopy', it.name);
       if (!r.ok) { showToast(App.i18n.tf('toast.home.openWorkFail', { v: (r.error || '') })); return; }
+      
       if (prod) { App.Tabs.prodNewWork(r.content, r.name, r.source); return; }
       App.openWorkCopyContent(r.content, r.name, r.source);
       this.hide();
@@ -449,12 +489,14 @@ App.Home = {
     const r = await window.sveApi.fileRead('svg', it.name);
     if (!r.ok) { showToast(App.i18n.tf('toast.home.openSvgFail', { v: (r.error || '') })); return; }
     if (prod) { App.Tabs.prodNewSvg(r.content, it.name.replace(/\.svg$/i, '') || App.i18n.t('name.untitled'), it.name); return; }
-    App.currentSvgSource = it.name;  
+    App.currentSvgSource = it.name; 
     App.importSVGContent(r.content);
-    if (App.Tabs && App.Tabs.clearDirty) App.Tabs.clearDirty();  
+    if (App.Tabs && App.Tabs.clearDirty) App.Tabs.clearDirty(); 
     this.hide();
   }
 };
+
+
 
 App.thumbFrameToContent = function (svg, layers) {
   try {
@@ -479,8 +521,9 @@ App.thumbFrameToContent = function (svg, layers) {
   }
 };
 
+
 App.buildThumbSvgForLayers = function (layers) {
-  const built = App.buildForzaExportString(true, layers);   
+  const built = App.buildForzaExportString(true, layers);  
   if (!built) return built;
   const str = (built && built.str) ? built.str : String(built);
   const fixed = App.thumbFrameToContent(str, layers);
@@ -495,11 +538,12 @@ App.buildSvgFromWorkCopy = async function (name) {
   try { data = JSON.parse(r.content); }
   catch (e) { console.warn('[home] 工作进程内容解析失败', String(e && e.message || e).slice(0, 160)); return null; }
   if (!data || data.type !== 'sve-work-copy') return null;
+  
   App.migrateWorkCopyModel(data, r.mtimeMs);
   const T = App.Tabs;
   let prevSilent = false;
   try {
-    if (T) { prevSilent = !!T._silentRender; T._silentRender = true; }   
+    if (T) { prevSilent = !!T._silentRender; T._silentRender = true; }  
     App._workCopyRenderSeq = (App._workCopyRenderSeq || 0) + 1;
     const layers = App.deserializeLayersDetached(data.layers || [], 'workcopy_' + App._workCopyRenderSeq + '_');
     return App.buildThumbSvgForLayers(layers);
@@ -511,6 +555,7 @@ App.buildSvgFromWorkCopy = async function (name) {
   }
 };
 
+
 App.buildSvgFromAnchor = async function (name) {
   const r = await window.sveApi.histAnchorRead(name);
   if (!r.ok) return null;
@@ -518,11 +563,12 @@ App.buildSvgFromAnchor = async function (name) {
   try { data = JSON.parse(r.content); }
   catch (e) { console.warn('[anchor] 锚点内容解析失败', String(e && e.message || e).slice(0, 160)); return null; }
   if (!data || data.type !== 'sve-work-copy') return null;
+  
   App.migrateWorkCopyModel(data, r.mtimeMs);
   const T = App.Tabs;
   let prevSilent = false;
   try {
-    if (T) { prevSilent = !!T._silentRender; T._silentRender = true; }   
+    if (T) { prevSilent = !!T._silentRender; T._silentRender = true; }  
     App._workCopyRenderSeq = (App._workCopyRenderSeq || 0) + 1;
     const layers = App.deserializeLayersDetached(data.layers || [], 'anchor_' + App._workCopyRenderSeq + '_');
     return App.buildThumbSvgForLayers(layers);
@@ -534,11 +580,13 @@ App.buildSvgFromAnchor = async function (name) {
   }
 };
 
+
 App.blankDocument = function () {
   if (App.cancelColorPreview) App.cancelColorPreview();
   if (App.state.edit) App.exitEdit(false);
   App.history.markDiscrete();
-  if (App.Tabs && App.Tabs.clearDirty) App.Tabs.clearDirty();  
+  if (App.Tabs && App.Tabs.clearDirty) App.Tabs.clearDirty(); 
+  
   if (App.recordWorkSource) App.recordWorkSource(null);
   if (App.recordSvgSource) App.recordSvgSource(null);
   if (App.state.bg.image && App.state.bg.image.el) App.state.bg.image.el.remove();

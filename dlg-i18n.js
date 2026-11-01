@@ -1,3 +1,4 @@
+
 (function () {
   var DICT = {
     'zh-CN': {
@@ -83,12 +84,14 @@
     DICT[lang]['dlg.overwriteMsg'] = overwrite[lang][1];
     DICT[lang]['dlg.fileChanged'] = overwrite[lang][2];
   });
+  
   var titles = { 'zh-CN': 'FH6 Vinyl Group Editor', 'zh-TW': 'FH6 Vinyl Group Editor', 'en': 'FH6 Vinyl Group Editor',
     'ja': 'SVG パターンコラージュエディター', 'ko': 'SVG 패턴 콜라주 편집기' };
   Object.keys(titles).forEach(function (l) { if (DICT[l]) DICT[l]['app.title'] = titles[l]; });
   var api = {
     dicts: DICT,
     langs: ['zh-CN', 'zh-TW', 'en', 'ja', 'ko'],
+    
     get: function (lang, key, params) {
       var d = DICT[lang] || DICT['zh-CN'];
       var s = d[key] || DICT['zh-CN'][key] || key;
@@ -102,6 +105,7 @@
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.DLG_I18N = api;
+  
   if (typeof App !== 'undefined' && App.i18n && App.i18n.dicts) {
     Object.keys(DICT).forEach(function (lang) {
       if (App.i18n.dicts[lang]) Object.assign(App.i18n.dicts[lang], DICT[lang]);

@@ -1,5 +1,7 @@
 'use strict';
+
 const zlib = require('zlib');
+
 
 function parseNameTable(buf, off, len) {
   if (!buf || off + 6 > buf.length) return null;
@@ -21,15 +23,18 @@ function parseNameTable(buf, off, len) {
     if (s + length > buf.length) continue;
     let text = '';
     if (platformID === 3 || platformID === 0) {
+      
       const b = Buffer.from(buf.subarray(s, s + length));
       if (b.length % 2) continue;
       b.swap16();
       text = b.toString('utf16le');
     } else if (platformID === 1) {
+      
       text = buf.toString('latin1', s, s + length);
     } else continue;
     text = String(text).replace(/\u0000/g, '').trim();
     if (!text) continue;
+    
     let score = nameID === 16 ? 300 : nameID === 1 ? 200 : 100;
     if (platformID === 3) score += 20;
     if (languageID === 0x0409) score += 10;
@@ -65,6 +70,7 @@ function readBase128(buf, p) {
   throw new Error('woff2 base128 too long');
 }
 
+
 function woff2NameTable(buf) {
   const numTables = buf.readUInt16BE(12);
   const totalCompressedSize = buf.readUInt32BE(20);
@@ -93,6 +99,7 @@ function woff2NameTable(buf) {
   }
   return null;
 }
+
 
 function readFamilyName(buf) {
   if (!buf || buf.length < 12) return null;
@@ -125,10 +132,12 @@ function readFamilyName(buf) {
       const t = sfntTable(buf, base, 'name');
       return t ? parseNameTable(buf, t.offset, t.length) : null;
     }
+    
     if (sig === '\u0000\u0001\u0000\u0000' || sig === 'OTTO' || sig === 'true' || sig === 'typ1') {
       const t = sfntTable(buf, 0, 'name');
       return t ? parseNameTable(buf, t.offset, t.length) : null;
     }
+    
     const t = sfntTable(buf, 0, 'name');
     if (t) return parseNameTable(buf, t.offset, t.length);
   } catch (e) {

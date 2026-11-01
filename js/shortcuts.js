@@ -1,4 +1,6 @@
 
+
+
 App.SHORTCUTS = [
   {
     group: 'sc.g.canvas', items: [
@@ -6,9 +8,11 @@ App.SHORTCUTS = [
       { keys: [{ act: 'pan' }, 'sc.k.holdDrag'], desc: 'sc.d.pan' },
       { keys: ['sc.k.wheel'], desc: 'sc.d.zoom' },
       { keys: [{ act: 'base' }], desc: 'sc.d.base' },
+      
       { keys: [{ act: 'hideLayers' }], desc: 'sc.d.hideLayers' },
       { keys: [{ act: 'hideOthers' }], desc: 'sc.d.hideOthers' },
       { keys: [{ act: 'hideBg' }], desc: 'sc.d.hideBg' },
+      
       { keys: [{ act: 'opacityLayersDown' }, { act: 'opacityLayersUp' }], desc: 'sc.d.opacityLayers' },
       { keys: [{ act: 'opacityBgDown' }, { act: 'opacityBgUp' }], desc: 'sc.d.opacityBg' }
     ]
@@ -63,6 +67,7 @@ App.SHORTCUTS = [
     ]
   }
 ];
+
 
 App.SC_I18N = {
   'zh-CN': {
@@ -201,6 +206,7 @@ App.SC_I18N = {
     'sc.d.finish': '편집 완료 후 변경 유지', 'sc.d.cancelEdit': '이 편집을 취소하고 이전 상태로 되돌림'
   }
 };
+
 Object.keys(App.SC_I18N).forEach(function (lang) {
   if (App.i18n.dicts[lang]) Object.assign(App.i18n.dicts[lang], App.SC_I18N[lang]);
 });
@@ -212,6 +218,7 @@ App.initShortcutPanel = function () {
   if (!btn || !panel || !list || App.shortcutPanelReady) return;
   App.shortcutPanelReady = true;
 
+  
   App.refreshShortcutPanel = function () {
     const t = function (k) { return App.i18n.t(k); };
     list.innerHTML = '';
@@ -240,6 +247,7 @@ App.initShortcutPanel = function () {
         };
         it.keys.forEach(function (k, i) {
           if (i > 0) sep('+', 'sc-plus');
+          
           if (k && typeof k === 'object' && k.act) {
             const combos = App.keymap ? App.keymap.combos(k.act) : [];
             combos.forEach(function (combo, j) {
@@ -251,6 +259,7 @@ App.initShortcutPanel = function () {
             });
             return;
           }
+          
           chip(k.indexOf('sc.k.') === 0 ? t(k) : k);
         });
         const d = document.createElement('div');
@@ -275,15 +284,17 @@ App.initShortcutPanel = function () {
     btn.classList.remove('active');
   };
 
+  
   const tip = document.createElement('span');
   tip.id = 'scTip';
   tip.className = 'sc-tooltip';
+  
   tip.textContent = 'QuQ';
   document.body.appendChild(tip);
   const placeTip = function () {
     const r = btn.getBoundingClientRect();
     tip.style.left = (r.left + r.width / 2) + 'px';
-    tip.style.top = (r.top - 8) + 'px';        
+    tip.style.top = (r.top - 8) + 'px';       
   };
   btn.addEventListener('mouseenter', function () { placeTip(); tip.classList.add('sc-tip-show'); });
   btn.addEventListener('mouseleave', function () { tip.classList.remove('sc-tip-show'); });
@@ -297,12 +308,14 @@ App.initShortcutPanel = function () {
   const closeBtn = document.getElementById('btnShortcutClose');
   if (closeBtn) closeBtn.addEventListener('click', function () { App.closeShortcutPanel(); });
 
+  
   document.addEventListener('click', function (e) {
     if (!isOpen()) return;
     if (panel.contains(e.target)) return;
     App.closeShortcutPanel();
   }, true);
 
+  
   window.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' || !isOpen()) return;
     e.preventDefault();

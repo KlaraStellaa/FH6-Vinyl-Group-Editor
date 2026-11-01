@@ -1,3 +1,4 @@
+
 .sve-thumb-loader.loader {
   position: absolute;
   top: 0;
@@ -25,7 +26,7 @@
   height: var(--uib-size);
   width: var(--uib-size);
   overflow: hidden;
-  text-indent: -9999em;    
+  text-indent: -9999em;   
 }
 
 .dot-spinner__dot {
@@ -78,6 +79,7 @@
     opacity: 1;
   }
 }
+
 
 .layer-thumb,
 .lib-item,

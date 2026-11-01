@@ -1,4 +1,5 @@
 'use strict';
+
 App.viewRevision = App.viewRevision || 0;
 App.renderPerfCounters = App.renderPerfCounters || {
   viewCommits: 0, autoVisibleScans: 0, autoVisibleLeaves: 0,
@@ -25,8 +26,10 @@ App.initRender = function () {
   App.handleG = $('#handleG');
   App.anchorG = $('#anchorG');
   App.flashG = $('#flashG');
+  
   App.autoStaticFlashG = svgEl('g', { 'pointer-events': 'none' });
   App.flashG.parentNode.insertBefore(App.autoStaticFlashG, App.flashG);
+  
   try { App.flashG.style.setProperty('--sve-flash-color', 'rgb(255,250,1)'); }
   catch (e) { console.warn('[render] 闪动颜色初始化失败', e); }
   App.overlayG = $('#overlayG');
@@ -41,11 +44,13 @@ App.initRender = function () {
 };
 
 App.buildGridPattern = function () {
+  
   const g = App.GRID_STEP || 20;
+  
   const N = 3;
-  const P = g / N;                     
-  const dash = P * 0.5, gap = P * 0.5; 
-  const off = dash / 2;                
+  const P = g / N;                    
+  const dash = P * 0.5, gap = P * 0.5;
+  const off = dash / 2;               
   const col = 'rgba(0,0,0,0.26)';
   const base = {
     fill: 'none', stroke: col, 'stroke-width': 1,
@@ -55,30 +60,34 @@ App.buildGridPattern = function () {
     'stroke-linecap': 'butt'
   };
   const p = svgEl('pattern', { id: 'sveGridP', width: g, height: g, patternUnits: 'userSpaceOnUse' });
+  
   App.gridPathH = svgEl('path', Object.assign({}, base, { d: 'M ' + g + ' 0 L 0 0' }));
   App.gridPathV = svgEl('path', Object.assign({}, base, { d: 'M 0 0 L 0 ' + g }));
   p.appendChild(App.gridPathH);
   p.appendChild(App.gridPathV);
   App.defs.appendChild(p);
-  App.gridPath = App.gridPathH;    
+  App.gridPath = App.gridPathH;   
 };
 App.updateGridStroke = function () {
   const col = App.state.bg.base === 'light' ? 'rgba(0,0,0,0.26)' : 'rgba(255,255,255,0.20)';
   if (App.gridPathH) App.gridPathH.setAttribute('stroke', col);
   if (App.gridPathV) App.gridPathV.setAttribute('stroke', col);
-  if (App.gridCross) { App.gridCross.remove(); App.gridCross = null; }    
+  if (App.gridCross) { App.gridCross.remove(); App.gridCross = null; }   
 };App.updateGridRect = function () {
   const v = App.state.view, w = App.wrap.clientWidth, h = App.wrap.clientHeight;
   App.gridRect.setAttribute('x', v.x - 4);
   App.gridRect.setAttribute('y', v.y - 4);
   App.gridRect.setAttribute('width', w / v.scale + 8);
   App.gridRect.setAttribute('height', h / v.scale + 8);
+  
   if (App.updateGridVisibility) App.updateGridVisibility();
 };
 App.updateView = function () {
   App.viewRevision = (App.viewRevision || 0) + 1;
   App.renderPerfCounters.viewCommits++;
+  
   App._viewMutT = performance.now();
+  
   if (App.layersRoot && App.layersRoot.style.display === 'none' && !(App.state && App.state.batching) &&
       !(App.state && App.state.layersHidden) && !(App.state && App.state.eyeMode === 'bg')) {
     App.layersRoot.style.display = '';
@@ -87,17 +96,280 @@ App.updateView = function () {
   const v = App.state.view;
   App.svg.setAttribute('viewBox', v.x + ' ' + v.y + ' ' + (r.width / v.scale) + ' ' + (r.height / v.scale));
   App.updateGridRect();
+  
   if (App.updateEditStaticViewport) App.updateEditStaticViewport();
+  
   if (App.maybeUpgradeProxyRes) App.maybeUpgradeProxyRes();
+  
   if (App.autoStaticMaybe) App.autoStaticMaybe();
+  
   try {
     if (App.Tabs && App.Tabs.current && App.Tabs.current.data) {
       App.Tabs.current.data.view = { x: App.state.view.x, y: App.state.view.y, scale: App.state.view.scale };
     }
-  } catch (e) {   }
+  } catch (e) {  }
+  
   const _am = App.state.editMode;
   if (App.drawAnchorIcon && (_am === 'size' || _am === 'rotate' || _am === 'skew')) App.drawAnchorIcon();
+  
+  if (App.scheduleLodRefresh) App.scheduleLodRefresh();
 };
+
+
+App.lod = {
+  enabled: true,
+  step: 1.25,                 
+  minScale: 0.01,
+  maxSide: 4096,              
+  maxPixels: 8.4e6,           
+  
+  layerMaxSide: 768,          
+  layerMaxPixels: 6e5,        
+  
+  minUpgrade: 1.5,
+  debounceMs: 130,            
+  maxLayersPerPass: 48,       
+  maxInflight: 2,             
+  maxPixelsPerPass: 1.2e7,    
+  unknownNativeSide: 1024,    
+  flashLeafMax: 256,          
+  
+  flashTotalPixels: 1.6e7,
+  stats: { passes: 0, rebuilt: 0, offscreen: 0, capped: 0, bucket: 0, bucketScale: 1, lastPassMs: 0, walkMs: 0, texMaxSide: 0 }
+};
+
+App._texNative = new Map();
+App.texNativeKey = function (uri) {
+  if (!uri) return '';
+  return uri.length + ':' + uri.slice(0, 48) + ':' + uri.slice(-32);
+};
+App.noteTexNative = function (uri, w, h) {
+  if (!uri || !(w > 0) || !(h > 0)) return;
+  App._texNative.set(App.texNativeKey(uri), Math.max(w, h));
+};
+App.lodNativeSide = function (layer) {
+  if (!layer) return App.lod.unknownNativeSide;
+  
+  if (layer._texSide) return layer._texSide;
+  const uri = layer.dataUri;
+  if (!uri) return App.lod.unknownNativeSide;
+  const v = App._texNative.get(App.texNativeKey(uri));
+  if (v) { layer._texSide = v; return v; }
+  return App.lod.unknownNativeSide;
+};
+
+App.lodBucketOf = function (scale) {
+  const s = Math.max(App.lod.minScale, Number(scale) || 1);
+  return Math.max(-24, Math.ceil(Math.log(s) / Math.log(App.lod.step) - 1e-9));
+};
+App.lodBucketScale = function (bucket) {
+  return Math.pow(App.lod.step, Math.max(-24, bucket | 0));
+};
+
+App.lodTexPlan = function (layer, bucketOverride) {
+  const dpr = window.devicePixelRatio || 1;
+  const bucket = bucketOverride === undefined
+    ? App.lodBucketOf(App.state && App.state.view ? App.state.view.scale : 1)
+    : bucketOverride;
+  const w = Math.max(1, Number(layer && layer.w) || 1);
+  const h = Math.max(1, Number(layer && layer.h) || 1);
+  const want = App.lodBucketScale(bucket) * dpr;
+  const byNative = App.lodNativeSide(layer) / Math.max(w, h);
+  const bySide = App.lod.layerMaxSide / Math.max(w, h);
+  const byPixels = Math.sqrt(App.lod.layerMaxPixels / (w * h));
+  let k = Math.max(0.02, Math.min(want, byNative, bySide, byPixels));
+  
+  const held = k > 1 && k < App.lod.minUpgrade;
+  if (held) k = 1;
+  
+  const cappedBy = (held || k >= want * 0.999) ? '' : (byNative <= bySide && byNative <= byPixels ? 'native' : 'texture');
+  const px = Math.max(1, Math.round(w * k));
+  const py = Math.max(1, Math.round(h * k));
+  return {
+    bucket: bucket, dpr: dpr, k: k, want: want, held: held,
+    px: px, py: py,
+    capped: !!cappedBy,
+    cappedBy: cappedBy,
+    
+    key: px + 'x' + py + '@' + dpr
+  };
+};
+
+App.layerLodKey = function (layer) {
+  if (!layer || layer.kind !== 'symbol' || layer.isMask) return '';
+  return App.lodTexPlan(layer).key;
+};
+App.layerLodUrl = function (layer) {
+  if (!layer || layer.kind !== 'symbol' || layer.isMask) {
+    return App.symbolColorUrl ? App.symbolColorUrl(layer) : Promise.resolve('');
+  }
+  const plan = App.lodTexPlan(layer);
+  return App.symbolColorUrl(layer, { k: plan.k });
+};
+
+App._lodQueue = null;          
+
+App.lodGroupLocalView = function (group, cache) {
+  if (cache.has(group)) return cache.get(group);
+  let r = null;
+  try { r = App.proxyLocalViewRect ? App.proxyLocalViewRect(group, 0.25) : null; } catch (e) { r = null; }
+  cache.set(group, r);
+  return r;
+};
+
+App.lodLeafNearRect = function (l, r) {
+  if (!r) return true;
+  const hw = Math.abs(Number(l.w) || 0) / 2, hh = Math.abs(Number(l.h) || 0) / 2;
+  const sx = Math.abs(Number(l.sx) || 1), sy = Math.abs(Number(l.sy) || 1);
+  const rad = Math.sqrt(hw * hw + hh * hh) * Math.max(sx, sy, 1e-6);
+  const cx = Number(l.x) || 0, cy = Number(l.y) || 0;
+  return cx + rad >= r.minx && cx - rad <= r.maxx && cy + rad >= r.miny && cy - rad <= r.maxy;
+};
+
+App.lodKeyArea = function (key, l) {
+  const m = key ? /^(\d+)x(\d+)@/.exec(key) : null;
+  if (m) return (Number(m[1]) || 1) * (Number(m[2]) || 1);
+  return Math.max(1, Math.round(Number(l && l.w) || 1)) * Math.max(1, Math.round(Number(l && l.h) || 1));
+};
+
+App.lodInstalledPx = function (l) {
+  const m = l && l._lodKey ? /^(\d+)x(\d+)@/.exec(l._lodKey) : null;
+  if (m) return Number(m[1]) || 1;
+  return Math.max(1, Math.round(Number(l && l.w) || 1));
+};
+
+App.lodBuildQueue = function (bucket, force) {
+  const layers = (App.state && App.state.layers) || [];
+  const vp = App.autoStaticViewportRect ? App.autoStaticViewportRect(0.25) : null;
+  const groupCache = new Map();
+  const list = [];
+  let offscreen = 0, capped = 0;
+  const consider = (l, localRect) => {
+    if (!l || l.kind !== 'symbol' || l.isMask || !l.imgEl) return;
+    const plan = App.lodTexPlan(l, bucket);
+    if (plan.cappedBy === 'texture') capped++;
+    if (!force && l._lodKey === plan.key) return;
+    if (!force && plan.px * plan.py <= App.lodKeyArea(l._lodKey, l)) return;   
+    const near = localRect ? App.lodLeafNearRect(l, localRect)
+      : (!vp || !App.layerInRect || App.layerInRect(l, vp));
+    if (!near) { offscreen++; return; }
+    list.push({ layer: l, plan: plan, area: (Number(l.w) || 0) * (Number(l.h) || 0) });
+  };
+  const walk = (node, group) => {
+    const kids = node.children || [];
+    for (let i = 0; i < kids.length; i++) {
+      const ch = kids[i];
+      if (ch && ch.kind === 'merged') { walk(ch, ch); continue; }
+      
+      const local = group && ch.el && ch.el.parentNode === group.el
+        ? App.lodGroupLocalView(group, groupCache) : null;
+      consider(ch, local);
+    }
+  };
+  for (let i = 0; i < layers.length; i++) {
+    const l = layers[i];
+    if (l && l.kind === 'merged') walk(l, l);
+    else consider(l, null);
+  }
+  list.sort((a, b) => b.area - a.area);
+  App.lod.stats.capped = capped;
+  App.lod.stats.offscreen = offscreen;
+  return list;
+};
+App.refreshLayerLod = function (opts) {
+  opts = opts || {};
+  if (!App.lod.enabled) return 0;
+  const layers = App.state && App.state.layers;
+  if (!layers || !layers.length) return 0;
+  
+  if (App.autoStatic && (App.autoStatic.active || App.autoStatic.baking)) { App._lodQueue = null; return 0; }
+  if (App.editStatic && (App.editStatic.active || App.editStatic.baking)) { App._lodQueue = null; return 0; }
+  
+  if (App.autoStaticEligible && App.autoStaticEligible()) { App._lodQueue = null; return 0; }
+  const t0 = performance.now();
+  const bucket = App.lodBucketOf(App.state.view.scale || 1);
+  let q = App._lodQueue;
+  if (!q || q.bucket !== bucket) {
+    
+    if (App.refreshImpBitmaps) App.refreshImpBitmaps();
+    q = App._lodQueue = { bucket: bucket, list: App.lodBuildQueue(bucket, opts.force), i: 0, done: 0 };
+    App.lod.stats.walkMs = Math.round((performance.now() - t0) * 10) / 10;
+  }
+  const list = q.list;
+  if (q.i >= list.length) { App._lodQueue = null; return 0; }
+  const limit = Math.max(1, opts.limit || App.lod.maxLayersPerPass);
+  let px = 0, done = 0;
+  while (q.i < list.length && done < limit) {
+    
+    if ((App._lodInflight || 0) >= App.lod.maxInflight) break;
+    const entry = list[q.i];
+    const cost = entry.plan.px * entry.plan.py;
+    if (done && (px + cost > App.lod.maxPixelsPerPass || performance.now() - t0 > 8)) break;
+    q.i++; done++;
+    px += cost;
+    try {
+      const p = App.installSymbolColorUrl(entry.layer, entry.layer.imgEl, { lod: true });
+      if (p && typeof p.then === 'function') {
+        App._lodInflight = (App._lodInflight || 0) + 1;
+        const done1 = function () { App._lodInflight = Math.max(0, (App._lodInflight || 1) - 1); };
+        p.then(done1, done1);
+      }
+    } catch (e) { console.warn('[lod] 纹理重建失败', entry.layer && entry.layer.id, String(e && e.message || e).slice(0, 160)); }
+  }
+  q.done += done;
+  App.lod.stats.passes++;
+  App.lod.stats.rebuilt += done;
+  App.lod.stats.bucket = bucket;
+  App.lod.stats.bucketScale = App.lodBucketScale(bucket);
+  App.lod.stats.lastPassMs = Math.round(performance.now() - t0);
+  if (done) {
+    App.lod.stats.texMaxSide = Math.max(App.lod.stats.texMaxSide, list[q.i - 1].plan.px);
+    try {
+      App.log('perf', 'LOD 纹理重建', {
+        bucket: bucket, bucketScale: +App.lodBucketScale(bucket).toFixed(3), dpr: window.devicePixelRatio || 1,
+        scale: +(App.state.view.scale || 1).toFixed(3), todo: list.length, rebuilt: done,
+        px: Math.round(px), ms: App.lod.stats.lastPassMs, walkMs: App.lod.stats.walkMs
+      });
+    } catch (e) {  }
+  }
+  
+  if (q.i < list.length) {
+    if (App._lodDrainTimer) clearTimeout(App._lodDrainTimer);
+    App._lodDrainTimer = setTimeout(function () {
+      App._lodDrainTimer = null;
+      App.refreshLayerLod(opts);
+    }, 12);
+  } else {
+    App._lodQueue = null;
+  }
+  return done;
+};
+
+App._lodAppliedBucket = null;
+App._lodLastAt = 0;
+App._lodDirty = false;         
+App.scheduleLodRefresh = function (delay) {
+  if (!App.lod.enabled) return;
+  const scale = (App.state && App.state.view ? App.state.view.scale : 1) || 1;
+  const bucket = App.lodBucketOf(scale);
+  const pending = !!App._lodQueue || !!App._lodDrainTimer;
+  if (bucket === App._lodAppliedBucket && !pending && !App._lodDirty && !App._lodTimer) return;
+  const now = performance.now();
+  const stale = App._lodAppliedBucket !== null &&
+    (bucket - App._lodAppliedBucket) >= 2 && (now - (App._lodLastAt || 0)) > 250;
+  const wait = stale ? 0 : (typeof delay === 'number' ? delay : App.lod.debounceMs);
+  if (App._lodTimer) clearTimeout(App._lodTimer);
+  App._lodTimer = setTimeout(function () {
+    App._lodTimer = null;
+    App._lodDirty = false;
+    App._lodLastAt = performance.now();
+    App._lodAppliedBucket = App.lodBucketOf((App.state && App.state.view ? App.state.view.scale : 1) || 1);
+    App.refreshLayerLod();
+    
+    if (App.refreshFlashLod) App.refreshFlashLod();
+  }, wait);
+};
+
 
 App.screenToDoc = function (clientX, clientY) {
   const p = new DOMPoint(clientX, clientY).matrixTransform(App.svg.getScreenCTM().inverse());
@@ -108,7 +380,9 @@ App.docToScreen = function (x, y) {
   return { x: p.x, y: p.y };
 };
 
+
 App.getItemDocBBox = function (item) {
+  
   if (item.kind === 'merged') {
     if (item._localBB === undefined) {
       const bb0 = item.el.getBBox();
@@ -122,6 +396,7 @@ App.getItemDocBBox = function (item) {
     }
     const loc = item._localBB;
     if (loc) {
+      
       let m = null;
       try { m = App.transformChainMat(item); } catch (e) { m = null; }
       if (m) {
@@ -139,7 +414,9 @@ App.getItemDocBBox = function (item) {
       }
     }
   }
+  
   if (item.kind === 'merged') {
+    
     const lb = App.computeLocalBBox(item);
     const cs = [[lb.x, lb.y], [lb.x + lb.w, lb.y], [lb.x + lb.w, lb.y + lb.h], [lb.x, lb.y + lb.h]]
       .map(p => {
@@ -158,6 +435,7 @@ App.getItemDocBBox = function (item) {
   }
   return App.modelBBox(item);
 };
+
 
 App.modelBBox = function (item) {
   const hw = (item.w || 0) / 2, hh = (item.h || 0) / 2;
@@ -188,8 +466,10 @@ App.modelBBox = function (item) {
   };
 };
 
+
 App.editStatic = { active: false, baking: false, items: [], bit: null, view: null, failedTop: null };
 App.editStaticBgEl = null;
+
 
 App.editStaticViewportRect = function () {
   const v = App.state.view;
@@ -200,12 +480,14 @@ App.editStaticViewportRect = function () {
 };
 App.layerInRect = function (l, rc) {
   try {
+    
     const b = l.kind === 'merged'
       ? App.getItemDocBBox(l)
       : (App.modelBBox ? App.modelBBox(l) : App.getItemDocBBox(l));
     return b.x < rc.x + rc.w && b.x + b.w > rc.x && b.y < rc.y + rc.h && b.y + b.h > rc.y;
   } catch (e) { return true; }
 };
+
 
 App.bakeLayerSourceKey = function (layer, size) {
   if (!layer) return 'none';
@@ -221,17 +503,30 @@ App.bakeLayerSourceKey = function (layer, size) {
   if (layer.kind === 'pattern') return 'pattern:' + (layer.patternKey || '') + ':' + (layer.color || '#ffffff') + ':' + size;
   return 'import:' + layer.id + ':' + size;
 };
-App.bakeLayerSource = function (layer, size, memo) {
+
+App.bakeLayerSource = function (layer, size, memo, opts) {
   size = size || 256;
+  const drawable = !!(opts && opts.drawable);
+  
   if (layer && layer.isMask && layer.kind !== 'import') size = Math.max(size, 512);
   const key = App.bakeLayerSourceKey(layer, size);
   if (memo && memo.has(key)) return memo.get(key);
   let source;
   try {
+    
     if (layer.kind === 'symbol' && !layer.dataUri && layer.symbolKey && App.relinkSymbolData) App.relinkSymbolData(layer);
     if (layer.isMask && layer.kind !== 'import' && App.maskBakeUrl) source = App.maskBakeUrl(layer, size);
-    else if (layer.kind === 'symbol') source = App.symbolColorUrl(layer);
-    else if (layer.kind === 'pattern') source = Promise.resolve(App.patternThumbCanvas(layer.patternKey, layer.color || '#ffffff', size).toDataURL());
+    else if (layer.kind === 'symbol') {
+      source = drawable
+        ? App.symbolColorCanvas(layer.dataUri, layer.color || '#ffffff',
+            Math.max(1, Math.round(layer.w)), Math.max(1, Math.round(layer.h)),
+            App.symbolColorIdent(layer), { lod: false })
+        : App.symbolColorUrl(layer);
+    }
+    else if (layer.kind === 'pattern') {
+      const pcv = App.patternThumbCanvas(layer.patternKey, layer.color || '#ffffff', size);
+      source = Promise.resolve(drawable ? pcv : pcv.toDataURL());
+    }
     else if (layer.kind === 'import') source = App.svgRasterThumb(layer, size);
     else source = Promise.resolve('');
   } catch (e) {
@@ -246,7 +541,8 @@ App.bakeLayerSource = function (layer, size, memo) {
   return result;
 };
 
-App.resolveBakeLayerSources = function (leaves, size, concurrency, shouldContinue) {
+
+App.resolveBakeLayerSources = function (leaves, size, concurrency, shouldContinue, opts) {
   leaves = leaves || [];
   size = size || 256;
   if (!leaves.length) return Promise.resolve([]);
@@ -259,7 +555,7 @@ App.resolveBakeLayerSources = function (leaves, size, concurrency, shouldContinu
     let i = 0;
     const collect = function () {
       if (!alive()) { finish([]); return; }
-      if (App.renderInteractionBusy && App.renderInteractionBusy()) { setTimeout(collect, 60); return; }
+      if (App.bakeDeferBusy()) { setTimeout(collect, 60); return; }
       const t0 = performance.now();
       do {
         const layer = leaves[i];
@@ -284,7 +580,7 @@ App.resolveBakeLayerSources = function (leaves, size, concurrency, shouldContinu
         let j = 0;
         const expandStep = function () {
           if (!alive()) { finish([]); return; }
-          if (App.renderInteractionBusy && App.renderInteractionBusy()) { setTimeout(expandStep, 60); return; }
+          if (App.bakeDeferBusy()) { setTimeout(expandStep, 60); return; }
           const t1 = performance.now();
           do { urls[j] = byKey.get(keys[j]) || ''; j++; }
           while (j < keys.length && performance.now() - t1 < 6);
@@ -295,11 +591,11 @@ App.resolveBakeLayerSources = function (leaves, size, concurrency, shouldContinu
       };
       const pumpSources = function () {
         if (!alive()) { finish([]); return; }
-        if (App.renderInteractionBusy && App.renderInteractionBusy()) { setTimeout(pumpSources, 60); return; }
+        if (App.bakeDeferBusy()) { setTimeout(pumpSources, 60); return; }
         while (sourceIndex < entries.length && sourceIndex - sourceDone < sourceLimit) {
           const entry = entries[sourceIndex++];
           let source;
-          try { source = App.bakeLayerSource(entry[1].layer, entry[1].size); }
+          try { source = App.bakeLayerSource(entry[1].layer, entry[1].size, undefined, opts); }
           catch (e) {
             console.warn('[bake] 图源启动失败', entry[0], String(e && e.message || e).slice(0, 160));
             source = Promise.resolve('');
@@ -326,6 +622,7 @@ App.resolveBakeLayerSources = function (leaves, size, concurrency, shouldContinu
   });
 };
 
+
 App.loadBakeImages = function (urls, warnLabel, shouldContinue) {
   const uniq = Array.from(new Set((urls || []).filter(Boolean)));
   if (!uniq.length) return Promise.resolve(new Map());
@@ -338,7 +635,7 @@ App.loadBakeImages = function (urls, warnLabel, shouldContinue) {
     let next = 0, active = 0, done = 0;
     const pump = function () {
       if (!alive()) { finish(byUrl); return; }
-      if (App.renderInteractionBusy && App.renderInteractionBusy()) { setTimeout(pump, 60); return; }
+      if (App.bakeDeferBusy()) { setTimeout(pump, 60); return; }
       while (next < uniq.length && active < limit) {
         const url = uniq[next++];
         active++;
@@ -363,6 +660,7 @@ App.loadBakeImages = function (urls, warnLabel, shouldContinue) {
     pump();
   });
 };
+
 
 App.bakeEditStatic = function (items, viewport, shouldContinue) {
   const vis = viewport ? items.filter(l => App.layerInRect(l, viewport)) : items;
@@ -406,12 +704,14 @@ App.bakeEditStatic = function (items, viewport, shouldContinue) {
       }
       if (i < leaves.length) { setTimeout(bboxStep, 0); return; }
       if (!isFinite(minx)) { finishResult(null); return; }
+      
       const bx = viewport ? viewport.x : minx;
       const by = viewport ? viewport.y : miny;
       const bw = viewport ? viewport.w : Math.max(1, maxx - minx);
       const bh = viewport ? viewport.h : Math.max(1, maxy - miny);
       let f;
       if (viewport) {
+        
         const dpr = window.devicePixelRatio || 1;
         const target = (App.state.view.scale || 1) * dpr;
         f = Math.min(target, 4096 / Math.max(bw, bh));
@@ -437,6 +737,7 @@ App.bakeEditStatic = function (items, viewport, shouldContinue) {
             rootRect: { x: bx, y: by, w: bw, h: bh }, shouldContinue: alive
           }).then(function (drawn) {
             if (!drawn || !alive()) { finishResult(null); return; }
+            
             finishResult({ url: cv.toDataURL(), x: bx, y: by, w: bw, h: bh, f: f, failedTop: ready.failedTop });
           });
         }).catch(e => { console.warn('[bake] 编辑静态图源加载失败', String(e && e.message || e).slice(0, 160)); finishResult(null); });
@@ -449,12 +750,14 @@ App.beginEditStatic = function () {
   const s = App.state;
   if (!s.edit || s.edit.type === 'bg') return;
   if (App.state.eyeMode) return; 
+  
   if (App.state.hideOthers) {
     if (App.editStatic.active || App.editStatic.baking) App.endEditStatic();
     return;
   }
   const targets = App.editTargets();
   if (App.editStatic.active) {
+    
     const before = App.editStatic.items.length;
     App.editStatic.items = App.editStatic.items.filter(l => !targets.includes(l));
     if (App.editStatic.items.length !== before) {
@@ -468,16 +771,19 @@ App.beginEditStatic = function () {
       }
       App.rebakeEditStaticViewport();
     }
+    
     targets.forEach(l => App.restoreEsVisibility(l));
     return;
   }
   if (App.editStatic.baking) return;
+  
   targets.forEach(l => App.restoreEsVisibility(l));
   const items = s.layers.filter(l => !targets.includes(l));
   if (!items.length) return;
   App.editStatic.active = true;
   App.editStatic.items = items;
   App.editStatic.view = null;
+  
   App.rebakeEditStaticViewport();
 };
 App.endEditStatic = function () {
@@ -498,8 +804,10 @@ App.endEditStatic = function () {
     if (App.editStaticStageEl.isConnected) App.editStaticStageEl.remove();
     App.editStaticStageEl = null;
   }
-  try { (App.state.layers || []).forEach(l => App.restoreEsVisibility(l)); } catch (e) {   }
+  
+  try { (App.state.layers || []).forEach(l => App.restoreEsVisibility(l)); } catch (e) {  }
 };
+
 App.setEsHidden = function (l, hide) {
   if (!l || !l.el) return;
   if (hide) {
@@ -515,6 +823,7 @@ App.setEsHidden = function (l, hide) {
 };
 App.restoreEsVisibility = function (l) { App.setEsHidden(l, false); };
 
+
 App.setAutoStaticHidden = function (l, hide) {
   if (!l || !l.el) return;
   if (hide) {
@@ -528,10 +837,114 @@ App.setAutoStaticHidden = function (l, hide) {
 };
 App.restoreAutoStaticDisplay = function (l) { App.setAutoStaticHidden(l, false); };
 
+﻿
 App.autoStatic = { active: false, baking: false, bit: null, view: null, token: 0, hiding: [], url: null, flashUrls: null, contentRevision: null };
 App.autoStaticBgEl = null;
+
+App.autoStaticBitCache = new Map();
+App.autoStaticBitCacheMax = 10;
+App.autoStaticCacheKey = function (bit) {
+  return Math.round(bit.x) + ',' + Math.round(bit.y) + ',' +
+    Math.round(bit.w * 1000) + ',' + Math.round(bit.h * 1000) + '@' + Math.round((bit.f || 1) * 1000);
+};
+App.autoStaticCacheHasUrl = function (url) {
+  if (!url) return false;
+  let found = false;
+  App.autoStaticBitCache.forEach(function (ev) {
+    if (!found && ev && ev.bit && ev.bit.url === url) found = true;
+  });
+  return found;
+};
+App.autoStaticCacheHasFlashUrls = function (urls) {
+  if (!urls) return false;
+  let found = false;
+  App.autoStaticBitCache.forEach(function (ev) {
+    if (!found && ev && ev.bit && ev.bit.flashUrls === urls) found = true;
+  });
+  return found;
+};
+App.autoStaticCachePut = function (bit, rect) {
+  if (!bit || !bit.url || bit.url.indexOf('blob:') !== 0) return;
+  const c = App.autoStaticBitCache;
+  const key = App.autoStaticCacheKey(bit);
+  if (c.has(key)) c.delete(key);
+  c.set(key, { bit: bit, rect: rect, rev: App.contentRevision || 0 });
+  while (c.size > App.autoStaticBitCacheMax) {
+    const first = c.keys().next();
+    if (first.done) break;
+    const ev = c.get(first.value);
+    c.delete(first.value);
+    if (!ev || !ev.bit) continue;
+    if (ev.bit.flashUrls) { try { App.revokeAutoStaticFlashUrls(ev.bit.flashUrls); } catch (e) {  } }
+    
+    if (ev.bit.url !== App.autoStatic.url) {
+      try { URL.revokeObjectURL(ev.bit.url); } catch (e) {  }
+    }
+  }
+};
+App.autoStaticCacheFind = function (rect, needF) {
+  const c = App.autoStaticBitCache;
+  if (!c.size || !rect) return null;
+  const rev = App.contentRevision || 0;
+  let hitKey = null, hit = null;
+  c.forEach(function (ev, key) {
+    if (hit) return;
+    if (!ev || !ev.bit || !ev.rect || ev.rev !== rev) return;
+    const b = ev.rect;
+    if (!(b.x <= rect.x && b.y <= rect.y && (b.x + b.w) >= (rect.x + rect.w) && (b.y + b.h) >= (rect.y + rect.h))) return;
+    const f = Number(ev.bit.f) || 0;
+    if (!(f > 0) || f < needF * 0.8) return;
+    hit = ev; hitKey = key;
+  });
+  if (!hit) return null;
+  c.delete(hitKey); c.set(hitKey, hit);   
+  return hit;
+};
+
+App.autoStaticParked = [];
+App.autoStaticParkedMax = 3;
+App.autoStaticParkHits = 0;
+App.autoStaticParkTake = function (url) {
+  if (!url) return null;
+  const list = App.autoStaticParked;
+  for (let i = 0; i < list.length; i++) {
+    if (list[i].url === url) { App.autoStaticParkHits++; return list.splice(i, 1)[0]; }
+  }
+  return null;
+};
+App.autoStaticParkPut = function (entry) {
+  if (!entry || !entry.stage || !entry.url) return false;
+  const list = App.autoStaticParked;
+  if (list.length >= App.autoStaticParkedMax) return false;
+  entry.stage.style.display = 'none';
+  entry.stage.style.visibility = '';
+  list.push(entry);
+  return true;
+};
+App.autoStaticParkClear = function () {
+  const list = App.autoStaticParked;
+  list.forEach(function (e) {
+    try { if (e.stage && e.stage.isConnected) e.stage.remove(); } catch (err) {  }
+    try { if (e.flashPair) App.removeAutoStaticFlashPair(e.flashPair); } catch (err) {  }
+  });
+  list.length = 0;
+};
+App.autoStaticCacheClear = function () {
+  const c = App.autoStaticBitCache;
+  if (!c.size) return;
+  c.forEach(function (ev) {
+    if (!ev || !ev.bit) return;
+    if (ev.bit.url === App.autoStatic.url) return;   
+    if (ev.bit.flashUrls) { try { App.revokeAutoStaticFlashUrls(ev.bit.flashUrls); } catch (e) {  } }
+    if (ev.bit.url) {
+      try { URL.revokeObjectURL(ev.bit.url); } catch (e) {  }
+    }
+  });
+  c.clear();
+};
 App.autoStaticFlashPair = null;
 App.autoStaticLayerThreshold = 300;
+
 App.renderPointerActive = false;
 App.renderInteractionUntil = 0;
 App.renderResizeUntil = 0;
@@ -561,8 +974,41 @@ App.renderInteractionBusy = function () {
   const now = performance.now();
   return !!App.renderPointerActive || now < (App.renderInteractionUntil || 0) || now < (App.renderResizeUntil || 0);
 };
+
+App.bakeDeferBusy = function () {
+  if (App._bakeUrgent) return false;
+  if (!App.renderInteractionBusy || !App.renderInteractionBusy()) return false;
+  
+  if (App.autoStatic.baking && !App.autoStaticViewUpToDate()) return false;
+  return true;
+};
+
+App.autoStaticViewUpToDate = function () {
+  const st = App.autoStatic;
+  if (!st || !st.active || !st.view) return false;
+  const v = st.view;
+  const want = App.autoStaticViewportRect(0);
+  const covered = v.x <= want.x && v.y <= want.y &&
+    (v.x + v.w) >= (want.x + want.w) && (v.y + v.h) >= (want.y + want.h);
+  if (!covered) return false;
+  const f = Number(v._f) || 0;
+  return !(f > 0 && f < App.autoStaticNeedF() * 0.8);
+};
+
+App.autoStaticKeepStale = function () {
+  if (!App.autoStatic || !App.autoStatic.active) return false;
+  return !!(App.renderInteractionBusy && App.renderInteractionBusy());
+};
+
+App.autoStaticDeferStart = function () {
+  if (!App.renderInteractionBusy || !App.renderInteractionBusy()) return false;
+  
+  return !!App.autoStatic.active;
+};
+
 App.autoStaticViewportPad = 1.0;
-App.autoStaticEnabled = true;        
+
+App.autoStaticEnabled = true;      
 
 
 App.autoStaticLeafCount = function () {
@@ -574,6 +1020,7 @@ App.autoStaticLeafCount = function () {
   }
   return n;
 };
+
 App.autoStaticNeeded = function () {
   const layers = App.state.layers || [];
   const prof = App._proxyBake;
@@ -585,18 +1032,20 @@ App.autoStaticNeeded = function () {
   return false;
 };
 App.autoStaticEligible = function () {
+  
   if (App.editStatic && App.editStatic.active) return false;
-  if (!App.autoStaticEnabled) return false;    
+  if (!App.autoStaticEnabled) return false;   
   if (!App.state.layers || !App.state.layers.length) return false;
-  if (App.state.edit) return false;             
-  if (App.state.eyeMode) return false;          
-  if (App.state.layersHidden) return false;     
+  if (App.state.edit) return false;            
+  if (App.state.eyeMode) return false;         
+  if (App.state.layersHidden) return false;    
   if (App.state.hideOthers) return false;
-  if (App.state.batching) return false;         
+  if (App.state.batching) return false;        
   if (App._colorYield) return false;
   if (!App.autoStaticNeeded()) return false;
   return App.autoStaticVisibleLeafCount() >= App.autoStaticLayerThreshold;
 };
+
 App.autoStaticVisibleLeafCount = function () {
   const layers = App.state.layers || [];
   if (!layers.length) return 0;
@@ -614,6 +1063,7 @@ App.autoStaticVisibleLeafCount = function () {
   App.renderPerfCounters.autoVisibleLeaves += n;
   return n;
 };
+
 App.autoStaticContentBBox = function () {
   const layers = App.state.layers || [];
   if (!layers.length) return null;
@@ -624,7 +1074,7 @@ App.autoStaticContentBBox = function () {
       if (!b || !isFinite(b.x + b.w)) continue;
       minx = Math.min(minx, b.x); miny = Math.min(miny, b.y);
       maxx = Math.max(maxx, b.x + b.w); maxy = Math.max(maxy, b.y + b.h);
-    } catch (e) {   }
+    } catch (e) {  }
   }
   if (!isFinite(minx)) return null;
   return { minx: minx, miny: miny, maxx: maxx, maxy: maxy };
@@ -643,12 +1093,14 @@ App.autoStaticViewportRect = function (pad) {
       const x3 = Math.min(x + w, b.maxx), y3 = Math.min(y + h, b.maxy);
       if (x3 > x2 && y3 > y2) { x = x2; y = y2; w = x3 - x2; h = y3 - y2; }
     }
-  } catch (e) {   }
+  } catch (e) {  }
   return { x: x, y: y, w: w, h: h, scale: sc };
 };
 
+
 App.autoStaticRectF = function (rect) {
   const dpr = window.devicePixelRatio || 1;
+  
   const byScreen = (App.state.view.scale || 1) * dpr;
   const byCap = 4096 / Math.max(rect.w, rect.h);
   return Math.min(byScreen, byCap);
@@ -657,6 +1109,7 @@ App.bakeOpacity = function (layer) {
   const n = Number(layer && layer.opacity);
   return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 1;
 };
+
 
 App.prepareBakeTree = function (items, leaves, mats) {
   const leafIndex = new Map();
@@ -727,12 +1180,12 @@ App.drawBakeTree = function (ctx, items, options) {
   };
   const waitForBudget = function () {
     if (!alive()) return Promise.resolve(false);
-    const busy = App.renderInteractionBusy && App.renderInteractionBusy();
+    const busy = App.bakeDeferBusy();
     if (!busy && performance.now() - sliceStart < 8) return null;
     return new Promise(function (resolve) {
       const resume = function () {
         if (!alive()) { resolve(false); return; }
-        if (App.renderInteractionBusy && App.renderInteractionBusy()) { setTimeout(resume, 60); return; }
+        if (App.bakeDeferBusy()) { setTimeout(resume, 60); return; }
         setTimeout(function () { sliceStart = performance.now(); resolve(alive()); }, 0);
       };
       resume();
@@ -764,6 +1217,7 @@ App.drawBakeTree = function (ctx, items, options) {
           target.globalAlpha = opacity;
           target.drawImage(scratch, (b.x - origin.x) * f, (b.y - origin.y) * f);
           target.restore();
+          
           scratch.width = 1; scratch.height = 1;
         }
       } else {
@@ -787,10 +1241,12 @@ App.drawBakeTree = function (ctx, items, options) {
   };
   return drawNodes(items || [], ctx, { x: root.x, y: root.y });
 };
+
 App.autoStaticNeedF = function () {
   const dpr = window.devicePixelRatio || 1;
   return (App.state.view.scale || 1) * dpr;
 };
+
 App.autoStaticViewSig = function () {
   const v = App.state.view;
   const r = App.wrap.getBoundingClientRect();
@@ -814,13 +1270,16 @@ App.removeAutoStaticFlashPair = function (pair) {
   if (pair.g && pair.g.parentNode) pair.g.parentNode.removeChild(pair.g);
 };
 App.autoStaticRelease = function () {
+  
+  App._bakeUrgent = 0;
+  
   App._autoStaticSig = null;
   if (!App.autoStatic.active && !App.autoStatic.baking && !(App.autoStatic.hiding || []).length &&
       !App.autoStaticFlashPair && !App.autoStatic.flashUrls) return;
   App.autoStatic.active = false;
   App.autoStatic.baking = false;
   App.autoStatic.token++;
-  (App.autoStatic.hiding || []).forEach(function (l) { try { App.restoreAutoStaticDisplay(l); } catch (e) {   } });
+  (App.autoStatic.hiding || []).forEach(function (l) { try { App.restoreAutoStaticDisplay(l); } catch (e) {  } });
   App.autoStatic.hiding = [];
   App.autoStatic.bit = null;
   App.autoStatic.view = null;
@@ -831,31 +1290,38 @@ App.autoStaticRelease = function () {
     App.autoStaticStageEl = null;
   }
   if (App.autoStatic.url) {
-    try { URL.revokeObjectURL(App.autoStatic.url); }
-    catch (e) { console.warn('[bake] 回收静态位图失败', String(e && e.message || e).slice(0, 120)); }
+    
+    if (!App.autoStaticCacheHasUrl(App.autoStatic.url)) {
+      try { URL.revokeObjectURL(App.autoStatic.url); }
+      catch (e) { console.warn('[bake] 回收静态位图失败', String(e && e.message || e).slice(0, 120)); }
+    }
     App.autoStatic.url = null;
   }
   App.removeAutoStaticFlashPair(App.autoStaticFlashPair);
   App.autoStaticFlashPair = null;
-  App.revokeAutoStaticFlashUrls(App.autoStatic.flashUrls);
+  if (!App.autoStaticCacheHasFlashUrls(App.autoStatic.flashUrls)) App.revokeAutoStaticFlashUrls(App.autoStatic.flashUrls);
   App.autoStatic.flashUrls = null;
   if (App.autoStaticBgEl) {
     App.autoStaticBgEl.style.display = 'none';
     App.autoStaticBgEl.removeAttribute('href');
   }
 };
+
 App.buildAutoStaticFlashUrls = function (source, shouldContinue) {
   if (!source || !source.width || !source.height) return Promise.resolve(null);
   const alive = typeof shouldContinue === 'function' ? shouldContinue : function () { return true; };
   if (!alive()) return Promise.resolve(null);
+  
+  const tw = Math.max(1, Math.round(source.width / 2));
+  const th = Math.max(1, Math.round(source.height / 2));
   const tinted = document.createElement('canvas');
-  tinted.width = source.width;
-  tinted.height = source.height;
+  tinted.width = tw;
+  tinted.height = th;
   const cx = tinted.getContext('2d');
   const encode = function (color, label) {
     cx.globalCompositeOperation = 'source-over';
     cx.clearRect(0, 0, tinted.width, tinted.height);
-    cx.drawImage(source, 0, 0);
+    cx.drawImage(source, 0, 0, source.width, source.height, 0, 0, tinted.width, tinted.height);
     cx.globalCompositeOperation = 'source-in';
     cx.fillStyle = color;
     cx.fillRect(0, 0, tinted.width, tinted.height);
@@ -896,6 +1362,7 @@ App.buildAutoStaticFlashUrls = function (source, shouldContinue) {
     return null;
   });
 };
+
 App.bakeAutoStatic = function (items, viewport, shouldContinue) {
   const vis = viewport ? items.filter(function (l) { return App.layerInRect(l, viewport); }) : items;
   const leaves = [];
@@ -906,14 +1373,17 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
   const mats = new Array(leaves.length);
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
   const BUDGET = 8, MIN_CHUNK = 8;
-  return new Promise(function (resolve) {
+  
+  const urgent = !App.autoStatic.active;
+  if (urgent) App._bakeUrgent = (App._bakeUrgent || 0) + 1;
+  const p = new Promise(function (resolve) {
     let settled = false;
     const finishResult = function (value) { if (!settled) { settled = true; resolve(value); } };
     let mi = 0;
     let i = 0;
     const matrixStep = function () {
       if (!alive()) { finishResult(null); return; }
-      if (App.renderInteractionBusy && App.renderInteractionBusy()) { setTimeout(matrixStep, 60); return; }
+      if (App.bakeDeferBusy()) { setTimeout(matrixStep, 60); return; }
       const t0 = performance.now();
       let n = 0;
       while (mi < leaves.length && (n < MIN_CHUNK || performance.now() - t0 < BUDGET)) {
@@ -925,7 +1395,7 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
     };
     const bboxStep = function () {
       if (!alive()) { finishResult(null); return; }
-      if (App.renderInteractionBusy && App.renderInteractionBusy()) { setTimeout(bboxStep, 60); return; }
+      if (App.bakeDeferBusy()) { setTimeout(bboxStep, 60); return; }
       const t0 = performance.now();
       let n = 0;
       while (i < leaves.length && (n < MIN_CHUNK || performance.now() - t0 < BUDGET)) {
@@ -946,7 +1416,9 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
       let f;
       if (viewport) {
         const dpr2 = window.devicePixelRatio || 1;
-        f = Math.min((App.state.view.scale || 1) * dpr2, 4096 / Math.max(bw, bh));
+        
+        const fGiven = Number(viewport._f);
+        f = (fGiven > 0) ? fGiven : Math.min((App.state.view.scale || 1) * dpr2, 4096 / Math.max(bw, bh));
       } else {
         const sc = App.state.view.scale || 1;
         const dpr2 = window.devicePixelRatio || 1;
@@ -955,12 +1427,24 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
       const cw = Math.max(1, Math.round(bw * f)), ch = Math.max(1, Math.round(bh * f));
       const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
       const cx = cv.getContext('2d');
-      App.resolveBakeLayerSources(leaves, 256, undefined, alive).then(function (urls) {
+      
+      let maxLeafSide = 1;
+      for (let i = 0; i < leaves.length; i++) {
+        const l = leaves[i];
+        const sd = Math.max(Number(l && l.w) || 0, Number(l && l.h) || 0);
+        if (sd > maxLeafSide) maxLeafSide = sd;
+      }
+      const srcSize = Math.max(24, Math.min(256, Math.ceil(maxLeafSide * f)));
+      App.resolveBakeLayerSources(leaves, srcSize, undefined, alive, { drawable: true }).then(function (urls) {
         if (!alive() || urls.length !== leaves.length) { finishResult(null); return; }
-        const uniq = Array.from(new Set(urls.filter(Boolean)));
+        
+        const uniq = Array.from(new Set(urls.filter(function (u) { return typeof u === 'string' && u; })));
         App.loadBakeImages(uniq, '[bake] 自动静态图源解码失败', alive).then(function (byUrl) {
           if (!alive()) { finishResult(null); return; }
-          const images = urls.map(function (url) { return url ? (byUrl.get(url) || null) : null; });
+          const images = urls.map(function (u) {
+            if (!u) return null;
+            return typeof u === 'string' ? (byUrl.get(u) || null) : u;
+          });
           const tree = App.prepareBakeTree(vis, leaves, mats);
           const ready = App.bakeDrawableItems(vis, tree, images);
           App.drawBakeTree(cx, ready.items, {
@@ -970,7 +1454,7 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
             if (!drawn || !alive()) { finishResult(null); return; }
             const finish = function (url) {
               if (!alive()) {
-                if (url && url.indexOf('blob:') === 0) { try { URL.revokeObjectURL(url); } catch (e) {   } }
+                if (url && url.indexOf('blob:') === 0) { try { URL.revokeObjectURL(url); } catch (e) {  } }
                 finishResult(null);
                 return;
               }
@@ -978,7 +1462,7 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
               if (leaves.length <= 400 || !url) { finishResult(bit); return; }
               App.buildAutoStaticFlashUrls(cv, alive).then(function (urls) {
                 if (!alive()) {
-                  if (url && url.indexOf('blob:') === 0) { try { URL.revokeObjectURL(url); } catch (e) {   } }
+                  if (url && url.indexOf('blob:') === 0) { try { URL.revokeObjectURL(url); } catch (e) {  } }
                   if (urls) App.revokeAutoStaticFlashUrls(urls);
                   finishResult(null);
                   return;
@@ -1000,7 +1484,11 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
     };
     matrixStep();
   });
+  if (!urgent) return p;
+  const release = function () { App._bakeUrgent = Math.max(0, (App._bakeUrgent || 1) - 1); };
+  return p.then(function (v) { release(); return v; }, function (e) { release(); throw e; });
 };
+
 App.autoStaticStructSig = function () {
   const L = App.state.layers || [];
   let s = String(L.length) + ':';
@@ -1014,9 +1502,14 @@ App.autoStaticInstall = function (bit, token) {
   const oldUrl = App.autoStatic.url;
   const oldFlashPair = App.autoStaticFlashPair;
   const oldFlashUrls = App.autoStatic.flashUrls;
-  const stage = svgEl('image', { 'pointer-events': 'none', preserveAspectRatio: 'none', class: 'sve-auto-static' });
+  
+  const parked = App.autoStaticParkTake(bit.url);
+  const stage = parked ? parked.stage : svgEl('image', { 'pointer-events': 'none', preserveAspectRatio: 'none', class: 'sve-auto-static' });
   let flashPair = null;
-  if (bit.flashUrls && App.autoStaticFlashG) {
+  if (parked && parked.flashPair && parked.flashUrls === bit.flashUrls) {
+    flashPair = parked.flashPair;          
+    flashPair.target = stage;
+  } else if (bit.flashUrls && App.autoStaticFlashG) {
     const g = svgEl('g', { 'pointer-events': 'none' });
     const make = function (href) {
       const el = svgEl('image', {
@@ -1056,6 +1549,7 @@ App.autoStaticInstall = function (bit, token) {
       if (settled) return;
       settled = true;
       clear();
+      
       requestAnimationFrame(function () { requestAnimationFrame(function () {
         if (token !== App.autoStatic.token || !stage.isConnected || App.autoStaticStageEl !== stage) {
           if (stage.isConnected) stage.remove();
@@ -1069,14 +1563,20 @@ App.autoStaticInstall = function (bit, token) {
         const hidingIds = new Set(hiding.map(function (l) { return l.id; }));
         stage.style.visibility = '';
         stage.style.display = '';
-        if (oldEl && oldEl !== stage) oldEl.remove();
-        if (oldFlashPair && oldFlashPair !== flashPair) App.removeAutoStaticFlashPair(oldFlashPair);
+        
+        let parkedOld = false;
+        if (oldEl && oldEl !== stage) {
+          parkedOld = App.autoStaticParkPut({ url: oldUrl, stage: oldEl, flashPair: oldFlashPair, flashUrls: oldFlashUrls });
+          if (!parkedOld) oldEl.remove();
+        }
+        if (oldFlashPair && oldFlashPair !== flashPair && !parkedOld) App.removeAutoStaticFlashPair(oldFlashPair);
         App.autoStaticBgEl = stage;
         if (flashPair) flashPair.target = stage;
         App.autoStaticFlashPair = flashPair;
         App.autoStaticStageEl = null;
         App.autoStatic.url = bit.url.indexOf('blob:') === 0 ? bit.url : null;
         App.autoStatic.flashUrls = bit.flashUrls || null;
+        
         (App.autoStatic.hiding || []).forEach(function (l) {
           if (!hidingIds.has(l.id)) { try { App.restoreAutoStaticDisplay(l); } catch (e) { console.warn('[bake] 恢复矢量层失败', l && l.id, String(e && e.message || e).slice(0, 120)); } }
         });
@@ -1088,10 +1588,11 @@ App.autoStaticInstall = function (bit, token) {
           delete bit._view;
         }
         App.autoStatic.active = true;
-        if (oldUrl && oldUrl !== bit.url) setTimeout(function () { try { URL.revokeObjectURL(oldUrl); } catch (e) { console.warn('[bake] 回收旧位图失败', String(e && e.message || e).slice(0, 120)); } }, 0);
+        if (oldUrl && oldUrl !== bit.url && !App.autoStaticCacheHasUrl(oldUrl)) setTimeout(function () { try { URL.revokeObjectURL(oldUrl); } catch (e) { console.warn('[bake] 回收旧位图失败', String(e && e.message || e).slice(0, 120)); } }, 0);
         if (oldFlashUrls && oldFlashUrls !== bit.flashUrls) {
-          setTimeout(function () { App.revokeAutoStaticFlashUrls(oldFlashUrls); }, 0);
+          if (!App.autoStaticCacheHasFlashUrls(oldFlashUrls)) setTimeout(function () { App.revokeAutoStaticFlashUrls(oldFlashUrls); }, 0);
         }
+        
         if (flashPair) {
           flashPair.yellow.style.opacity = '0.001';
           flashPair.blue.style.opacity = '0.001';
@@ -1103,15 +1604,42 @@ App.autoStaticInstall = function (bit, token) {
         resolve(true);
       }); });
     };
-    stage.addEventListener('load', ready);
-    stage.addEventListener('error', failed);
-    stage.setAttribute('href', bit.url);
+    if (parked) {
+      
+      stage.style.display = '';
+      stage.style.visibility = 'hidden';
+      ready();
+    } else {
+      stage.addEventListener('load', ready);
+      stage.addEventListener('error', failed);
+      stage.setAttribute('href', bit.url);
+    }
   });
+};
+
+App.autoStaticKeepOld = function () {
+  const v = (App.autoStatic && App.autoStatic.active) ? App.autoStatic.view : null;
+  if (!v) return false;
+  const want = App.autoStaticViewportRect(0);
+  return v.x <= want.x && v.y <= want.y && (v.x + v.w) >= (want.x + want.w) && (v.y + v.h) >= (want.y + want.h);
+};
+
+App.autoStaticRectStillUseful = function (rect) {
+  if (!rect) return true;
+  const want = App.autoStaticViewportRect(0);
+  const covered = rect.x <= want.x && rect.y <= want.y &&
+    (rect.x + rect.w) >= (want.x + want.w) && (rect.y + rect.h) >= (want.y + want.h);
+  if (!covered) return false;
+  const f = Number(rect._f) || 0;
+  const needF = App.autoStaticNeedF();
+  return !(f > 0 && f < needF * 0.8);
 };
 App.autoStaticRebake = function () {
   if (App.autoStatic.baking) return;
-  if (App.renderInteractionBusy && App.renderInteractionBusy()) { App.autoStaticSchedule(120); return; }
+  
+  if (App.autoStaticDeferStart()) { App.autoStaticSchedule(120); return; }
   if (!App.autoStaticEligible()) { App.autoStaticRelease(); return; }
+  
   const needF = App.autoStaticNeedF();
   let rect = App.autoStaticViewportRect(0.5);
   let rectPad = 0.5;
@@ -1126,9 +1654,15 @@ App.autoStaticRebake = function () {
   App.autoStatic.lastErr = null;
   App.autoStatic.baking = true;
   const token = ++App.autoStatic.token;
+  
+  const cached = App.autoStaticCacheFind(rect, needF);
+  if (cached) {
+    rect = { x: cached.rect.x, y: cached.rect.y, w: cached.rect.w, h: cached.rect.h,
+             scale: rect.scale, _f: cached.rect._f, _pad: cached.rect._pad };
+  }
   const items = App.state.layers.slice();
   const contentRevision = App.contentRevision || 0;
-  const structSig = App.autoStaticStructSig();    
+  const structSig = App.autoStaticStructSig();   
   const docId = App.Tabs && App.Tabs.current ? App.Tabs.current.id : null;
   const viewRevision = App.viewRevision || 0;
   App.renderPerfCounters.autoBakeStarts++;
@@ -1138,22 +1672,32 @@ App.autoStaticRebake = function () {
     rect: { x: rect.x, y: rect.y, w: rect.w, h: rect.h, f: rect._f, pad: rect._pad }
   });
   let __p = null;
+  let lastGeomAt = 0;
   const shouldContinue = function () {
     const currentDocId = App.Tabs && App.Tabs.current ? App.Tabs.current.id : null;
-    return token === App.autoStatic.token && contentRevision === (App.contentRevision || 0) &&
-      structSig === App.autoStaticStructSig() && currentDocId === docId &&
-      viewRevision === (App.viewRevision || 0);
+    
+    if (token !== App.autoStatic.token || contentRevision !== (App.contentRevision || 0) ||
+        currentDocId !== docId) return false;
+    const now = performance.now();
+    if (now - lastGeomAt > 60) {
+      lastGeomAt = now;
+      
+      if (structSig !== App.autoStaticStructSig()) return false;
+      if (!App.autoStaticRectStillUseful(rect)) return false;
+    }
+    return true;
   };
-  try { __p = App.bakeAutoStatic(items, rect, shouldContinue); }
+  try { __p = cached ? Promise.resolve(cached.bit) : App.bakeAutoStatic(items, rect, shouldContinue); }
   catch (e) { App.autoStatic.baking = false; App.autoStatic.lastErr = 'bake-sync-throw: ' + String(e && e.message || e).slice(0, 120); return; }
   if (!__p || typeof __p.then !== 'function') { App.autoStatic.baking = false; App.autoStatic.lastErr = 'bake-not-promise'; return; }
   __p.then(function (bit) {
     const drop = function (why, releaseCurrent) {
-      if (bit && bit.url && bit.url.indexOf('blob:') === 0) {
+      if (bit && bit.url && bit.url.indexOf('blob:') === 0 && !App.autoStaticCacheHasUrl(bit.url)) {
         try { URL.revokeObjectURL(bit.url); }
         catch (e) { console.warn('[bake] 回收废弃位图失败', String(e && e.message || e).slice(0, 120)); }
       }
-      if (bit && bit.flashUrls) App.revokeAutoStaticFlashUrls(bit.flashUrls);
+      if (bit && bit.flashUrls && !App.autoStaticCacheHasFlashUrls(bit.flashUrls)) App.revokeAutoStaticFlashUrls(bit.flashUrls);
+      
       if (token !== App.autoStatic.token) return;
       App.autoStatic.baking = false;
       App.autoStatic.lastErr = why;
@@ -1166,35 +1710,57 @@ App.autoStaticRebake = function () {
     };
     if (token !== App.autoStatic.token) { drop('superseded', false); return; }
     if (!bit) {
-      drop('bake-returned-null', true);
+      
+      drop('bake-aborted', !(App.autoStaticKeepOld() || App.autoStaticKeepStale()));
       if (App.autoStaticEligible && App.autoStaticEligible()) App.autoStaticSchedule(80);
       return;
     }
+    
     const install = function () {
       if (token !== App.autoStatic.token) { drop('superseded', false); return; }
-      if (App.renderInteractionBusy && App.renderInteractionBusy()) { setTimeout(install, 60); return; }
+      
+      if (App.autoStaticDeferStart()) { setTimeout(install, 60); return; }
       if (contentRevision !== (App.contentRevision || 0)) { drop('stale-content', true); App.autoStaticSchedule(); return; }
       if (structSig !== App.autoStaticStructSig()) { drop('stale-struct', true); App.autoStaticSchedule(); return; }
-      if (viewRevision !== (App.viewRevision || 0)) { drop('stale-view', true); App.autoStaticSchedule(80); return; }
+      
       if (!App.autoStaticEligible()) { drop('stale-ineligible', true); return; }
+      
       const want = App.autoStaticViewportRect(0);
-      if (!(rect.x <= want.x && rect.y <= want.y && (rect.x + rect.w) >= (want.x + want.w) && (rect.y + rect.h) >= (want.y + want.h))) {
-        drop('stale-cover', true);
-        App.autoStaticSchedule();
-        return;
+      const interacting = !!(App.renderInteractionBusy && App.renderInteractionBusy());
+      const covered = rect.x <= want.x && rect.y <= want.y &&
+        (rect.x + rect.w) >= (want.x + want.w) && (rect.y + rect.h) >= (want.y + want.h);
+      if (!covered) {
+        
+        let cover = 0;
+        if (interacting) {
+          const ix = Math.max(0, Math.min(rect.x + rect.w, want.x + want.w) - Math.max(rect.x, want.x));
+          const iy = Math.max(0, Math.min(rect.y + rect.h, want.y + want.h) - Math.max(rect.y, want.y));
+          cover = (ix * iy) / Math.max(1, want.w * want.h);
+        }
+        if (cover < 0.7) {
+          
+          drop('stale-cover', !(App.autoStaticKeepOld() || App.autoStaticKeepStale()));
+          App.autoStaticSchedule();
+          return;
+        }
       }
       if (!(bit.f > 0) || bit.f < App.autoStaticNeedF() * 0.8) {
-        drop('stale-quality', true);
-        App.autoStaticSchedule(80);
-        return;
+        
+        if (!interacting) {
+          drop('stale-quality', !(App.autoStaticKeepOld() || App.autoStaticKeepStale()));
+          App.autoStaticSchedule(80);
+          return;
+        }
       }
       if (typeof bit.f === 'number' && bit.f > 0) rect._f = bit.f;
       bit._view = rect;
       App.autoStaticInstall(bit, token).then(function (installed) {
         if (!installed) { drop('stage-failed', false); return; }
         if (token === App.autoStatic.token) {
+          
           App.autoStatic.contentRevision = contentRevision;
           App.autoStatic.baking = false;
+          App.autoStaticCachePut(bit, rect);
           App.renderPerfCounters.autoBakeInstalls++;
           App.traceRenderTask('autoStatic', 'install', {
             docId: docId, contentRevision: contentRevision, viewRevision: viewRevision,
@@ -1206,6 +1772,7 @@ App.autoStaticRebake = function () {
         drop('stage-throw', false);
       });
     };
+    
     const preload = [loadImage(bit.url)];
     if (bit.flashUrls) {
       preload.push(loadImage(bit.flashUrls.yellow));
@@ -1218,19 +1785,24 @@ App.autoStaticRebake = function () {
   }).catch(function (e) { App.autoStatic.baking = false; App.autoStatic.lastErr = 'bake-throw: ' + String(e && e.message || e).slice(0, 120); });
 };
 
+
 App.autoStaticSchedule = function (delay) {
   if (App._autoStaticTimer) clearTimeout(App._autoStaticTimer);
   App._autoStaticTimer = setTimeout(function () {
     App._autoStaticTimer = null;
-    if (App.renderInteractionBusy && App.renderInteractionBusy()) { App.autoStaticSchedule(120); return; }
+    
+    if (App.autoStaticDeferStart()) { App.autoStaticSchedule(120); return; }
     App.autoStaticRebake();
-  }, typeof delay === 'number' ? delay : 280);
+  }, typeof delay === 'number' ? delay
+     
+     : (App.autoStaticBitCache && App.autoStaticBitCache.size ? 120 : 280));
 };
 App.autoStaticMaybe = function () {
   if (!App.autoStaticEnabled) return;
   const nowTs = Date.now();
   const gap = nowTs - (App.autoStaticLastCheck || 0);
   if (gap < 60) {
+    
     if (!App._autoStaticTrailTimer) {
       App._autoStaticTrailTimer = setTimeout(function () {
         App._autoStaticTrailTimer = null;
@@ -1241,12 +1813,15 @@ App.autoStaticMaybe = function () {
   }
   App.autoStaticLastCheck = nowTs;
   if (App.autoStatic.baking) {
+    
     if (!App.autoStaticEligible()) { App.autoStaticRelease(); return; }
     return;
   }
   if (!App.autoStaticEligible()) { if (App.autoStatic.active) App.autoStaticRelease(); return; }
   if (!App.autoStatic.active || !App.autoStatic.view) { App.autoStaticRebake(); return; }
+  
   const v = App.autoStatic.view;
+  
   const pad = (v && v._pad !== undefined) ? v._pad : 0.5;
   const rect = App.autoStaticViewportRect(pad);
   const covered = v.x <= rect.x && v.y <= rect.y && (v.x + v.w) >= (rect.x + rect.w) && (v.y + v.h) >= (rect.y + rect.h);
@@ -1255,30 +1830,46 @@ App.autoStaticMaybe = function () {
   App.autoStaticSchedule();
 };
 
+
 App.invalidateEditStatic = function () {
   if (App.editStatic && App.editStatic.active && App.endEditStatic) App.endEditStatic();
+  
   if (App.autoStaticRelease) App.autoStaticRelease();
+  
   if (App.autoStaticMaybe) App.autoStaticMaybe();
 };
+
 App.contentChanged = function (options) {
-  if (App.state.batching) return;    
+  if (App.state.batching) return;   
   App.contentRevision = (App.contentRevision || 0) + 1;
+  
+  if (App.autoStaticCacheClear) App.autoStaticCacheClear();
+  if (App.autoStaticParkClear) App.autoStaticParkClear();
+  
+  App._lodQueue = null;
+  App._lodDirty = true;
+  if (App._lodDrainTimer) { clearTimeout(App._lodDrainTimer); App._lodDrainTimer = null; }
+  
+  if (App.scheduleLodRefresh) App.scheduleLodRefresh();
   const preserveRequested = !options || options.preserveAutoStatic !== false;
   const preserve = !!(preserveRequested && App.autoStatic && App.autoStatic.active &&
     App.autoStaticEligible && App.autoStaticEligible());
   if (preserve) {
+    
     App._autoStaticSig = null;
     if (App.autoStatic.baking) { App.autoStatic.token++; App.autoStatic.baking = false; }
     const current = App.state.layers || [];
-    current.forEach(function (l) { try { App.setAutoStaticHidden(l, true); } catch (e) {   } });
+    current.forEach(function (l) { try { App.setAutoStaticHidden(l, true); } catch (e) {  } });
     App.autoStatic.hiding = Array.from(new Set((App.autoStatic.hiding || []).concat(current)));
     if (App.autoStaticRebake) App.autoStaticRebake();
   } else {
     if (App.autoStaticRelease) App.autoStaticRelease();
     if (App.autoStaticMaybe) App.autoStaticMaybe();
   }
+  
   if (App.requestFlashRefresh) App.requestFlashRefresh(false);
 };
+
 App.rebakeEditStaticViewport = function () {
   if (!App.editStatic || !App.editStatic.active) return;
   if (App._editStaticViewTimer) clearTimeout(App._editStaticViewTimer);
@@ -1290,6 +1881,7 @@ App.rebakeEditStaticViewport = function () {
       if (App.renderInteractionBusy && App.renderInteractionBusy()) { App.rebakeEditStaticViewport(); return; }
       const vp = App.editStaticViewportRect();
       let items = App.editStatic.items.filter(l => App.layerInRect(l, vp));
+      
       const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
       const editItems = (App.state.edit && App.editTargets) ? App.editTargets() : [];
       let interMin = -1;
@@ -1300,6 +1892,7 @@ App.rebakeEditStaticViewport = function () {
       if (interMin >= 0) items = items.filter(l => App.state.layers.indexOf(l) < interMin);
       else items = [];
       if (!items.length) {
+        
         App.editStatic.view = vp;
         App.editStatic.bit = null;
         App.editStatic.failedTop = null;
@@ -1309,7 +1902,7 @@ App.rebakeEditStaticViewport = function () {
           App.editStaticBgEl.style.display = 'none';
           App.editStaticBgEl.removeAttribute('href');
         }
-        try { App.state.layers.forEach(l => App.restoreEsVisibility(l)); } catch (e) {   }
+        try { App.state.layers.forEach(l => App.restoreEsVisibility(l)); } catch (e) {  }
         return;
       }
       const docId = App.Tabs && App.Tabs.current ? App.Tabs.current.id : null;
@@ -1336,7 +1929,7 @@ App.rebakeEditStaticViewport = function () {
           App.editStaticBgEl.style.display = 'none';
           App.editStaticBgEl.removeAttribute('href');
         }
-        try { App.state.layers.forEach(l => App.restoreEsVisibility(l)); } catch (e) {   }
+        try { App.state.layers.forEach(l => App.restoreEsVisibility(l)); } catch (e) {  }
         App.traceRenderTask('editStatic', 'cancel', {
           docId: docId, contentRevision: contentRevision, viewRevision: viewRevision,
           generation: token, reason: reason
@@ -1345,6 +1938,7 @@ App.rebakeEditStaticViewport = function () {
       App.bakeEditStatic(items, vp, shouldContinue).then(bit => {
         if (!App.editStatic.active || token !== App._editStaticToken) return; 
         if (!bit) {
+          
           failCurrent('bake-returned-null');
           return;
         }
@@ -1353,6 +1947,7 @@ App.rebakeEditStaticViewport = function () {
           App.rebakeEditStaticViewport();
           return;
         }
+        
         if (App.editStaticStageEl && App.editStaticStageEl.isConnected) App.editStaticStageEl.remove();
         const stage = svgEl('image', { 'pointer-events': 'none', preserveAspectRatio: 'none', class: 'sve-edit-static' });
         App.editStaticStageEl = stage;
@@ -1392,6 +1987,7 @@ App.rebakeEditStaticViewport = function () {
             App.editStatic._bakedInterMin = interMin;
             App.editStatic.baking = false;
             if (old && old !== stage && old.isConnected) old.remove();
+            
             App.updateEditStaticViewport();
             App.traceRenderTask('editStatic', 'install', {
               docId: docId, contentRevision: contentRevision, viewRevision: viewRevision,
@@ -1406,9 +2002,10 @@ App.rebakeEditStaticViewport = function () {
         console.warn('[bake] 编辑静态任务失败', String(e && e.message || e).slice(0, 160));
         failCurrent('bake-throw');
       });
-    } catch (e) {   }
+    } catch (e) {  }
   }, 300);
 };
+
 App.updateEditStaticViewport = function () {
   if (!App.editStatic || !App.editStatic.active) return;
   const s = App.state;
@@ -1416,8 +2013,10 @@ App.updateEditStaticViewport = function () {
   const es = App.editStatic;
   let interMinNow = -1;
   if (es.view && es.bit) {
+    
     const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
     const editItems = (s.edit && App.editTargets) ? App.editTargets() : [];
+    
     for (let i = 0; i < s.layers.length; i++) {
       const l = s.layers[i];
       if (l === box || s.selected.has(l.id) || editItems.includes(l)) { interMinNow = i; break; }
@@ -1429,31 +2028,39 @@ App.updateEditStaticViewport = function () {
       const inter = l === box || s.selected.has(l.id) || editItems.includes(l);
       const inItems = es.items.includes(l);
       const inView = App.layerInRect(l, es.view);
+      
       const hide = !inter && inItems && inView && (interMin < 0 || i < interMin) &&
         !(es.failedTop && es.failedTop.has(l.id));
       App.setEsHidden(l, hide);
     }
   }
+  
   if (es.view && es._bakedInterMin !== undefined && es._bakedInterMin !== interMinNow) {
     App.rebakeEditStaticViewport();
   }
+  
   const vpNow = App.editStaticViewportRect();
   if (!es.view || Math.abs(es.view.x - vpNow.x) > 5 || Math.abs(es.view.y - vpNow.y) > 5 ||
       Math.abs(es.view.scale - (App.state.view.scale || 1)) > 0.05) {
     App.rebakeEditStaticViewport();
   }
 };
+
 App.dropEditStaticItem = function (layer) {
   if (!App.editStatic || !App.editStatic.active || !layer) return;
   const idx = App.editStatic.items.indexOf(layer);
   if (idx >= 0) {
     App.editStatic.items.splice(idx, 1);
+    
     App.restoreEsVisibility(layer);
+    
     if (App.editStaticBgEl) App.editStaticBgEl.style.display = 'none';
     App.rebakeEditStaticViewport();
   }
 };
+
 App.drawOutlines = function () {
+  
   if (!App.state.edit && !App.outlineG.firstChild && !App.handleG.firstChild) {
     App.outlinePolys = [];
     if (App.anchorIconEl) App.anchorIconEl.style.display = 'none';
@@ -1463,12 +2070,16 @@ App.drawOutlines = function () {
   App.outlineG.setAttribute('pointer-events', 'none');
   App.handleG.setAttribute('pointer-events', 'none');
   App.outlinePolys = [];
+  
   App.handleG.innerHTML = '';
+  
   if (App.state.edit && App.state.editMode === 'size' && !App.state.eyeMode) {
     if (App.state.showHandles !== false && !App.state.anchorPlacing) App.drawHandles();
     if (App.state.axisHint) App.drawAxisArrows();
   }
+  
   if (App.drawAnchorIcon) App.drawAnchorIcon();
+  
   if (App.state.edit && App.syncFlashForEdit) App.syncFlashForEdit();
 };
 
@@ -1488,6 +2099,7 @@ App.editTargetBox = function () {
   });
   return { x: minx, y: miny, w: maxx - minx, h: maxy - miny, cx: (minx + maxx) / 2, cy: (miny + maxy) / 2, corners };
 };
+
 
 App.handleGeometry = function () {
   const items = App.editTargets();
@@ -1513,16 +2125,19 @@ App.handleGeometry = function () {
   };
 };
 
+
 App.handleSizePx = function (box) {
   if (!box || !(box.w > 0) || !(box.h > 0)) return 9;
   const short = Math.min(box.w, box.h) * (App.state.view.scale || 1);
   return Math.max(1, Math.min(9, short / 4));
 };
 
+
 App.handleHitPx = function (box) {
   const v = App.handleSizePx(box);
   const short = (box && box.w > 0 && box.h > 0)
     ? Math.min(box.w, box.h) * (App.state.view.scale || 1) : Infinity;
+  
   return Math.min(v * 1.5, short / 2);
 };
 
@@ -1554,6 +2169,7 @@ App.drawHandles = function () {
     App.handleEls.push({ key: k[0], el: hit });
   });
 };
+
 
 App.drawAxisArrows = function () {
   const g = App.handleGeometry();
@@ -1601,6 +2217,7 @@ App.drawAxisArrows = function () {
   });
 };
 
+
 App.flashTimers = [];
 App.flashSeq = 0;
 App.flashColor = null;
@@ -1625,6 +2242,7 @@ App.applyDirectFlashColor = function (rec, color) {
   rec.active = true;
   return true;
 };
+
 App.releaseFlashOverlay = function (rec) {
   if (rec && rec.kind === 'auto-static-direct') {
     App.restoreDirectFlash(rec);
@@ -1642,6 +2260,7 @@ App.releaseFlashOverlay = function (rec) {
 };
 
 App.ensureFlashRunning = function (reset) {
+  
   const sig = Array.from(App.state.selected).sort((a, b) => a - b).join(',') + '|' + (App.state.edit ? 'E' : '-');
   const changed = sig !== App._flashRunSig;
   App._flashRunSig = sig;
@@ -1654,6 +2273,7 @@ App.ensureFlashRunning = function (reset) {
   }
 };
 App.startFlash = function () {
+  
   App.ensureFlashRunning(true);
   App.updateFlashOverlays();
 };
@@ -1664,6 +2284,7 @@ App.stopFlash = function () {
   App.flashTimers = [];
   App.flashSeq++;
   App.compFlashToken++; 
+  
   App.compBuildSig = null;
   App.compBuildAnimate = false;
   App.compAlignCheckToken++; 
@@ -1674,16 +2295,19 @@ App.stopFlash = function () {
   App.flashOverlayMap.clear();
 };
 
+
 App.buildFlashOverlayFor = function (layer) {
   const t = layer.el.getAttribute('transform');
   const op = layer.el.getAttribute('opacity');
   if (layer.kind === 'symbol') {
     const g = svgEl('g', { transform: t, opacity: op, 'pointer-events': 'none' });
+    
     const m = svgEl('mask', {
       id: 'sveFM' + layer.id, maskUnits: 'userSpaceOnUse',
       x: -layer.w / 2, y: -layer.h / 2, width: layer.w, height: layer.h
     });
     if (layer.dataUri) {
+      
       m.appendChild(svgEl('image', {
         href: layer.dataUri,
         x: -layer.w / 2, y: -layer.h / 2,
@@ -1707,6 +2331,7 @@ App.buildFlashOverlayFor = function (layer) {
     return g;
   }
   if (layer.kind === 'merged') {
+    
     const g = svgEl('g', { transform: t, opacity: op, 'pointer-events': 'none' });
     (layer.children || []).forEach(ch => {
       const sub = App.buildFlashOverlayFor(ch);
@@ -1726,7 +2351,9 @@ App.buildFlashOverlayFor = function (layer) {
   return clone;
 };
 
+
 App.compFlashToken = 0;
+
 function parseTransformAttr(s) {
   const m = new DOMMatrix();
   if (!s) return m;
@@ -1749,6 +2376,7 @@ function parseTransformAttr(s) {
   }
   return m;
 }
+
 function transformChainMat(l) {
   const chain = [];
   let el = l.el;
@@ -1764,6 +2392,7 @@ App.transformChainMat = transformChainMat;
 App.buildCompositeFlash = function (items) {
   App.__compBuildT0 = performance.now();
   const isMerged = items.length === 1 && items[0].kind === 'merged';
+  
   if (isMerged) {
     const g0 = items[0];
     const prec = App._proxyBake && App._proxyBake.get(g0.id);
@@ -1773,7 +2402,7 @@ App.buildCompositeFlash = function (items) {
       m.appendChild(svgEl('image', { href: prec.baseMaskUrl, x: prec.baseMinx, y: prec.baseMiny, width: prec.baseBw, height: prec.baseBh, preserveAspectRatio: 'none' }));
       g.appendChild(m);
       g.appendChild(svgEl('rect', { x: prec.baseMinx, y: prec.baseMiny, width: prec.baseBw, height: prec.baseBh, class: 'sve-flash-fill', mask: 'url(#sveFComp)' }));
-      try { App.log('perf', '合成闪动快速路径', { ms: Math.round(performance.now() - App.__compBuildT0) }); } catch (e) {   }
+      try { App.log('perf', '合成闪动快速路径', { ms: Math.round(performance.now() - App.__compBuildT0) }); } catch (e) {  }
       return Promise.resolve(g);
     }
   }
@@ -1781,17 +2410,8 @@ App.buildCompositeFlash = function (items) {
   const walk = l => { if (l.kind === 'merged') (l.children || []).forEach(walk); else leaves.push(l); };
   if (isMerged) walk(items[0]); else items.forEach(walk);
   if (!leaves.length) return Promise.resolve(null);
-  const srcs = leaves.map(l => {
-    if (l.kind === 'symbol' && l.dataUri) return App.silhouetteCanvas(l.dataUri, '#ffffff', 64, App.symbolColorIdent(l));
-    if (l.kind === 'pattern') {
-      const c = App.patternThumbCanvas(l.patternKey, '#ffffff', 64);
-      return Promise.resolve({ canvas: c, rect: { x: 0, y: 0, w: 64, h: 64 } });
-    }
-    return App.svgRasterThumb(l).then(url => (url ? loadImage(url) : null))
-      .then(img => (img ? { canvas: img, rect: { x: 0, y: 0, w: img.width, h: img.height } } : null))
-      .catch(e => { console.warn('[flash] 导入图层剪影生成失败', l && l.id, String(e && e.message || e).slice(0, 160)); return null; });
-  });
-  return Promise.all(srcs).then(canvases => new Promise(resolve => {
+  return new Promise(resolve => {
+    
     const rootM = isMerged && items[0].el ? transformChainMat(items[0]) : null;
     const mats = leaves.map(l => {
       const m = transformChainMat(l);
@@ -1800,10 +2420,26 @@ App.buildCompositeFlash = function (items) {
       }
       return m;
     });
+    
     const BUDGET = 8, MIN_CHUNK = 8;
     const token = App.compFlashToken;
     let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
     let bi = 0, di = 0, bw = 0, bh = 0, f = 1, cv = null, cx = null;
+    
+    let leafScale = 1;
+    {
+      let sum = 0;
+      for (let i = 0; i < leaves.length; i++) {
+        const need = Math.max(1, Math.max(Number(leaves[i].w) || 0, Number(leaves[i].h) || 0) * f);
+        const p = Math.max(16, Math.min(App.lod.flashLeafMax, Math.round(need)));
+        sum += p * p;
+      }
+      if (sum > App.lod.flashTotalPixels) leafScale = Math.sqrt(App.lod.flashTotalPixels / sum);
+    }
+    const leafTexSize = l => {
+      const need = Math.max(1, Math.max(Number(l && l.w) || 0, Number(l && l.h) || 0) * f) * leafScale;
+      return Math.max(16, Math.min(App.lod.flashLeafMax, App.lod.maxSide, Math.round(need)));
+    };
     const bboxStep = () => {
       if (App.compFlashToken !== token) return resolve(null); 
       const t0 = performance.now();
@@ -1820,13 +2456,38 @@ App.buildCompositeFlash = function (items) {
       if (bi < leaves.length) { setTimeout(bboxStep, 0); return; }
       if (!isFinite(minx)) return resolve(null);
       bw = Math.max(1, maxx - minx); bh = Math.max(1, maxy - miny);
-      f = Math.min(1, 1024 / Math.max(bw, bh));
-      const cw = Math.max(1, Math.round(bw * f)), ch2 = Math.max(1, Math.round(bh * f));
-      cv = document.createElement('canvas'); cv.width = cw; cv.height = ch2;
-      cx = cv.getContext('2d');
-      drawStep();
+      
+      const dpr = window.devicePixelRatio || 1;
+      const bucket = App.lodBucketOf(App.state.view.scale || 1);
+      const wantF = App.lodBucketScale(bucket) * dpr;
+      f = Math.max(1e-4, Math.min(wantF, App.lod.maxSide / Math.max(bw, bh),
+        Math.sqrt(App.lod.maxPixels / (bw * bh))));
+      const srcs = leaves.map(l => {
+        if (l.kind === 'symbol' && l.dataUri) {
+          return App.silhouetteCanvas(l.dataUri, '#ffffff', leafTexSize(l), App.symbolColorIdent(l));
+        }
+        if (l.kind === 'pattern') {
+          const s = Math.min(256, leafTexSize(l));
+          const c = App.patternThumbCanvas(l.patternKey, '#ffffff', s);
+          return Promise.resolve({ canvas: c, rect: { x: 0, y: 0, w: s, h: s } });
+        }
+        return App.svgRasterThumb(l, Math.min(App.lod.flashLeafMax, leafTexSize(l)))
+          .then(url => (url ? loadImage(url) : null))
+          .then(img => (img ? { canvas: img, rect: { x: 0, y: 0, w: img.width, h: img.height } } : null))
+          .catch(e => { console.warn('[flash] 导入图层剪影生成失败', l && l.id, String(e && e.message || e).slice(0, 160)); return null; });
+      });
+      Promise.all(srcs).then(canvases => {
+        if (App.compFlashToken !== token) return resolve(null);
+        const cw = Math.max(1, Math.round(bw * f)), ch2 = Math.max(1, Math.round(bh * f));
+        cv = document.createElement('canvas'); cv.width = cw; cv.height = ch2;
+        cx = cv.getContext('2d');
+        drawStep(canvases);
+      }).catch(e => {
+        console.warn('[flash] 合成剪影取图失败', String(e && e.message || e).slice(0, 160));
+        resolve(null);
+      });
     };
-    const drawStep = () => {
+    const drawStep = (canvases) => {
       if (App.compFlashToken !== token) return resolve(null);
       const t0 = performance.now();
       let n = 0;
@@ -1835,6 +2496,7 @@ App.buildCompositeFlash = function (items) {
         const entry = canvases[di];
         if (entry && entry.canvas) {
           cx.save();
+          
           const T = new DOMMatrix().translate(-minx * f, -miny * f).scale(f).multiply(mats[di]);
           cx.setTransform(T.a, T.b, T.c, T.d, T.e, T.f);
           cx.drawImage(entry.canvas, entry.rect.x, entry.rect.y, entry.rect.w, entry.rect.h,
@@ -1843,7 +2505,8 @@ App.buildCompositeFlash = function (items) {
         }
         di++; n++;
       }
-      if (di < leaves.length) { setTimeout(drawStep, 0); return; }
+      if (di < leaves.length) { setTimeout(() => drawStep(canvases), 0); return; }
+      
       const finish = href => {
         if (App.compFlashToken !== token || !href) {
           if (href && href.indexOf('blob:') === 0) {
@@ -1857,6 +2520,7 @@ App.buildCompositeFlash = function (items) {
           'pointer-events': 'none'
         });
         if (href.indexOf('blob:') === 0) g._sveFlashBlobUrl = href;
+        
         const m = svgEl('mask', { id: 'sveFComp', maskUnits: 'userSpaceOnUse', x: minx, y: miny, width: bw, height: bh });
         m.appendChild(svgEl('image', { href, x: minx, y: miny, width: bw, height: bh, preserveAspectRatio: 'none' }));
         g.appendChild(m);
@@ -1864,9 +2528,10 @@ App.buildCompositeFlash = function (items) {
         try {
           const __ct0 = App.__compBuildT0 || 0;
           App.log('perf', '合成闪动构建', { layers: leaves.length, ms: Math.round(performance.now() - __ct0), w: bw, h: bh });
-        } catch (e) {   }
+        } catch (e) {  }
         resolve(g);
       };
+      
       if (cv.toBlob) {
         cv.toBlob(blob => {
           if (!blob) { console.warn('[flash] 合成剪影编码返回空'); resolve(null); return; }
@@ -1883,8 +2548,9 @@ App.buildCompositeFlash = function (items) {
       }
     };
     bboxStep();
-  }));
+  });
 };
+
 
 App.compAlignCheckAt = 0;
 App.compAlignDrift = 0;
@@ -1896,6 +2562,7 @@ App.checkCompositeAlign = function (items, rec, sig, animate) {
   if (!items.length || !rec) return false;
   const rect = rec.el.querySelector('rect');
   if (!rect) return false;
+  
   const leaves = [];
   const walk = l => { if (l.kind === 'merged') (l.children || []).forEach(walk); else leaves.push(l); };
   items.forEach(walk);
@@ -1919,6 +2586,7 @@ App.checkCompositeAlign = function (items, rec, sig, animate) {
     } while (i < leaves.length && performance.now() - t0 < 6);
     if (i < leaves.length) { setTimeout(step, 0); return; }
     if (!isFinite(minx)) return;
+    
     const gM = parseTransformAttr(rec.el.getAttribute('transform') || '');
     const rx = parseFloat(rect.getAttribute('x')), ry = parseFloat(rect.getAttribute('y'));
     const rw = parseFloat(rect.getAttribute('width')), rh = parseFloat(rect.getAttribute('height'));
@@ -1929,6 +2597,7 @@ App.checkCompositeAlign = function (items, rec, sig, animate) {
     const dx2 = Math.max(...corners.map(p => p.x)) - maxx;
     const dy2 = Math.max(...corners.map(p => p.y)) - maxy;
     if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(dx2) < 1 && Math.abs(dy2) < 1) return;
+    
     App.compAlignDrift++;
     rec.sig = '__stale__';
     App.flashG.style.display = 'none';
@@ -1949,6 +2618,7 @@ App.checkCompositeAlign = function (items, rec, sig, animate) {
   setTimeout(step, 0);
   return true;
 };
+
 
 App.layerFlashContentSig = function (layer) {
   if (!layer) return '';
@@ -1973,8 +2643,11 @@ App.directAutoStaticFlashTarget = function (items) {
   return target;
 };
 App.largeFlashSig = function (items) {
-  return (App.contentRevision || 0) + ':' + (items || []).map(layer => layer.id).join(',');
+  
+  return (App.contentRevision || 0) + ':' + (items || []).map(layer => layer.id).join(',') +
+    ':lod' + (App.lodBucketOf ? App.lodBucketOf(App.state.view.scale || 1) : 0);
 };
+
 
 App.flashTargetLayers = function () {
   const items = [];
@@ -1988,6 +2661,7 @@ App.flashTargetLayers = function () {
   }
   return items;
 };
+
 
 App.syncFlashForEdit = function () {
   const map = App.flashOverlayMap;
@@ -2010,8 +2684,11 @@ App.syncFlashForEdit = function () {
   });
 };
 
+
 App.updateFlashOverlays = function (animate) {
+  
   if (App.refreshImpBitmaps) App.refreshImpBitmaps();
+  
   if (App.updateEditStaticViewport) App.updateEditStaticViewport();
   const items = App.flashTargetLayers();
   const total = items.reduce((acc, l) => acc + App.countInLayer(l), 0);
@@ -2025,6 +2702,7 @@ App.updateFlashOverlays = function (animate) {
       App.flashOverlayMap.delete(key);
     });
 
+    
     if (directTarget) {
       if (App.compBuildSig) {
         App.compFlashToken++;
@@ -2045,6 +2723,7 @@ App.updateFlashOverlays = function (animate) {
       return;
     }
 
+    
     if (composite && composite.kind === 'composite' && composite.sig === sig) {
       if (items.length === 1 && items[0].kind === 'merged' && composite.el) {
         composite.el.setAttribute('transform', items[0].el.getAttribute('transform') || '');
@@ -2095,6 +2774,7 @@ App.updateFlashOverlays = function (animate) {
     App.compBuildSig = null;
     App.compBuildAnimate = false;
   }
+  
   const wanted = new Set(items.map(l => 'L' + l.id));
   Array.from(App.flashOverlayMap.keys()).forEach(k => {
     if (!wanted.has(k)) {
@@ -2105,6 +2785,7 @@ App.updateFlashOverlays = function (animate) {
   items.forEach(layer => {
     const rec = App.flashOverlayMap.get('L' + layer.id);
     if (rec && rec.kind === layer.kind && rec.contentSig === App.layerFlashContentSig(layer)) {
+      
       rec.el.setAttribute('transform', layer.el.getAttribute('transform') || '');
       rec.el.setAttribute('opacity', layer.el.getAttribute('opacity') || '1');
       return;
@@ -2122,13 +2803,31 @@ App.updateFlashOverlays = function (animate) {
   if (animate !== false) App.animateFlash();
 };
 
+
+App._flashLodBucket = -1;
+App.refreshFlashLod = function () {
+  if (!App.flashOverlayMap || !App.flashOverlayMap.size) return;
+  const composite = App.flashOverlayMap.get('__composite__');
+  if (!composite || composite.kind !== 'composite') { App._flashLodBucket = App.lodBucketOf(App.state.view.scale || 1); return; }
+  const bucket = App.lodBucketOf(App.state.view.scale || 1);
+  if (bucket === App._flashLodBucket) return;
+  App._flashLodBucket = bucket;
+  
+  const n = (composite.items || []).reduce((acc, l) => acc + (App.countInLayer ? App.countInLayer(l) : 1), 0);
+  if (n > 400) return;
+  try { App.updateFlashOverlays(false); }
+  catch (e) { console.warn('[flash] LOD 重建覆盖层失败', String(e && e.message || e).slice(0, 160)); }
+};
+
 App.applyFlashColor = function (c) {
   App.flashColor = c;
+  
   App.flashG.style.setProperty('--sve-flash-color', c);
   const direct = App.flashOverlayMap.get('__composite__');
   if (direct && direct.kind === 'auto-static-direct') App.applyDirectFlashColor(direct, c);
 };
 function mixRGB(a, b, p) {
+  
   const t = p < 0 ? 0 : (p > 1 ? 1 : p);
   return 'rgb(' + Math.round(a[0] + (b[0] - a[0]) * t) + ',' +
     Math.round(a[1] + (b[1] - a[1]) * t) + ',' +
@@ -2137,9 +2836,13 @@ function mixRGB(a, b, p) {
 App.flashNow = function () {
   App.updateFlashOverlays();
 };
+
 App.animateFlash = function (opts) {
+  
   if (App.state && App.state.layersHidden) { App.flashG.style.display = 'none'; return; }
+  
   if (!(opts && opts.periodic)) App.ensureFlashRunning(true);
+  
   try {
     const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
     if (box && App._flashBoxId !== box.id) {
@@ -2156,10 +2859,12 @@ App.animateFlash = function (opts) {
   }
   if (!App.flashOverlayMap.size) {
     App.flashG.style.display = 'none';
+    
     const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
     if (box && !App.compRebuildTimer) setTimeout(function () { App.updateFlashOverlays(true); }, 0);
     return;
   }
+  
   const crec = App.flashOverlayMap.get('__composite__');
   if (crec && crec.kind === 'composite' && crec.items) App.checkCompositeAlign(crec.items, crec, crec.sig);
   App.flashG.style.display = crec && crec.kind === 'auto-static-direct' ? 'none' : '';
@@ -2186,8 +2891,10 @@ App.animateFlash = function (opts) {
   App.flashTimers.push(requestAnimationFrame(step));
 };
 
+
 const imgCache = new Map();
 const silhouetteCache = new Map();
+
 function dataUrlToBlob(uri) {
   const comma = uri.indexOf(',');
   const mime = (uri.slice(5, comma).split(';')[0]) || 'image/png';
@@ -2196,15 +2903,19 @@ function dataUrlToBlob(uri) {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return new Blob([bytes], { type: mime });
 }
+
 App.decodedImage = function (uri) {
   if (!imgCache.has(uri)) {
     const p = (window.createImageBitmap
       ? Promise.resolve().then(() => createImageBitmap(dataUrlToBlob(uri))).catch(() => loadImage(uri).catch(() => null))
-      : loadImage(uri).catch(() => null));
+      : loadImage(uri).catch(() => null))
+      
+      .then(img => { if (img && App.noteTexNative) App.noteTexNative(uri, img.width, img.height); return img; });
     imgCache.set(uri, p);
   }
   return imgCache.get(uri);
 };
+
 App._warmupTimer = null;
 App.warmupSymbols = function () {
   if (App._warmupTimer) clearTimeout(App._warmupTimer);
@@ -2220,6 +2931,7 @@ function fitDrawRect(img, size) {
   cx.drawImage(img, x, y, w, h);
   return { canvas: c, ctx: cx, rect: { x, y, w, h } };
 }
+
 function tfPoint(x, y, f) {
   const sy = f.sy * (f.flipV ? -1 : 1);
   const py0 = y * sy;
@@ -2227,12 +2939,14 @@ function tfPoint(x, y, f) {
   const a = f.rot * D2R, c = Math.cos(a), s = Math.sin(a);
   return [px * c - py0 * s, px * s + py0 * c];
 }
+
 App.computeLocalBBox = function (layer) {
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
   const addCorners = l => {
     if (l.kind === 'merged') { (l.children || []).forEach(addCorners); return; }
     const hw = (l.w || 0) / 2, hh = (l.h || 0) / 2;
     [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].forEach(p => {
+      
       const py = p[1] * (l.sy * (l.flipV ? -1 : 1));
       const px = p[0] * (l.sx * (l.flipH ? -1 : 1)) + Math.tan(l.skew * D2R) * py;
       const a = l.rot * D2R, c = Math.cos(a), s = Math.sin(a);
@@ -2246,6 +2960,7 @@ App.computeLocalBBox = function (layer) {
   if (!isFinite(minx)) return { x: 0, y: 0, w: 0, h: 0 };
   return { x: minx, y: miny, w: maxx - minx, h: maxy - miny };
 };
+
 App.renderTransformedThumb = function (base, rect, f) {
   const c = document.createElement('canvas');
   c.width = 48; c.height = 48;
@@ -2263,12 +2978,15 @@ App.renderTransformedThumb = function (base, rect, f) {
   cx.translate(24, 24);
   cx.scale(s, s);
   cx.rotate(f.rot * D2R);
+  
   cx.transform(1, 0, Math.tan(f.skew * D2R), 1, 0, 0);
   cx.scale(f.sx * (f.flipH ? -1 : 1), f.sy * (f.flipV ? -1 : 1));
   cx.drawImage(base, -(rect.x + rect.w / 2), -(rect.y + rect.h / 2));
   return c;
 };
+
 App.silhouettePending = new Map();
+
 App.silhouetteCanvas = function (uri, color, size, ident) {
   const key = App.silhouetteCacheKey(uri, color, size, ident);
   if (silhouetteCache.has(key)) return Promise.resolve(silhouetteCache.get(key));
@@ -2279,6 +2997,7 @@ App.silhouetteCanvas = function (uri, color, size, ident) {
     const d = ctx.getImageData(0, 0, size, size);
     const p2 = d.data;
     const rgb = hexToRgb(color) || { r: 255, g: 255, b: 255 };
+    
     return tintPixels(p2, rgb).then(() => {
       ctx.putImageData(d, 0, 0);
       const entry = { canvas, rect };
@@ -2289,7 +3008,9 @@ App.silhouetteCanvas = function (uri, color, size, ident) {
   App.silhouettePending.set(key, p);
   return p;
 };
+
 const MASK_INDICATOR_TRANSPARENT = false;
+
 App.maskIndicatorCanvas = function (size) {
   const themeKey = App.maskThemeKey();
   const key = 'ind:' + themeKey + ':' + size + (MASK_INDICATOR_TRANSPARENT ? ':t' : '');
@@ -2319,6 +3040,7 @@ App.maskIndicatorCanvas = function (size) {
   silhouetteCache.set(key, c);
   return c;
 };
+
 App.maskBakeIndicatorCanvas = function (layer, size) {
   const themeKey = App.maskThemeKey();
   const w = Math.max(0.0001, Math.abs(Number(layer && layer.w) || 0));
@@ -2353,6 +3075,7 @@ App.maskBakeIndicatorCanvas = function (layer, size) {
   const maxCol = Math.ceil((w / 2) / pw) + 1;
   const minRow = Math.floor((-h / 2) / ph) - 1;
   const maxRow = Math.ceil((h / 2) / ph) + 1;
+  
   const tx = 0.5, ty = 0.5;
   cx.beginPath();
   for (let row = minRow; row <= maxRow; row++) {
@@ -2375,6 +3098,9 @@ App.maskBakeIndicatorCanvas = function (layer, size) {
   silhouetteCache.set(key, c);
   return c;
 };
+
+
+
 App.maskThumbEntry = async function (layer, size) {
   size = size || 96;
   const ind = App.maskIndicatorCanvas(size);
@@ -2384,7 +3110,7 @@ App.maskThumbEntry = async function (layer, size) {
   const cx = c.getContext('2d');
   if (ind) cx.drawImage(ind, 0, 0, size, size);
   if (entry && entry.canvas) {
-    cx.globalCompositeOperation = 'destination-in';    
+    cx.globalCompositeOperation = 'destination-in';   
     cx.drawImage(entry.canvas, 0, 0, size, size);
     cx.globalCompositeOperation = 'source-over';
   }
@@ -2425,13 +3151,14 @@ App.maskBakeUrlKey = function (layer, size) {
 App.maskBakeUrl = function (layer, size) {
   size = size || 256;
   if (!layer || !layer.isMask) return Promise.resolve("");
-  if (MASK_INDICATOR_TRANSPARENT) return Promise.resolve("");    
+  if (MASK_INDICATOR_TRANSPARENT) return Promise.resolve("");   
   const key = App.maskBakeUrlKey(layer, size);
   if (App.maskBakeUrlCache.has(key)) return App.maskBakeUrlCache.get(key);
   const promise = Promise.resolve().then(function () {
     const ind = App.maskBakeIndicatorCanvas(layer, size);
     if (!ind) return "";
     if (layer.kind !== "symbol" || !layer.dataUri) return App.canvasPngUrl(ind, 'mask-indicator');
+    
     return App.symbolColorCanvas(layer.dataUri, "#ffffff", size, size, App.symbolColorIdent(layer)).then(function (maskCanvas) {
       if (!maskCanvas) return App.canvasPngUrl(ind, 'mask-indicator');
       const c = document.createElement("canvas");
@@ -2479,6 +3206,7 @@ App.maskSilhouetteCanvas = function (uri, size) {
     return entry;
   });
 };
+
 App.patternThumbCanvas = function (key, color, size) {
   const src = (App.patterns || []).find(p => p.key === key);
   const base = color || (src ? src.fill : '#888888');
@@ -2504,23 +3232,28 @@ App.patternThumb = function (key, color) {
   return App.patternThumbCanvas(key, color, 64).toDataURL();
 };
 
+
 App.libThumb = function (symbol) {
   if (symbol.thumb) return Promise.resolve(symbol.thumb);
+  
   if (App.libThumbPreUrl) {
     const pre = App.libThumbPreUrl(symbol);
     if (pre) return Promise.resolve(pre);
   }
   const identity = App.libThumbIdentity(symbol);
+  
   const diskOk = !!(identity && typeof App.thumbCacheLookup === 'function' &&
     window.sveApi && typeof window.sveApi.thumbCachePut === 'function');
   if (diskOk) return App.libThumbResolve(symbol, identity);
   return App.libThumbBuild(symbol);
 };
 
+
 App.libThumbIdentity = function (symbol) {
   if (!symbol || !symbol.key) return '';
   return 'lib\0' + String(symbol.key) + '\0' + String(App.libAssetVer || '0');
 };
+
 
 App.libThumbResolve = function (symbol, identity) {
   const cache = App.__libThumbDiskCache || (App.__libThumbDiskCache = new Map());
@@ -2529,6 +3262,7 @@ App.libThumbResolve = function (symbol, identity) {
     const hits = await App.thumbCacheLookup(App.LIB_THUMB_NS, [identity]);
     let url = hits.get(identity) || '';
     if (url) {
+      
       const ok = await App.probeImageUrl(url);
       if (!ok) {
         await App.thumbCacheDrop(App.LIB_THUMB_NS, [identity]);
@@ -2539,7 +3273,7 @@ App.libThumbResolve = function (symbol, identity) {
       const dataUrl = await App.libThumbBuild(symbol, true);
       if (!dataUrl) return '';
       url = (await App.thumbCacheStore(App.LIB_THUMB_NS, identity, dataUrl)) || dataUrl;
-      symbol.thumb = dataUrl;       
+      symbol.thumb = dataUrl;      
     }
     cache.set(identity, url);
     return url;
@@ -2548,6 +3282,7 @@ App.libThumbResolve = function (symbol, identity) {
   p.catch(() => cache.delete(identity));
   return p;
 };
+
 
 App.libThumbBuild = function (symbol, wantDataUrl) {
   return App.silhouetteCanvas(App.symbolUri(symbol), '#ffffff', 64,
@@ -2559,6 +3294,7 @@ App.libThumbBuild = function (symbol, wantDataUrl) {
   });
 };
 
+
 App.probeImageUrl = function (url) {
   return new Promise(function (resolve) {
     const img = new Image();
@@ -2568,6 +3304,9 @@ App.probeImageUrl = function (url) {
     img.src = url;
   });
 };
+
+
+
 
 App.thumbKnockoutMasks = function (svgText) {
   try { return window.SveThumbRenderer ? SveThumbRenderer.knockoutMasks(svgText) : svgText; }
@@ -2581,6 +3320,7 @@ App.thumbKnockoutRaster = async function (svgText) {
   try { return window.SveThumbRenderer ? await SveThumbRenderer.rasterizeKnockout(svgText, 1920) : ''; }
   catch (e) { console.warn('[thumb] thumbKnockoutRaster 失败', String(e && e.message || e).slice(0, 160)); return ''; }
 };
+
 App.mergedThumbGeometry = function (layer) {
   const leaves = [], mats = [];
   const modelMatrix = function (l) {
@@ -2646,6 +3386,7 @@ App.mergedThumbUrl = async function (layer, size, preparedGeometry) {
       const T = new DOMMatrix().translate(offx, offy).scale(f).multiply(M);
       cx.setTransform(T.a, T.b, T.c, T.d, T.e, T.f);
       cx.globalAlpha = (l && l.opacity >= 0 && l.opacity <= 1) ? l.opacity : 1;
+      
       cx.globalCompositeOperation = l.isMask ? 'destination-out' : 'source-over';
       cx.drawImage(img, 0, 0, img.width, img.height, -(l.w || 0) / 2, -(l.h || 0) / 2, l.w || 0, l.h || 0);
       cx.restore();
@@ -2654,6 +3395,7 @@ App.mergedThumbUrl = async function (layer, size, preparedGeometry) {
         sliceStart = performance.now();
       }
     }
+    
     if (layer.flipH || layer.flipV) {
       const c2 = document.createElement('canvas');
       c2.width = size; c2.height = size;
@@ -2678,8 +3420,11 @@ App.svgRasterThumb = async function (layer, size) {
     clone.removeAttribute('data-layer');
     clone.removeAttribute('data-kind');
     clone.removeAttribute('opacity');
+    
     $$('[style]', clone).forEach(el => { if (el.style && el.style.display === 'none') el.style.display = ''; });
+    
     $$('[data-layer]', clone).forEach(el => el.removeAttribute('visibility'));
+    
     const pendingFills = [];
     $$('[data-layer]', clone).forEach(el => {
       const id = parseInt(el.getAttribute('data-layer'), 10);
@@ -2692,6 +3437,7 @@ App.svgRasterThumb = async function (layer, size) {
     });
     if (pendingFills.length) await Promise.all(pendingFills);
     let lb = App.computeLocalBBox(layer);
+    
     if (layer.kind === "merged" && layer.el) {
       try { const bb = layer.el.getBBox(); if (bb && bb.width > 0 && bb.height > 0) lb = { x: bb.x, y: bb.y, w: bb.width, h: bb.height }; }
       catch (e) { console.warn('[thumb] 分组 DOM 包围盒读取失败', layer && layer.id, String(e && e.message || e).slice(0, 160)); }
@@ -2711,6 +3457,7 @@ App.svgRasterThumb = async function (layer, size) {
     clone.setAttribute('transform', 'rotate(' + f.rot + ') skewX(' + f.skew + ') scale(' + (f.sx * sfx) + ' ' + (f.sy * sfy) + ')');
     const host = svgEl('svg');
     host.setAttribute('viewBox', (minx - pad) + ' ' + (miny - pad) + ' ' + (w + 2 * pad) + ' ' + (h + 2 * pad));
+    
     let defsHost = null;
     const addDefs = () => {
       if (defsHost) return defsHost;
@@ -2722,18 +3469,21 @@ App.svgRasterThumb = async function (layer, size) {
       const ind = $('#sveMaskInd', App.defs);
       if (ind) addDefs().appendChild(ind.cloneNode(true));
     }
+    
     $$('use', clone).forEach(u => {
       const h = (u.getAttribute('href') || '').replace(/^#/, '');
       if (h.indexOf('sveImg') !== 0) return;
       const d = $('#' + h, App.defs);
       if (d) addDefs().appendChild(d.cloneNode(true));
     });
+    
     $$('[fill]', clone).forEach(el => {
       const m = /url\(#(svePat\d+)\)/.exec(el.getAttribute('fill') || '');
       if (!m) return;
       const d = $('#' + m[1], App.defs);
       if (!d) return;
       const host = addDefs();
+      
       if (!$('#' + m[1], host)) host.appendChild(d.cloneNode(true));
     });
     host.appendChild(clone);
@@ -2757,14 +3507,18 @@ App.svgRasterThumb = async function (layer, size) {
   }
 };
 
+
 App.getLayerThumb = function (layer) {
   if (layer.thumbCache && !layer.thumbDirty) return Promise.resolve(layer.thumbCache);
+  
   if (layer.isMask) return Promise.resolve('');
+  
   const done = url => { layer.thumbCache = url; if (url) layer.thumbDirty = false; return url; };
   let p;
   if (layer.kind === 'symbol') {
     if (!layer.dataUri) p = Promise.resolve('');
     else if (layer.isMask) {
+      
       p = App.maskThumbEntry(layer, 96).then(entry => {
         const out = App.renderTransformedThumb(entry.canvas, entry.rect, layer);
         return out ? out.toDataURL() : '';
@@ -2781,18 +3535,21 @@ App.getLayerThumb = function (layer) {
     const out = App.renderTransformedThumb(base, { x: 0, y: 0, w: 96, h: 96 }, layer);
     p = Promise.resolve(out ? out.toDataURL() : '');
   } else {
-    p = (layer.kind === "merged") ? App.mergedThumbUrl(layer, 96) : App.svgRasterThumb(layer);    
+    p = (layer.kind === "merged") ? App.mergedThumbUrl(layer, 96) : App.svgRasterThumb(layer);   
   }
   return p.then(done);
 };
 
 App.doRefreshLayerThumbs = function () {
+  
   App.fillVisibleThumbs();
 };
+
 App.refreshLayerThumbs = function () {
   if (App.thumbTimer) clearTimeout(App.thumbTimer);
   App.thumbTimer = setTimeout(() => { App.thumbTimer = null; App.doRefreshLayerThumbs(); }, 60);
 };
+
 
 App.proxyEnabled = false;
 App.proxyThreshold = 400;
@@ -2801,7 +3558,7 @@ App._proxyQueue = new Map();
 App._proxyTimer = null;
 
 App.maybeBakeProxy = function (merged) {
-  if (!App.proxyEnabled) {                                    
+  if (!App.proxyEnabled) {                                   
     try { if (App._proxyBake && App._proxyBake.has(merged.id) && App.unbakeProxy) App.unbakeProxy(merged); } catch (e) { }
     return;
   }
@@ -2810,27 +3567,30 @@ App.maybeBakeProxy = function (merged) {
   if (App._proxyBake.has(merged.id)) return;
   App._enqueueProxyBake(merged);
 };
+
 App.markProxyDirty = function (merged) {
   if (merged && merged.kind === 'merged' && App._proxyBake.has(merged.id)) {
     App._enqueueProxyBake(merged);
   }
 };
+
 App.unbakeProxy = function (merged) {
   if (!merged) return;
-  merged.__proxyEpoch = (merged.__proxyEpoch || 0) + 1;    
+  merged.__proxyEpoch = (merged.__proxyEpoch || 0) + 1;   
   App._proxyQueue.delete(merged.id);
   const rec = App._proxyBake.get(merged.id);
-  if (rec && rec.url) { try { URL.revokeObjectURL(rec.url); } catch (e) {   } }
-  if (rec && rec.baseUrl) { try { URL.revokeObjectURL(rec.baseUrl); } catch (e) {   } }
-  if (rec && rec.baseMaskUrl) { try { URL.revokeObjectURL(rec.baseMaskUrl); } catch (e) {   } }
+  if (rec && rec.url) { try { URL.revokeObjectURL(rec.url); } catch (e) {  } }
+  if (rec && rec.baseUrl) { try { URL.revokeObjectURL(rec.baseUrl); } catch (e) {  } }
+  if (rec && rec.baseMaskUrl) { try { URL.revokeObjectURL(rec.baseMaskUrl); } catch (e) {  } }
   App._proxyBake.delete(merged.id);
   if (merged.el) {
-    merged.el.querySelectorAll('image[data-proxy]').forEach(img => img.remove());    
+    merged.el.querySelectorAll('image[data-proxy]').forEach(img => img.remove());   
     merged.el.querySelectorAll('[data-layer]').forEach(el => el.removeAttribute('visibility'));
     merged._localBB = undefined; 
   }
   (merged.children || []).forEach(ch => { if (ch.kind === 'merged') App.unbakeProxy(ch); });
 };
+
 App.impBitmapThreshold = 300;
 App.impBitmapMaxSide = 512; 
 App.impBakeQueue = [];
@@ -2843,6 +3603,7 @@ App.impBitmapActive = function () {
   }
   return false;
 };
+
 App.impIsInteractive = function (layer) {
   if (!layer || layer.kind !== 'import') return false;
   if (App.state.selected.has(layer.id)) return true;
@@ -2854,6 +3615,7 @@ App.impIsInteractive = function (layer) {
   }
   return false;
 };
+
 App.impEnsureEl = function (layer) {
   if (!layer.el || layer.bitmapEl) return;
   const img = svgEl('image', {
@@ -2863,15 +3625,22 @@ App.impEnsureEl = function (layer) {
   layer.el.insertBefore(img, layer.el.firstChild);
   layer.bitmapEl = img;
 };
+
 App.impBakeLayer = function (layer) {
   if (!layer || layer.kind !== 'import' || layer.isMask) return;
   if (layer.w > App.impBitmapMaxSide || layer.h > App.impBitmapMaxSide) return;
-  if (layer.impBaking || (layer.impBitmapUrl && !layer.impBitmapDirty)) return;
+  const plan = App.lodTexPlan ? App.lodTexPlan(layer) : null;
+  const lodKey = plan ? plan.key : '';
+  if (layer.impBaking || (layer.impBitmapUrl && !layer.impBitmapDirty && layer.impLodKey === lodKey)) return;
+  
   if (/url\(#/.test(layer.importMarkup || '')) return;
   layer.impBaking = true;
-  const w = Math.max(1, Math.round(layer.w)), h = Math.max(1, Math.round(layer.h));
-  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="' +
-    (-w / 2) + ' ' + (-h / 2) + ' ' + w + ' ' + h + '">' + (layer.importMarkup || '') + '</svg>';
+  
+  const k = plan ? plan.k : 1;
+  const bw = Math.max(1, Math.min(2048, Math.round(layer.w * k)));
+  const bh = Math.max(1, Math.min(2048, Math.round(layer.h * k)));
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + bw + '" height="' + bh + '" viewBox="' +
+    (-layer.w / 2) + ' ' + (-layer.h / 2) + ' ' + layer.w + ' ' + layer.h + '">' + (layer.importMarkup || '') + '</svg>';
   let url = null;
   try { url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })); } catch (e) { layer.impBaking = false; return; }
   const img = new Image();
@@ -2880,13 +3649,14 @@ App.impBakeLayer = function (layer) {
     if (layer.impBitmapUrl && layer.impBitmapUrl !== url) URL.revokeObjectURL(layer.impBitmapUrl);
     layer.impBitmapUrl = url;
     layer.impBitmapDirty = false;
+    layer.impLodKey = lodKey;
     App.updateImpDisplay(layer);
   };
   img.onerror = () => { layer.impBaking = false; URL.revokeObjectURL(url); };
   img.src = url;
 };
 App.impQueueBake = function (layer) {
-  if (!layer || layer.impBaking || (layer.impBitmapUrl && !layer.impBitmapDirty)) return;
+  if (!layer || layer.impBaking) return;
   if (App.impBakeQueue.indexOf(layer) >= 0) return;
   App.impBakeQueue.push(layer);
   if (App.impBakeTimer) return;
@@ -2900,14 +3670,18 @@ App.impQueueBake = function (layer) {
     if (!App.impBakeQueue.length) { clearInterval(App.impBakeTimer); App.impBakeTimer = null; }
   }, 50);
 };
+
 App.updateImpDisplay = function (layer) {
   if (!layer || layer.kind !== 'import') return;
   if (!App.impBitmapActive()) return;
   const interactive = App.impIsInteractive(layer);
+  
+  const lodKey = App.lodTexPlan ? App.lodTexPlan(layer).key : '';
+  const fresh = !!(layer.impBitmapUrl && !layer.impBitmapDirty && layer.impLodKey === lodKey);
   if (interactive) {
     if (layer.innerEl && layer.innerEl.style.display !== '') layer.innerEl.style.display = '';
     if (layer.bitmapEl && layer.bitmapEl.style.display !== 'none') layer.bitmapEl.style.display = 'none';
-  } else if (layer.impBitmapUrl && !layer.impBitmapDirty) {
+  } else if (fresh) {
     App.impEnsureEl(layer);
     if (layer.bitmapEl.getAttribute('href') !== layer.impBitmapUrl) layer.bitmapEl.setAttribute('href', layer.impBitmapUrl);
     if (layer.innerEl && layer.innerEl.style.display !== 'none') layer.innerEl.style.display = 'none';
@@ -2918,20 +3692,23 @@ App.updateImpDisplay = function (layer) {
     App.impQueueBake(layer);
   }
 };
+
 App.refreshImpBitmaps = function () {
   if (!App.impBitmapActive()) return;
   for (let i = 0; i < App.state.layers.length; i++) {
     if (App.state.layers[i].kind === 'import') App.updateImpDisplay(App.state.layers[i]);
   }
 };
+
 App.impMarkDirty = function (layer) {
   if (!layer || layer.kind !== 'import') return;
   layer.impBitmapDirty = true;
   App.updateImpDisplay(layer);
 };
+
 App.impCleanup = function (layer) {
   if (!layer) return;
-  if (layer.impBitmapUrl) { try { URL.revokeObjectURL(layer.impBitmapUrl); } catch (e) {   } }
+  if (layer.impBitmapUrl) { try { URL.revokeObjectURL(layer.impBitmapUrl); } catch (e) {  } }
   layer.impBitmapUrl = null;
   layer.impBitmapDirty = false;
   layer.bitmapEl = null;
@@ -2955,9 +3732,12 @@ App._enqueueProxyBake = function (merged) {
   if (App._proxyTimer) return;
   App._proxyTimer = setTimeout(App._drainProxyBakeQueue, 80);
 };
+
 App._bakeProxyAsync = function (merged) {
   if (!merged || merged.kind !== 'merged' || !merged.el) return;
+  
   const bakeToken = (merged.__proxyEpoch = (merged.__proxyEpoch || 0) + 1);
+  
   App._proxyBaking = App._proxyBaking || {};
   App._proxyBaking[merged.id] = true;
   merged.__bakeT0 = performance.now();
@@ -2965,6 +3745,7 @@ App._bakeProxyAsync = function (merged) {
   const walk = l => { if (l.kind === 'merged') (l.children || []).forEach(walk); else leaves.push(l); };
   (merged.children || []).forEach(walk);
   if (!leaves.length) return;
+  
   const chainToGroup = el => {
     const chain = [];
     let e = el;
@@ -2976,6 +3757,7 @@ App._bakeProxyAsync = function (merged) {
     for (let i = chain.length - 1; i >= 0; i--) m = m.multiply(parseTransformAttr(chain[i]));
     return m;
   };
+  
   const mats = leaves.map(l => chainToGroup(l.el));
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
   const SLICE_MS = 8;   
@@ -2995,13 +3777,15 @@ App._bakeProxyAsync = function (merged) {
     if (i < leaves.length) { setTimeout(bboxStep, 0); return; }
     if (!isFinite(minx)) return;
     const bw = Math.max(1, maxx - minx), bh = Math.max(1, maxy - miny);
+    
     const needF = App.proxyNeedF(merged);
     const fWant = Math.max(0.2, needF * 1.15);
-    const CROP_PX_BUDGET = 6.0e6;                        
+    const CROP_PX_BUDGET = 6.0e6;                       
     const cropMax = Math.max(1, Math.min(4096, Math.sqrt(CROP_PX_BUDGET)) / fWant);
     let cx0 = minx, cy0 = miny, cw0 = bw, ch0 = bh;
     const vrect = App.proxyLocalViewRect(merged, 0);
     if (vrect) {
+      
       const ix0 = Math.max(minx, vrect.minx), iy0 = Math.max(miny, vrect.miny);
       const ix1 = Math.min(maxx, vrect.maxx), iy1 = Math.min(maxy, vrect.maxy);
       if (ix1 > ix0 && iy1 > iy0) {
@@ -3012,18 +3796,24 @@ App._bakeProxyAsync = function (merged) {
         if (gx1 > gx0 && gy1 > gy0) { cx0 = gx0; cy0 = gy0; cw0 = gx1 - gx0; ch0 = gy1 - gy0; }
       }
     }
+    
     const screenScale = App.state.view.scale || 1;
     const dpr = window.devicePixelRatio || 1;
     const target = Math.max(2048, Math.ceil(Math.max(bw, bh) * screenScale * dpr));
+    
+    
     const f = Math.max(0.2, Math.min(fWant, 4096 / Math.max(cw0, ch0)));
     const cw = Math.max(1, Math.round(cw0 * f)), ch = Math.max(1, Math.round(ch0 * f));
     const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
     const cx = cv.getContext('2d');
+    
     Promise.all(leaves.map(l => App.symbolColorUrl(l).catch(() => ''))).then(urls => {
+      
       const uniq = Array.from(new Set(urls.filter(Boolean)));
       const tLoad = performance.now();
       return App.loadBakeImages(uniq, '[proxy-bake] 图片加载异常').then(byUrl => {
         const imgs = urls.map(u => (u ? (byUrl.get(u) || null) : null));
+        
         const drawLeaf = (ctx2, di2, f2, ox, oy) => {
           const img = imgs[di2];
           if (!img) return;
@@ -3031,10 +3821,11 @@ App._bakeProxyAsync = function (merged) {
           ctx2.save();
           const T = new DOMMatrix().translate(-ox * f2, -oy * f2).scale(f2).multiply(mats[di2]);
           ctx2.setTransform(T.a, T.b, T.c, T.d, T.e, T.f);
-          ctx2.globalAlpha = (l && l.opacity >= 0 && l.opacity <= 1) ? l.opacity : 1;    
+          ctx2.globalAlpha = (l && l.opacity >= 0 && l.opacity <= 1) ? l.opacity : 1;   
           ctx2.drawImage(img, 0, 0, img.width, img.height, -(l.w || 0) / 2, -(l.h || 0) / 2, l.w || 0, l.h || 0);
           ctx2.restore();
         };
+        
         const bakeBase = () => {
           const fBase = Math.max(0.05, Math.min(2, 2048 / Math.max(bw, bh)));
           const bcv = document.createElement('canvas');
@@ -3067,10 +3858,10 @@ App._bakeProxyAsync = function (merged) {
             App._installProxy(merged, cv, cx0, cy0, cw0, ch0, f,
               { leaves: leaves.length, uniqUrls: uniq.length, loadMs: Math.round(performance.now() - tLoad), drawMs: Math.round(performance.now() - tDraw),
                 needF: needF, full: { minx: minx, miny: miny, bw: bw, bh: bh }, token: bakeToken });
-            if (bakeToken === merged.__proxyEpoch) bakeBase();    
+            if (bakeToken === merged.__proxyEpoch) bakeBase();   
           }
           catch (err) { console.warn('[proxy-bake] 安装异常', merged.id, String(err).slice(0, 200)); }
-          finally { if (App._proxyBaking) delete App._proxyBaking[merged.id]; }    
+          finally { if (App._proxyBaking) delete App._proxyBaking[merged.id]; }   
         };
         drawStep();
       }).catch(err => console.warn('[proxy-bake] 图片加载异常', merged.id, String(err).slice(0, 200)));
@@ -3078,11 +3869,14 @@ App._bakeProxyAsync = function (merged) {
   };
   bboxStep();
 };
+
 App._installProxy = function (merged, cv, minx, miny, bw, bh, f, stat) {
   if (!merged.el) return;
+  
   if (stat && stat.token !== undefined && stat.token !== merged.__proxyEpoch) return;
   if (!App.state || !App.state.layers || App.state.layers.indexOf(merged) < 0) return;
   const rec0 = App._proxyBake.get(merged.id);
+  
   const tEnc = performance.now();
   cv.toBlob(blob => {
     let url = null;
@@ -3094,7 +3888,7 @@ App._installProxy = function (merged, cv, minx, miny, bw, bh, f, stat) {
     const done = () => {
       if ((stat && stat.token !== undefined && stat.token !== merged.__proxyEpoch) ||
           !merged.el || !App.state || App.state.layers.indexOf(merged) < 0) {
-        if (url.indexOf('blob:') === 0) { try { URL.revokeObjectURL(url); } catch (e) {   } }
+        if (url.indexOf('blob:') === 0) { try { URL.revokeObjectURL(url); } catch (e) {  } }
         return;
       }
       const fresh = svgEl('image', {
@@ -3106,32 +3900,36 @@ App._installProxy = function (merged, cv, minx, miny, bw, bh, f, stat) {
       if (current && current.parentNode === merged.el) merged.el.insertBefore(fresh, current);
       else merged.el.appendChild(fresh);
       if (current) current.remove();
+      
       merged.el.querySelectorAll('[data-layer]').forEach(el => el.setAttribute('visibility', 'hidden'));
       const prev = App._proxyBake.get(merged.id) || rec0;
       App._proxyBake.set(merged.id, Object.assign({}, prev || {}, {
         canvas: cv, minx, miny, bw, bh, f, url: url.indexOf('blob:') === 0 ? url : null,
         needF: (stat && stat.needF) || 0, full: (stat && stat.full) || null
       }));
-      if (prev && prev.url && prev.url !== url) { try { URL.revokeObjectURL(prev.url); } catch (e) {   } }
+      if (prev && prev.url && prev.url !== url) { try { URL.revokeObjectURL(prev.url); } catch (e) {  } }
       merged._localBB = undefined;
+      
       try {
         const t0 = merged.__bakeT0 || 0;
         App.log('perf', '分组烘焙阶段', { merged: merged.id, totalMs: Math.round(performance.now() - t0),
           encodeMs: Math.round(performance.now() - tEnc), leaves: stat && stat.leaves, uniqUrls: stat && stat.uniqUrls,
           loadMs: stat && stat.loadMs, drawMs: stat && stat.drawMs, w: cv.width, h: cv.height, f: f });
-      } catch (e) {   }
+      } catch (e) {  }
     };
     const fail = () => {
       console.warn('[proxy-bake] 代理位图解码失败', merged.id);
-      if (url.indexOf('blob:') === 0) { try { URL.revokeObjectURL(url); } catch (e) {   } }
+      if (url.indexOf('blob:') === 0) { try { URL.revokeObjectURL(url); } catch (e) {  } }
     };
     if (warm.decode) warm.decode().then(done, fail); else setTimeout(done, 400);
   }, 'image/png');
 };
+
 App._installProxyBase = function (merged, cv, minx, miny, bw, bh, fBase, token) {
   if (!merged || !merged.el) return;
-  if (token !== undefined && token !== merged.__proxyEpoch) return;    
+  if (token !== undefined && token !== merged.__proxyEpoch) return;   
   if (!App.state || !App.state.layers || App.state.layers.indexOf(merged) < 0) return;
+  
   const maskCanvas = document.createElement('canvas');
   maskCanvas.width = cv.width; maskCanvas.height = cv.height;
   const maskCtx = maskCanvas.getContext('2d');
@@ -3146,28 +3944,29 @@ App._installProxyBase = function (merged, cv, minx, miny, bw, bh, fBase, token) 
     const url = parts[0] ? URL.createObjectURL(parts[0]) : null;
     const maskUrl = parts[1] ? URL.createObjectURL(parts[1]) : null;
     if (token !== undefined && token !== merged.__proxyEpoch) {
-      if (url) { try { URL.revokeObjectURL(url); } catch (e) {   } }
-      if (maskUrl) { try { URL.revokeObjectURL(maskUrl); } catch (e) {   } }
-      return;    
+      if (url) { try { URL.revokeObjectURL(url); } catch (e) {  } }
+      if (maskUrl) { try { URL.revokeObjectURL(maskUrl); } catch (e) {  } }
+      return;   
     }
     if (!url || !maskUrl) {
-      if (url) { try { URL.revokeObjectURL(url); } catch (e) {   } }
-      if (maskUrl) { try { URL.revokeObjectURL(maskUrl); } catch (e) {   } }
+      if (url) { try { URL.revokeObjectURL(url); } catch (e) {  } }
+      if (maskUrl) { try { URL.revokeObjectURL(maskUrl); } catch (e) {  } }
       console.warn('[proxy-bake] 底图或剪影编码失败', merged.id);
       return;
     }
     let installAttempts = 0;
     const done = () => {
       if ((token !== undefined && token !== merged.__proxyEpoch) || !merged.el || App.state.layers.indexOf(merged) < 0) {
-        try { URL.revokeObjectURL(url); } catch (e) {   }
-        try { URL.revokeObjectURL(maskUrl); } catch (e) {   }
+        try { URL.revokeObjectURL(url); } catch (e) {  }
+        try { URL.revokeObjectURL(maskUrl); } catch (e) {  }
         return;
       }
       const cur = App._proxyBake.get(merged.id);
+      
       if (!cur) {
         if (++installAttempts < 100) { setTimeout(done, 20); return; }
-        try { URL.revokeObjectURL(url); } catch (e) {   }
-        try { URL.revokeObjectURL(maskUrl); } catch (e) {   }
+        try { URL.revokeObjectURL(url); } catch (e) {  }
+        try { URL.revokeObjectURL(maskUrl); } catch (e) {  }
         console.warn('[proxy-bake] 底图等待裁剪图超时', merged.id);
         return;
       }
@@ -3182,22 +3981,24 @@ App._installProxyBase = function (merged, cv, minx, miny, bw, bh, fBase, token) 
       else if (cropImg) merged.el.insertBefore(fresh, cropImg);
       else merged.el.appendChild(fresh);
       if (old) old.remove();
-      if (cur.baseUrl && cur.baseUrl !== url) { try { URL.revokeObjectURL(cur.baseUrl); } catch (e) {   } }
-      if (cur.baseMaskUrl && cur.baseMaskUrl !== maskUrl) { try { URL.revokeObjectURL(cur.baseMaskUrl); } catch (e) {   } }
+      if (cur.baseUrl && cur.baseUrl !== url) { try { URL.revokeObjectURL(cur.baseUrl); } catch (e) {  } }
+      if (cur.baseMaskUrl && cur.baseMaskUrl !== maskUrl) { try { URL.revokeObjectURL(cur.baseMaskUrl); } catch (e) {  } }
       App._proxyBake.set(merged.id, Object.assign({}, cur, {
         baseCanvas: cv, baseF: fBase, baseUrl: url, baseMaskUrl: maskUrl,
         baseMinx: minx, baseMiny: miny, baseBw: bw, baseBh: bh
       }));
-      try { App.log('perf', '底图烘焙', { merged: merged.id, w: cv.width, h: cv.height, f: fBase, encodeMs: Math.round(performance.now() - tEnc) }); } catch (e) {   }
+      try { App.log('perf', '底图烘焙', { merged: merged.id, w: cv.width, h: cv.height, f: fBase, encodeMs: Math.round(performance.now() - tEnc) }); } catch (e) {  }
     };
     const fail = () => {
-      try { URL.revokeObjectURL(url); } catch (e) {   }
-      try { URL.revokeObjectURL(maskUrl); } catch (e) {   }
+      try { URL.revokeObjectURL(url); } catch (e) {  }
+      try { URL.revokeObjectURL(maskUrl); } catch (e) {  }
       console.warn('[proxy-bake] 底图预解码失败', merged.id);
     };
     Promise.all([loadImage(url), loadImage(maskUrl)]).then(done, fail);
   }).catch(e => console.warn('[proxy-bake] 底图编码异常', merged.id, String(e && e.message || e).slice(0, 160)));
 };
+
+
 App.proxyLocalViewRect = function (merged, pad) {
   try {
     const r = App.wrap.getBoundingClientRect();
@@ -3206,7 +4007,7 @@ App.proxyLocalViewRect = function (merged, pad) {
     const pd = typeof pad === 'number' ? pad : 0;
     const vx = v.x - (r.width / sc) * pd, vy = v.y - (r.height / sc) * pd;
     const vw = (r.width / sc) * (1 + pd * 2), vh = (r.height / sc) * (1 + pd * 2);
-    const m = App.transformChainMat ? App.transformChainMat(merged) : null;    
+    const m = App.transformChainMat ? App.transformChainMat(merged) : null;   
     if (!m) return null;
     const inv = m.inverse();
     let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
@@ -3219,6 +4020,7 @@ App.proxyLocalViewRect = function (merged, pad) {
     return { minx: minx, miny: miny, maxx: maxx, maxy: maxy };
   } catch (e) { return null; }
 };
+
 App.proxyGroupScale = function (merged) {
   try {
     const m = App.transformChainMat ? App.transformChainMat(merged) : null;
@@ -3231,9 +4033,11 @@ App.proxyNeedF = function (merged) {
   const dpr = window.devicePixelRatio || 1;
   return (App.state.view.scale || 1) * dpr * App.proxyGroupScale(merged);
 };
+
+
 App.proxyViewHasContent = function (merged) {
   const vr = App.proxyLocalViewRect(merged, 0);
-  if (!vr || !merged || !merged.el) return true;       
+  if (!vr || !merged || !merged.el) return true;      
   const bb = App.getItemDocBBox ? null : null;
   const rec = App._proxyBake ? App._proxyBake.get(merged.id) : null;
   const full = (rec && rec.full) || null;
@@ -3244,18 +4048,19 @@ App.proxyViewHasContent = function (merged) {
 };
 App.proxyCropCoversView = function (merged, rec) {
   const vr = App.proxyLocalViewRect(merged, 0);
-  if (!vr || !rec || !rec.full) return true;         
+  if (!vr || !rec || !rec.full) return true;        
+  
   const fx0 = rec.full.minx, fy0 = rec.full.miny;
   const fx1 = fx0 + rec.full.bw, fy1 = fy0 + rec.full.bh;
   const ix0 = Math.max(vr.minx, fx0), iy0 = Math.max(vr.miny, fy0);
   const ix1 = Math.min(vr.maxx, fx1), iy1 = Math.min(vr.maxy, fy1);
-  if (ix1 <= ix0 || iy1 <= iy0) return true;          
+  if (ix1 <= ix0 || iy1 <= iy0) return true;         
   const eps = 1;
   return rec.minx <= ix0 + eps && rec.miny <= iy0 + eps &&
     (rec.minx + rec.bw) >= ix1 - eps && (rec.miny + rec.bh) >= iy1 - eps;
 };
 App.maybeUpgradeProxyRes = function () {
-  if (!App.proxyEnabled) return;                               
+  if (!App.proxyEnabled) return;                              
   if (!App._proxyBake || !App._proxyBake.size) return;
   const scale = App.state.view.scale || 1;
   const dpr = window.devicePixelRatio || 1;
@@ -3264,19 +4069,20 @@ App.maybeUpgradeProxyRes = function () {
       if (!rec || !rec.f) return;
       const m = App.findLayer(id);
       if (!m || m.kind !== 'merged') return;
-      if (App._proxyQueue.has(id)) return;           
-      if (App._proxyBaking && App._proxyBaking[id]) return;    
-      if (!App.proxyViewHasContent(m)) return;                 
+      if (App._proxyQueue.has(id)) return;          
+      if (App._proxyBaking && App._proxyBaking[id]) return;   
+      if (!App.proxyViewHasContent(m)) return;                
+      
       const needF = App.proxyNeedF(m);
-      const resShort = rec.f < needF * 0.85;                  
+      const resShort = rec.f < needF * 0.85;                 
       const resFat = rec.f > needF * 1.15 * 2.2;              
-
       const cover = App.proxyCropCoversView(m, rec);
       if (resShort || resFat || !cover) App.markProxyDirty(m);
 
-    } catch (e) {   }
+    } catch (e) {  }
   });
 };
+
 App.proxySampleColor = function (merged, clientX, clientY) {
   const rec = App._proxyBake.get(merged && merged.id);
   if (!rec || !rec.canvas) return null;
@@ -3286,7 +4092,7 @@ App.proxySampleColor = function (merged, clientX, clientY) {
     const inv = App.transformChainMat(merged).inverse();
     const q = new DOMPoint(p.x, p.y).matrixTransform(inv);
     lp = { x: q.x, y: q.y };
-  } catch (e) {   }
+  } catch (e) {  }
   const px = Math.round((lp.x - rec.minx) * rec.f);
   const py = Math.round((lp.y - rec.miny) * rec.f);
   if (px < 0 || py < 0 || px >= rec.canvas.width || py >= rec.canvas.height) return null;

@@ -1,4 +1,5 @@
 'use strict';
+
 App.initEditMode = function () {
   $('#btnFinish').addEventListener('click', () => App.exitEdit(false));
   $('#btnPropMode').addEventListener('click', () => {
@@ -10,11 +11,13 @@ App.initEditMode = function () {
     App.updateEditBar();
     App.drawOutlines();
   });
+  
   $('#btnShowHandles').addEventListener('click', () => {
     App.state.showHandles = !App.state.showHandles;
     App.updateEditBar();
     App.drawOutlines();
   });
+  
   $('#btnPlaceAnchor').addEventListener('click', () => App.toggleAnchor());
   $$('#editBar .edit-modes button[data-mode]').forEach(b => {
     b.addEventListener('click', () => App.setEditMode(b.getAttribute('data-mode')));
@@ -24,18 +27,21 @@ App.initEditMode = function () {
     e.stopPropagation();
     if (e.key === 'Enter') { e.target.blur(); }
   });
+  
   $('#editValueRange').addEventListener('input', () => {
-    if (!['skew', 'opacity'].includes(App.state.editMode)) return;    
+    if (!['skew', 'opacity'].includes(App.state.editMode)) return;   
     if (App.cancelColorPreview) App.cancelColorPreview();
     $('#editValueInput').value = $('#editValueRange').value; 
     App.editValueCommit(); 
   });
 };
 
+
 App.leafColorEntries = function (l) {
   if (l.kind !== 'merged') return [{ c: l, color: l.color }];
   return (l.children || []).reduce((acc, ch) => acc.concat(App.leafColorEntries(ch)), []);
 };
+
 
 App.withTransformBatch = function (fn) {
   App._batchTransformDepth = (App._batchTransformDepth || 0) + 1;
@@ -50,6 +56,8 @@ App.withTransformBatch = function (fn) {
 };
 
 
+
+
 App.editPatternSnap = function (it) {
   return {
     kind: it.kind,
@@ -57,8 +65,10 @@ App.editPatternSnap = function (it) {
     patternKey: it.patternKey || null,
     name: it.name,
     w: it.w, h: it.h
+    
   };
 };
+
 App.editPatternRestore = function (it, s) {
   if (!it || !s) return false;
   const dirty = it.kind !== s.kind ||
@@ -73,6 +83,7 @@ App.editPatternRestore = function (it, s) {
   it.thumbDirty = true;
   it.thumbCache = null;
   if (dirty) {
+    
     if (it.kind === 'symbol') {
       it.dataUri = null;
       if (App.relinkSymbolData) App.relinkSymbolData(it);
@@ -95,10 +106,12 @@ App.editHist = {
       x: it.x, y: it.y, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew, opacity: it.opacity,
       flipH: !!it.flipH, flipV: !!it.flipV,
       colors: App.leafColorEntries(it),
+      
       pat: App.editPatternSnap(it)
     }));
   },
   restore: function (snap) {
+    
     if (snap && snap.despawn && snap.despawn.length) {
       snap.despawn.forEach(id => {
         const l = App.findLayer(id);
@@ -109,6 +122,7 @@ App.editHist = {
     snap.forEach(s => {
       const l = App.findLayer(s.id);
       if (!l) return;
+      
       if (s.pat && App.editPatternRestore(l, s.pat)) patDirty = true;
       l.x = s.x; l.y = s.y; l.sx = s.sx; l.sy = s.sy;
       l.rot = s.rot; l.skew = s.skew; l.opacity = s.opacity;
@@ -121,8 +135,10 @@ App.editHist = {
     App.drawOutlines();
     App.updateEditValue();
     App.refreshLayerThumbs();
+    
     if (patDirty && App.requestFlashRefresh) App.requestFlashRefresh(false);
   },
+  
   checkpoint: function () {
     if (this.gesture) return null;
     const s = this.snapshot();
@@ -139,6 +155,7 @@ App.editHist = {
   },
   undo: function () {
     if (!this.stack.length) return false;
+    
     if (App.cancelColorPreview) App.cancelColorPreview();
     this.redoStack.push(this.snapshot());
     this.gesture = false;
@@ -147,6 +164,7 @@ App.editHist = {
   },
   redo: function () {
     if (!this.redoStack.length) return false;
+    
     if (App.cancelColorPreview) App.cancelColorPreview();
     this.stack.push(this.snapshot());
     this.gesture = false;
@@ -162,17 +180,22 @@ App.editHist = {
 };
 
 App.enterEdit = function (spec) {
+  
   if (App.cancelColorPreview) App.cancelColorPreview();
+  
   App.clearAnchor();
+  
   if (App.state.eyeMode) App.setEyedropper(null);
-  try { App.log('info', '进入编辑', { type: spec && spec.type, id: spec && spec.id, ids: spec && spec.ids ? spec.ids.length : undefined }); } catch (e) {   }
+  try { App.log('info', '进入编辑', { type: spec && spec.type, id: spec && spec.id, ids: spec && spec.ids ? spec.ids.length : undefined }); } catch (e) {  }
   if (!App.editTargets2(spec).length && spec.type !== 'bg') return;
   App.state.edit = spec;
   App.state.editMode = 'move';
   App.state.sizeMode = 'free';
   App.state.editFlipStep = 0; 
   App.editHist.reset(); 
+  
   App.editHistStart = App.history.undoStack.length;
+  
   App.editSession = {
     lastColor: App.state.lastColor,
     snapshot: App.editTargets().map(it => ({
@@ -181,15 +204,18 @@ App.enterEdit = function (spec) {
       flipH: !!it.flipH, flipV: !!it.flipV,
       color: it.color,
       colors: App.leafColorEntries(it),
+      
       pat: App.editPatternSnap(it)
     })),
   };
+  
   {
     const t = App.editTargets();
     if (t.length >= 2) {
       App.editSession.grp = { rot: 0, skew: 0, sx: 1, sy: 1 };
       const e = groupExtent(t);
       App.editSession.grpC = { x: e.cx, y: e.cy };
+      
       App.editSession.grpLCS = { w: e.w, h: e.h };
       App.editSession.grpM0 = t.map(it => layerDocMatrix(it));
     }
@@ -198,7 +224,7 @@ App.enterEdit = function (spec) {
   $('#leftPanel').classList.add('hidden');
   const eb = $('#editBar');
   eb.classList.remove('hidden');
-  eb.classList.remove('sve-editbar-out');    
+  eb.classList.remove('sve-editbar-out');   
   $('#selToolbar').classList.add('hidden');
   const isBg = spec.type === 'bg';
   if (isBg) {
@@ -211,10 +237,14 @@ App.enterEdit = function (spec) {
   $('#btnRemoveBg').classList.toggle('hidden', !isBg);
   App.layersRoot.style.pointerEvents = 'auto';
   App.updateEditBar();
+  
   if (App.updateHideLayersButton) App.updateHideLayersButton();
   App.drawOutlines();
+  
   if (App.refreshImpBitmaps) App.refreshImpBitmaps();
+  
   if (App.autoStaticRelease) App.autoStaticRelease();
+  
   if (App.beginEditStatic) App.beginEditStatic();
 };
 App.editTargets2 = function (spec) {
@@ -227,13 +257,16 @@ App.editTargets2 = function (spec) {
 
 App.exitEdit = function (cancel) {
   if (!App.state.edit) return;
+  
   App.clearAnchor();
-  try { App.log('info', '退出编辑', { cancel: !!cancel, type: App.state.edit.type }); } catch (e) {   }
+  try { App.log('info', '退出编辑', { cancel: !!cancel, type: App.state.edit.type }); } catch (e) {  }
   App.editHistStart = undefined; 
+  
   if (App.cancelColorPreview) App.cancelColorPreview();
   const es = App.editSession;
   App.editHist.reset(); 
   if (cancel && es) {
+    
     App.state.batching = true;
     try {
       es.snapshot.forEach(s => {
@@ -241,9 +274,11 @@ App.exitEdit = function (cancel) {
         s.it.sx = s.sx; s.it.sy = s.sy;
         s.it.rot = s.rot; s.it.skew = s.skew; s.it.opacity = s.opacity;
         s.it.flipH = !!s.flipH; s.it.flipV = !!s.flipV;
+        
         if (s.pat) App.editPatternRestore(s.it, s.pat);
         App.applyItemTransform(s.it);
         App.markThumbDirty(s.it);
+        
         if (s.colors) {
           s.colors.forEach(p => App.setLayerColor(p.c, p.color));
         } else if (s.it.kind !== 'bg' && s.color !== undefined) {
@@ -251,6 +286,7 @@ App.exitEdit = function (cancel) {
         }
       });
       App.state.lastColor = es.lastColor;
+      
     } finally {
       App.state.batching = false;
     }
@@ -265,10 +301,13 @@ App.exitEdit = function (cancel) {
   }
   App.editSession = null;
   App.state.edit = null;
+  
   if (App.updateHideLayersButton) App.updateHideLayersButton();
+  
   if (App.updateEditStaticViewport) App.updateEditStaticViewport();
   App.state.keys.clear();
   App.drag = null;
+  
   if (!(App.state.selectedByTab && App.state.selected.size > 1)) {
     App.state.selected = new Set();
     App.state.selectedByTab = false;
@@ -284,11 +323,15 @@ App.exitEdit = function (cancel) {
   App.handleG.innerHTML = '';
   App.handleEls = [];
   if (App.state.bg.image) App.applyBgTransform(App.state.bg.image);
+  
   if (App.alignWheelScroll) App.alignWheelScroll();
+  
   App.refreshLayerThumbs();
   App.updateSelToolbar();
   App.drawOutlines();
+  
   if (App.requestFlashRefresh) App.requestFlashRefresh(false);
+  
   App.flashSeq++;
   App.flashTimers.forEach(t => { cancelAnimationFrame(t); clearTimeout(t); });
   App.flashTimers = [];
@@ -299,6 +342,7 @@ App.exitEdit = function (cancel) {
   App.switchTab('lib');
 };
 
+
 App.stepEditMode = function (dir) {
   const e = App.state && App.state.edit;
   if (!e || e.type === 'bg') return false;
@@ -306,14 +350,17 @@ App.stepEditMode = function (dir) {
   const i = MODES.indexOf(App.state.editMode);
   if (i < 0) return false;
   const j = i + dir;
-  if (j < 0 || j >= MODES.length) return false;    
+  if (j < 0 || j >= MODES.length) return false;   
   App.setEditMode(MODES[j]);
   return true;
 };
 
 App.setEditMode = function (mode) {
+  
   if (mode === 'opacity' && App.state.edit && App.state.edit.type === 'bg') return;
+  
   if (App.cancelColorPreview) App.cancelColorPreview();
+  
   if (App.state.anchorPlacing && mode !== 'size' && mode !== 'rotate' && mode !== 'skew') App.cancelAnchorPlacing();
   App.state.editMode = mode;
   App.updateEditBar();
@@ -323,6 +370,7 @@ App.setEditMode = function (mode) {
 App.updateEditBar = function () {
   $$('#editBar .edit-modes button[data-mode]').forEach(b =>
     b.classList.toggle('active', b.getAttribute('data-mode') === App.state.editMode));
+  
   const opModeBtn = $('#editBar .edit-modes button[data-mode="opacity"]');
   if (opModeBtn) opModeBtn.classList.toggle('hidden', !!(App.state.edit && App.state.edit.type === 'bg'));
   const mode = App.state.editMode;
@@ -334,6 +382,7 @@ App.updateEditBar = function () {
   $('#btnAxisHint').textContent = App.i18n.t(App.state.axisHint ? 'edit.axisOn' : 'edit.axisOff');
   $('#btnShowHandles').classList.toggle('hidden', !isSize);
   $('#btnShowHandles').textContent = App.i18n.t(App.state.showHandles ? 'edit.handlesOn' : 'edit.handlesOff');
+  
   const anchorShown = isSize || mode === 'rotate' || mode === 'skew';
   const anchorBtn = $('#btnPlaceAnchor');
   if (anchorBtn) {
@@ -345,8 +394,10 @@ App.updateEditBar = function () {
     anchorBtn.setAttribute('data-i18n', App.state.anchor ? 'edit.anchorCancel' : 'edit.anchorPlace');
     anchorBtn.classList.toggle('active', !!App.state.anchorPlacing);
   }
+  
   const rng = $('#editValueRange');
   $('#editValueBox').classList.toggle('hidden', !isRotSkewOp);
+  
   rng.classList.toggle('hidden', mode !== 'opacity');
   if (isRotSkewOp) {
     $('#editValueLabel').textContent = App.i18n.t(mode === 'rotate' ? 'edit.label.rotate' : mode === 'skew' ? 'edit.label.skew' : 'edit.label.opacity');
@@ -355,6 +406,7 @@ App.updateEditBar = function () {
     else { rng.min = -180; rng.max = 180; rng.step = 0.5; }
   }
   App.updateEditValue();
+  
   const any2 = !$('#btnShowHandles').classList.contains('hidden') ||
     !$('#btnAxisHint').classList.contains('hidden') ||
     !$('#btnPropMode').classList.contains('hidden') ||
@@ -391,14 +443,17 @@ App.updateEditValue = function () {
 };
 
 App.editValueCommit = function () {
+  
   if (App.cancelColorPreview) App.cancelColorPreview();
   const v = parseFloat($('#editValueInput').value);
   if (isNaN(v)) { App.updateEditValue(); return; }
   const items = App.editTargets();
   if (App.state.editMode === 'rotate') {
     if (items.length > 1) {
+      
       App.groupRotateItems(items, v - items[0].rot);
     } else items.forEach(it => {
+      
       const af = App.anchorFixedLocal(it);
       if (af) {
         const p0 = App.itemLocalToDoc(it, af.x, af.y);
@@ -413,6 +468,7 @@ App.editValueCommit = function () {
     if (items.length > 1) {
       App.groupSkewItems(items, v - items[0].skew);
     } else items.forEach(it => {
+      
       const af = App.anchorFixedLocal(it);
       if (af) {
         const p0 = App.itemLocalToDoc(it, af.x, af.y);
@@ -429,15 +485,18 @@ App.editValueCommit = function () {
   App.refreshLayerThumbs();
 };
 
+
 App.applyEditMove = function (dx, dy) {
   App.withTransformBatch(() => App.editTargets().forEach(it => {
     it.x += dx; it.y += dy;
     App.applyItemTransform(it);
   }));
+  
   App.groupRebase();
   if (App.scheduleFrameUpdate) App.scheduleFrameUpdate('edit');
   else App.drawOutlines();
 };
+
 App.applyScaleWithFlip = function (it, sx, sy) {
   if (sx < 0) { it.flipH = true; sx = -sx; }
   else if (sx > 0) { it.flipH = false; }
@@ -447,9 +506,11 @@ App.applyScaleWithFlip = function (it, sx, sy) {
   it.sy = clamp(sy, 1e-6, 1e6);
 };
 
+
 App.scaleItemKeepCenter = function (it, fx, fy) {
   const af = App.anchorFixedLocal(it);
   if (af) {
+    
     const p0 = App.itemLocalToDoc(it, af.x, af.y);
     App.applyScaleWithFlip(it, (it.flipH ? -1 : 1) * (it.sx || 1) * fx, (it.flipV ? -1 : 1) * (it.sy || 1) * fy);
     App.placeItemAtDocPoint(it, af.x, af.y, p0.x, p0.y);
@@ -481,6 +542,8 @@ function groupCenter(items) {
   const e = groupExtent(items);
   return { x: e.cx, y: e.cy };
 }
+
+
 function layerDocMatrix(it) {
   const sxf = (it.flipH ? -1 : 1) * (it.sx || 1);
   const syf = (it.flipV ? -1 : 1) * (it.sy || 1);
@@ -492,11 +555,13 @@ function layerDocMatrix(it) {
     e: it.x, f: it.y
   };
 }
+
 function groupMatrix(g, C) {
   return App.FZA.matFromString('translate(' + C.x + ' ' + C.y + ') rotate(' + (g.rot || 0) +
     ') skewX(' + (g.skew || 0) + ') scale(' + (g.sx || 1) + ' ' + (g.sy || 1) +
     ') translate(' + (-C.x) + ' ' + (-C.y) + ')');
 }
+
 App.groupDecompose = function () {
   const es = App.editSession;
   if (!es || !es.grp || !es.grpM0) return false;
@@ -512,6 +577,7 @@ App.groupDecompose = function () {
     it.rot = normalizeDeg(p.rot);
     it.skew = App.clampSkew(p.skew);
     it.sx = Math.abs(p.sx) || 1;
+    
     it.flipH = false;
     it.flipV = !!(sy < 0);
     it.sy = Math.abs(sy) || 1;
@@ -521,6 +587,7 @@ App.groupDecompose = function () {
   App.drawOutlines();
   return true;
 };
+
 App.groupTransformApply = function (upd) {
   const es = App.editSession;
   if (!es || !es.grp) return false;
@@ -529,6 +596,7 @@ App.groupTransformApply = function (upd) {
   upd(es.grp);
   return App.groupDecompose();
 };
+
 App.groupRebase = function () {
   const es = App.editSession;
   if (!es || !es.grp) return;
@@ -540,6 +608,7 @@ App.groupRebase = function () {
   es.grpC = { x: e.cx, y: e.cy };
   es.grpLCS = { w: e.w, h: e.h };
 };
+
 App.applyGroupScaleAt = function (items, cx, cy, fx, fy) {
   items.forEach(it => {
     if (it.kind === 'merged') {
@@ -551,6 +620,7 @@ App.applyGroupScaleAt = function (items, cx, cy, fx, fy) {
     } else {
       it.x = cx + (it.x - cx) * fx; 
       it.y = cy + (it.y - cy) * fy;
+      
       App.applyScaleWithFlip(it, (it.flipH ? -1 : 1) * (it.sx || 1) * fx, (it.flipV ? -1 : 1) * (it.sy || 1) * fy);
     }
     App.applyItemTransform(it);
@@ -560,6 +630,7 @@ App.applyGroupScaleAt = function (items, cx, cy, fx, fy) {
 App.applyEditScale = function (fx, fy) {
   const items = App.editTargets();
   if (items.length >= 2) {
+    
     if (App.groupTransformApply(g => { g.sx *= fx; g.sy *= fy; })) {
       App.refreshLayerThumbs();
       return;
@@ -569,6 +640,7 @@ App.applyEditScale = function (fx, fy) {
   App.drawOutlines();
   App.refreshLayerThumbs();
 };
+
 App.localContentSize = function (it) {
   if (it && it.kind === 'merged') {
     const loc = it._localBB;
@@ -583,16 +655,20 @@ App.localContentSize = function (it) {
   }
   return { w: Math.max(1, Number(it && it.w) || 128), h: Math.max(1, Number(it && it.h) || 128) };
 };
+
 App.scaleItemKeepCenterAbs = function (it, ddx, ddy) {
   const ssx = (it.flipH ? -1 : 1) * (it.sx || 1); 
   const ssy = (it.flipV ? -1 : 1) * (it.sy || 1);
+  
   const _lcs = App.localContentSize(it);
   const k = 128 / Math.max(1, _lcs.w);
   const nddx = ddx * k, nddy = ddy * k;
   if (it.kind === 'merged') {
     const nsx = ssx + nddx, nsy = ssy + nddy;
+    
     const af = App.anchorFixedLocal(it);
     if (af) {
+      
       const p0 = App.itemLocalToDoc(it, af.x, af.y);
       App.applyScaleWithFlip(it, nsx, nsy);
       App.placeItemAtDocPoint(it, af.x, af.y, p0.x, p0.y);
@@ -608,6 +684,7 @@ App.scaleItemKeepCenterAbs = function (it, ddx, ddy) {
     const nsx = ssx + nddx, nsy = ssy + nddy;
     const af = App.anchorFixedLocal(it);
     if (af) {
+      
       const p0 = App.itemLocalToDoc(it, af.x, af.y);
       App.applyScaleWithFlip(it, nsx, nsy);
       App.placeItemAtDocPoint(it, af.x, af.y, p0.x, p0.y);
@@ -618,11 +695,13 @@ App.scaleItemKeepCenterAbs = function (it, ddx, ddy) {
   App.applyItemTransform(it);
   App.markThumbDirty(it);
 };
+
 App.applyGroupScaleAbs = function (ddx, ddy) {
   const items = App.editTargets();
   if (items.length < 2) return false;
   const es = App.editSession;
   if (!es || !es.grp) return false;
+  
   const e = (es.grpLCS && es.grpLCS.w > 0) ? es.grpLCS : groupExtent(items);
   const k = 128 / Math.max(1, e.w);
   const fx = ddx ? 1 + ddx * k : 1;
@@ -631,6 +710,7 @@ App.applyGroupScaleAbs = function (ddx, ddy) {
   App.groupTransformApply(g => { g.sx *= fx; g.sy *= fy; });
   return true;
 };
+
 App.propScalePair = function (ddx, ddy) {
   const targets = App.editTargets();
   if (targets.length !== 1) return [ddx, ddy];
@@ -652,6 +732,7 @@ App.applyEditScaleDelta = function (ddx, ddy) {
   }
   if (App.scheduleFrameUpdate) App.scheduleFrameUpdate('edit');
   else App.drawOutlines();
+  
 };
 function rotatePoint(p, c, deg) {
   const a = deg * D2R, cos = Math.cos(a), sin = Math.sin(a);
@@ -660,19 +741,22 @@ function rotatePoint(p, c, deg) {
     y: c.y + (p.x - c.x) * sin + (p.y - c.y) * cos
   };
 }
+
 App.clampSkew = function (deg) {
   return (App.FZA && App.FZA.normalizeSkew) ? App.FZA.normalizeSkew(deg) : deg;
 };
 
+
 App.mergedLocalCenter = function (it) {
   const loc = it._localBB;
   if (loc) return { lcx: (loc.pts[0][0] + loc.pts[2][0]) / 2, lcy: (loc.pts[0][1] + loc.pts[2][1]) / 2 };
+  
   try {
     const lb = App.computeLocalBBox(it);
     if (isFinite(lb.w) && lb.w > 0 && isFinite(lb.h) && lb.h > 0) {
       return { lcx: lb.x + lb.w / 2, lcy: lb.y + lb.h / 2 };
     }
-  } catch (e) {   }
+  } catch (e) {  }
   return { lcx: 0, lcy: 0 };
 };
 App.mergedContentCenter = function (it) {
@@ -680,12 +764,14 @@ App.mergedContentCenter = function (it) {
   const M = App.FZA.layerMatrix({ flipH: it.flipH, flipV: it.flipV, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew });
   return { x: it.x + (M.a * lcx + M.c * lcy), y: it.y + (M.b * lcx + M.d * lcy) };
 };
+
 App.anchorToKeepCenter = function (it, ccx, ccy) {
   const { lcx, lcy } = App.mergedLocalCenter(it);
   const M = App.FZA.layerMatrix({ flipH: it.flipH, flipV: it.flipV, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew });
   it.x = ccx - (M.a * lcx + M.c * lcy);
   it.y = ccy - (M.b * lcx + M.d * lcy);
 };
+
 App.editTransformSnap = function (it) {
   const s = { it, x: it.x, y: it.y, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew };
   if (it.kind === 'merged') {
@@ -694,14 +780,18 @@ App.editTransformSnap = function (it) {
   }
   return s;
 };
+
 App.applySnapCenterKeep = function (s) {
   if (s.it.kind !== 'merged' || s.ccx === undefined) return;
   App.anchorToKeepCenter(s.it, s.ccx, s.ccy);
 };
 
+
+
 App.anchorTarget = function () {
   const e = App.state.edit;
   if (!e) return null;
+  
   if (e.type === 'bg') {
     const m = App.state.bg.image;
     if (!m) return null;
@@ -712,10 +802,12 @@ App.anchorTarget = function () {
   const items = App.editTargets();
   if (items.length !== 1) return null;
   const it = items[0];
+  
   if (!it || it.kind === 'bg') return null;
   return it;
 };
 App.anchorEligible = function () { return !!App.anchorTarget(); };
+
 App.currentAnchor = function () {
   const a = App.state.anchor;
   if (!a || !a.placed) return null;
@@ -723,6 +815,7 @@ App.currentAnchor = function () {
   if (!it || it.id !== a.layerId) return null;
   return a;
 };
+
 App.anchorFixedLocal = function (it) {
   const _am = App.state.editMode;
   if (_am !== 'size' && _am !== 'rotate' && _am !== 'skew') return null;
@@ -730,10 +823,12 @@ App.anchorFixedLocal = function (it) {
   if (!a || !it || it.id !== a.layerId) return null;
   return { x: a.lx, y: a.ly };
 };
+
 App.itemLocalToDoc = function (it, lx, ly) {
   const M = App.FZA.layerMatrix(it);
   return { x: it.x + M.a * lx + M.c * ly, y: it.y + M.b * lx + M.d * ly };
 };
+
 App.docToItemLocal = function (it, px, py) {
   const M = App.FZA.layerMatrix(it);
   const det = M.a * M.d - M.b * M.c;
@@ -741,11 +836,13 @@ App.docToItemLocal = function (it, px, py) {
   const dx = px - it.x, dy = py - it.y;
   return { x: (M.d * dx - M.c * dy) / det, y: (M.a * dy - M.b * dx) / det };
 };
+
 App.placeItemAtDocPoint = function (it, lx, ly, px, py) {
   const M = App.FZA.layerMatrix(it);
   it.x = px - (M.a * lx + M.c * ly);
   it.y = py - (M.b * lx + M.d * ly);
 };
+
 App.clampToQuad = function (p, q) {
   if (!q || q.length < 4) return p;
   if (App.pointInQuad(p, q)) return p;
@@ -762,6 +859,7 @@ App.clampToQuad = function (p, q) {
   }
   return best || p;
 };
+
 App.anchorQuad = function (it) {
   const c = App._anchorQuadCache;
   if (c && c.id === it.id) return c.corners;
@@ -770,6 +868,7 @@ App.anchorQuad = function (it) {
   App._anchorQuadCache = { id: it.id, corners: corners };
   return corners;
 };
+
 
 App.anchorIconPx = 20;        
 App.anchorArcPath = function (r, a0, a1) {
@@ -785,6 +884,7 @@ App.ensureAnchorIcon = function () {
   const g = svgEl('g', { class: 'sve-anchor-icon', 'pointer-events': 'none' });
   const arcs = svgEl('g', { class: 'sve-anchor-arcs', 'pointer-events': 'none' });
   const R = App.anchorIconPx / 2 - 1.4;
+  
   for (let i = 0; i < 4; i++) {
     arcs.appendChild(svgEl('path', {
       d: App.anchorArcPath(R, i * 90 + 24, i * 90 + 66),
@@ -800,10 +900,11 @@ App.ensureAnchorIcon = function () {
   App.anchorArcsEl = arcs;
   return g;
 };
+
 App.anchorUnmerge = function () {
   const arcs = App.anchorArcsEl;
   if (!arcs) return;
-  try { arcs.getAnimations().forEach(a => a.cancel()); } catch (e) {   }
+  try { arcs.getAnimations().forEach(a => a.cancel()); } catch (e) {  }
 };
 App.anchorMergeAnim = function () {
   const arcs = App.anchorArcsEl;
@@ -811,12 +912,14 @@ App.anchorMergeAnim = function () {
   try {
     arcs.animate([{ transform: 'scale(1)' }, { transform: 'scale(0.55)' }],
       { duration: 240, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'forwards' });
-  } catch (e) {   }
+  } catch (e) {  }
 };
+
 App.drawAnchorIcon = function () {
   const it = App.anchorTarget();
   const a = it ? App.currentAnchor() : null;
   const placing = !!(it && App.state.anchorPlacing);
+  
   const _am = App.state.editMode;
   const show = !!it && (_am === 'size' || _am === 'rotate' || _am === 'skew') && (!!a || placing);
   if (!show) { if (App.anchorIconEl) App.anchorIconEl.style.display = 'none'; return; }
@@ -830,6 +933,7 @@ App.drawAnchorIcon = function () {
   el.setAttribute('transform', 'translate(' + fmtNum(doc.x, 3) + ' ' + fmtNum(doc.y, 3) + ') scale(' + fmtNum(k, 6) + ')');
 };
 
+
 App.startAnchorPlacing = function () {
   const it = App.anchorTarget();
   if (!it) return false;
@@ -838,6 +942,7 @@ App.startAnchorPlacing = function () {
   App.anchorHoverDoc = null;
   App._anchorQuadCache = null;
   App.anchorUnmerge();
+  
   const bb = App.getItemDocBBox(it);
   const c = (bb && isFinite(bb.cx) && isFinite(bb.cy)) ? { x: bb.cx, y: bb.cy } : App.itemLocalToDoc(it, 0, 0);
   App.anchorHoverDoc = c;
@@ -848,6 +953,7 @@ App.startAnchorPlacing = function () {
 };
 App.cancelAnchorPlacing = function () {
   if (!App.state.anchorPlacing) return;
+  
   App.state.anchorPlacing = false;
   App.anchorHoverDoc = null;
   App.anchorHoverLocal = null;
@@ -864,6 +970,7 @@ App.clearAnchor = function () {
   App.anchorUnmerge();
   if (App.anchorIconEl) App.anchorIconEl.style.display = 'none';
 };
+
 App.toggleAnchor = function () {
   if (!App.anchorEligible()) return false;
   if (App.state.anchorPlacing) { App.cancelAnchorPlacing(); return true; }
@@ -875,6 +982,7 @@ App.toggleAnchor = function () {
   }
   return App.startAnchorPlacing();
 };
+
 App.onAnchorHover = function (clientX, clientY) {
   const it = App.anchorTarget();
   if (!it || !App.state.anchorPlacing) return;
@@ -884,6 +992,7 @@ App.onAnchorHover = function (clientX, clientY) {
   App.anchorHoverLocal = App.docToItemLocal(it, p.x, p.y);
   App.drawAnchorIcon();
 };
+
 App.fixAnchorAt = function (clientX, clientY) {
   const it = App.anchorTarget();
   if (!it || !App.state.anchorPlacing) return false;
@@ -897,6 +1006,7 @@ App.fixAnchorAt = function (clientX, clientY) {
   App.anchorMergeAnim();            
   App.updateEditBar();
   App.drawOutlines();
+  
   if (App.contentChanged) App.contentChanged();
   return true;
 };
@@ -909,6 +1019,7 @@ function groupCenter(items) {
   });
   return { x: (minx + maxx) / 2, y: (miny + maxy) / 2 };
 }
+
 App.groupRotateItems = function (items, dd, c) {
   if (!items.length) return;
   if (!c) c = groupCenter(items);
@@ -925,6 +1036,7 @@ App.groupRotateItems = function (items, dd, c) {
     App.applyItemTransform(it);
   });
 };
+
 App.groupSkewItems = function (items, dd, c) {
   if (!items.length) return;
   if (!c) c = groupCenter(items);
@@ -947,6 +1059,7 @@ App.groupSkewItems = function (items, dd, c) {
 App.applyEditRotate = function (dd) {
   const items = App.editTargets();
   if (items.length > 1) {
+    
     if (App.groupTransformApply(g => { g.rot += dd; })) {
       App.updateEditValue();
       App.refreshLayerThumbs();
@@ -956,10 +1069,12 @@ App.applyEditRotate = function (dd) {
   App.withTransformBatch(() => items.forEach(it => {
     const af = App.anchorFixedLocal(it);
     if (af) {
+      
       const p0 = App.itemLocalToDoc(it, af.x, af.y);
       it.rot += dd;
       App.placeItemAtDocPoint(it, af.x, af.y, p0.x, p0.y);
     } else if (it.kind === 'merged') {
+      
       const c = App.mergedContentCenter(it);
       const p = rotatePoint({ x: it.x, y: it.y }, c, dd);
       it.x = p.x; it.y = p.y; it.rot += dd;
@@ -977,6 +1092,7 @@ App.applyEditRotate = function (dd) {
 App.applyEditSkew = function (dd) {
   const items = App.editTargets();
   if (items.length > 1) {
+    
     if (App.groupTransformApply(g => { g.skew = App.clampSkew(g.skew + dd); })) {
       App.updateEditValue();
       App.refreshLayerThumbs();
@@ -984,17 +1100,20 @@ App.applyEditSkew = function (dd) {
     }
   }
   App.withTransformBatch(() => items.forEach(it => {
+    
     const _h = Math.max(1, App.localContentSize(it).h);
     const _th = it.skew * D2R;
     const _t0 = Math.tan(_th);
     const _t1 = _t0 + (128 / _h) * (Math.tan(_th + dd * D2R) - _t0);
     const d = Math.atan(_t1) / D2R - it.skew;
+    
     const af = App.anchorFixedLocal(it);
     if (af) {
       const p0 = App.itemLocalToDoc(it, af.x, af.y);
       it.skew = App.clampSkew(it.skew + d);
       App.placeItemAtDocPoint(it, af.x, af.y, p0.x, p0.y);
     } else if (it.kind === 'merged') {
+      
       const c = App.mergedContentCenter(it);
       it.skew = App.clampSkew(it.skew + d);
       App.anchorToKeepCenter(it, c.x, c.y);
@@ -1018,6 +1137,7 @@ App.applyEditOpacityDelta = function (d) {
   App.refreshLayerThumbs();
 };
 
+
 App.tick = function (dt) {
   if (!App.state.edit) return;
   const k = App.state.keys;
@@ -1032,6 +1152,7 @@ App.tick = function (dt) {
     if (k.has('right')) dx += sp * dt;
     if (dx || dy) App.applyEditMove(dx, dy);
   } else if (mode === 'size') {
+    
     const d = (App.state.editSpeeds.size / 100) * dt / App.state.view.scale;
     if (App.state.sizeMode === 'prop') {
       let dd = 0;
@@ -1054,6 +1175,7 @@ App.tick = function (dt) {
     if (k.has('right')) d += App.state.editSpeeds.rotate * dt;
     if (d) App.applyEditRotate(d);
   } else if (mode === 'skew') {
+    
     let d = 0;
     if (k.has('left')) d += App.state.editSpeeds.skew * dt;
     if (k.has('right')) d -= App.state.editSpeeds.skew * dt;
@@ -1067,15 +1189,19 @@ App.tick = function (dt) {
   }
 };
 
+
+
 App.arrowStep = function (dir) {
   const mode = App.state.editMode;
   if (!mode) return;
+  
   if (App.cancelColorPreview) App.cancelColorPreview();
   const ns = App.state.nudgeSpeeds || {};
   const nv = (v, d) => (isFinite(v) ? v : d);
   App.editHist.checkpoint();
   App.editHist.endGesture(); 
   if (mode === 'move') {
+    
     const st = nv(ns.move, 0.2) / (App.state.view.scale || 1);
     let dx = 0, dy = 0;
     if (dir === 'left') dx -= st;
@@ -1084,6 +1210,7 @@ App.arrowStep = function (dir) {
     if (dir === 'down') dy += st;
     App.applyEditMove(dx, dy);
   } else if (mode === 'size') {
+    
     const d = nv(ns.size, 0.8) / 100 / (App.state.view.scale || 1);
     if (App.state.sizeMode === 'prop') {
       if (dir === 'up' || dir === 'right') App.applyEditScaleDelta(d, d);
@@ -1094,12 +1221,14 @@ App.arrowStep = function (dir) {
       else if (dir === 'left') App.applyEditScaleDelta(d, 0);        
       else if (dir === 'right') App.applyEditScaleDelta(-d, 0);      
     }
+    
     App.refreshLayerThumbs();
   } else if (mode === 'rotate') {
     const d = nv(ns.rotate, 0.1);
     if (dir === 'left') App.applyEditRotate(-d);
     else if (dir === 'right') App.applyEditRotate(d);
   } else if (mode === 'skew') {
+    
     const d = nv(ns.skew, 0.1);
     if (dir === 'left') App.applyEditSkew(d);
     else if (dir === 'right') App.applyEditSkew(-d);
@@ -1109,6 +1238,8 @@ App.arrowStep = function (dir) {
     else if (dir === 'down') App.applyEditOpacityDelta(-d);
   }
 };
+
+
 
 App.pointInQuad = function (p, q) {
   let sign = 0;
@@ -1124,6 +1255,7 @@ App.pointInQuad = function (p, q) {
   return true;
 };
 
+
 App.editPointerInside = function (clientX, clientY) {
   const items = App.editTargets();
   if (!items.length) return false;
@@ -1135,16 +1267,19 @@ App.editPointerInside = function (clientX, clientY) {
   return false;
 };
 
+
 App.dragSpeed = function (mode) {
   const d = (App.state && App.state.dragSpeeds) || {};
   const v = Number(d[mode]);
   return (isFinite(v) && v > 0) ? v : 1;
 };
 
+
 App.beginHandleDrag = function (h, g, e, items) {
   App.editHist.checkpoint(); 
   const _g0 = App.editSession && App.editSession.grp
     ? { rot: App.editSession.grp.rot, skew: App.editSession.grp.skew, sx: App.editSession.grp.sx, sy: App.editSession.grp.sy } : null;
+  
   const _af = (items.length === 1) ? App.anchorFixedLocal(items[0]) : null;
   const _ad = _af ? App.itemLocalToDoc(items[0], _af.x, _af.y) : null;
   const _anchorCenter = (items.length === 1 && _ad) ? { x: _ad.x, y: _ad.y } : { x: g.cx, y: g.cy };
@@ -1164,18 +1299,21 @@ App.beginHandleDrag = function (h, g, e, items) {
     grabAngle: Math.atan2(hp.y - _anchorCenter.y, hp.x - _anchorCenter.x), 
     rotLock: 0,
     skewLock: 0, 
+    
     speed: App.dragSpeed('size'),
     snap: items.map(it => ({ it, x: it.x, y: it.y, sx: it.sx, sy: it.sy, rot: it.rot, skew: it.skew,
       flipH: !!it.flipH, flipV: !!it.flipV }))
   };
-  try { App.svg.setPointerCapture(e.pointerId); } catch (err) {   }
+  try { App.svg.setPointerCapture(e.pointerId); } catch (err) {  }
   e.preventDefault();
 };
 
 App.onEditPointerDown = function (e) {
   if (App.state.spaceDown) return;
+  
   if (App.cancelColorPreview) App.cancelColorPreview();
   const mode = App.state.editMode;
+  
   if (App.state.anchorPlacing &&
       (mode === 'size' || mode === 'rotate' || mode === 'skew')) {
     App.fixAnchorAt(e.clientX, e.clientY);
@@ -1183,10 +1321,13 @@ App.onEditPointerDown = function (e) {
     return;
   }
   if (mode === 'move') {
+    
     const items = App.editTargets();
     if (!items.length) return;
+    
     if (App.state.edit.type === 'bg' && App.state.bg.hidden) return;
     App.editHist.checkpoint(); 
+    
     App.drag = {
       kind: 'editmove',
       startX: e.clientX, startY: e.clientY,
@@ -1194,17 +1335,21 @@ App.onEditPointerDown = function (e) {
       speed: App.dragSpeed('move'),
       snap: items.map(it => ({ it, x: it.x, y: it.y }))
     };
-    try { App.svg.setPointerCapture(e.pointerId); } catch (err) {   }
+    try { App.svg.setPointerCapture(e.pointerId); } catch (err) {  }
     e.preventDefault();
   } else if (mode === 'size') {
+    
     const gizmo = App.state.showHandles !== false;
     const hEl = gizmo ? (e.target.closest && e.target.closest('[data-h]')) : null;
     const g = App.handleGeometry();
     if (!g) return;
+    
     const items = App.editTargets();
     const inside = App.editPointerInside(e.clientX, e.clientY);
+    
     let h = hEl ? hEl.getAttribute('data-h') : null;
     if (!h && !inside && gizmo) {
+      
       const R = App.handleHitPx(g.box) / 2;
       let best = null, bestD = R;
       for (const k of ['nw', 'ne', 'se', 'sw']) {
@@ -1217,8 +1362,10 @@ App.onEditPointerDown = function (e) {
       h = best;
     }
     if (h) {
+      
       App.beginHandleDrag(h, g, e, items);
     } else if (inside) {
+      
       if (!items.length) return;
       App.editHist.checkpoint(); 
       App.drag = {
@@ -1228,13 +1375,15 @@ App.onEditPointerDown = function (e) {
         speed: App.dragSpeed('size'),
         snap: items.map(it => ({ it, x: it.x, y: it.y }))
       };
-      try { App.svg.setPointerCapture(e.pointerId); } catch (err) {   }
+      try { App.svg.setPointerCapture(e.pointerId); } catch (err) {  }
       e.preventDefault();
     } else {
+      
       if (!items.length) return;
       App.beginHandleDrag('box', g, e, items);
     }
   } else if (mode === 'rotate') {
+    
     const items = App.editTargets();
     if (!items.length) return;
     const pd = App.screenToDoc(e.clientX, e.clientY);
@@ -1243,6 +1392,7 @@ App.onEditPointerDown = function (e) {
     const inside = App.editPointerInside(e.clientX, e.clientY);
     App.editHist.checkpoint(); 
     if (inside) {
+      
       App.drag = {
         kind: 'editmove',
         startX: e.clientX, startY: e.clientY,
@@ -1251,6 +1401,7 @@ App.onEditPointerDown = function (e) {
         snap: items.map(it => ({ it, x: it.x, y: it.y }))
       };
     } else {
+      
       const _af = (items.length === 1) ? App.anchorFixedLocal(items[0]) : null;
       const _ad = _af ? App.itemLocalToDoc(items[0], _af.x, _af.y) : null;
       const _rc = _ad ? { x: _ad.x, y: _ad.y } : { x: g.cx, y: g.cy };
@@ -1259,6 +1410,7 @@ App.onEditPointerDown = function (e) {
         center: _rc,
         anchorFix: _af,
         anchorDoc: _ad,
+        
         speed: App.dragSpeed('rotate'),
         grabAngle: Math.atan2(pd.y - _rc.y, pd.x - _rc.x), 
         g0: App.editSession && App.editSession.grp
@@ -1266,14 +1418,16 @@ App.onEditPointerDown = function (e) {
         snap: items.map(it => App.editTransformSnap(it))
       };
     }
-    try { App.svg.setPointerCapture(e.pointerId); } catch (err) {   }
+    try { App.svg.setPointerCapture(e.pointerId); } catch (err) {  }
     e.preventDefault();
   } else if (mode === 'skew') {
+    
     const items = App.editTargets();
     if (!items.length) return;
     const inside = App.editPointerInside(e.clientX, e.clientY);
     App.editHist.checkpoint(); 
     if (inside) {
+      
       App.drag = {
         kind: 'editmove',
         startX: e.clientX, startY: e.clientY,
@@ -1282,12 +1436,14 @@ App.onEditPointerDown = function (e) {
         snap: items.map(it => ({ it, x: it.x, y: it.y }))
       };
     } else {
+      
       const _af = (items.length === 1) ? App.anchorFixedLocal(items[0]) : null;
       const _ad = _af ? App.itemLocalToDoc(items[0], _af.x, _af.y) : null;
       App.drag = {
         kind: 'editskew',
         startX: e.clientX, startY: e.clientY,
         scale: App.state.view.scale,
+        
         speed: App.dragSpeed('skew'),
         anchorFix: _af,
         anchorDoc: _ad,
@@ -1296,7 +1452,7 @@ App.onEditPointerDown = function (e) {
         snap: items.map(it => App.editTransformSnap(it))
       };
     }
-    try { App.svg.setPointerCapture(e.pointerId); } catch (err) {   }
+    try { App.svg.setPointerCapture(e.pointerId); } catch (err) {  }
     e.preventDefault();
   }
 };
@@ -1305,6 +1461,7 @@ App.onEditPointerMove = function (e) {
   if (!App.drag) return;
   const apply = fn => App.withTransformBatch ? App.withTransformBatch(fn) : fn();
   if (App.drag.kind === 'editmove') {
+    
     const _sp = (App.drag.speed > 0) ? App.drag.speed : 1;
     const dx = (e.clientX - App.drag.startX) / App.drag.scale * _sp;
     const dy = (e.clientY - App.drag.startY) / App.drag.scale * _sp;
@@ -1315,18 +1472,23 @@ App.onEditPointerMove = function (e) {
     if (App.scheduleFrameUpdate) App.scheduleFrameUpdate('edit');
     else App.drawOutlines();
   } else if (App.drag.kind === 'editrotate') {
+    
     const pd = App.screenToDoc(e.clientX, e.clientY);
+    
     const _rsp = (App.drag.speed > 0) ? App.drag.speed : 1;
     const rotD = (Math.atan2(pd.y - App.drag.center.y, pd.x - App.drag.center.x) - App.drag.grabAngle) * 180 / Math.PI * _rsp;
     if (App.drag.snap.length > 1) {
+      
       const g0 = App.drag.g0;
       if (g0) { App.editSession.grp.rot = g0.rot + rotD; App.groupDecompose(); }
     } else {
       apply(() => App.drag.snap.forEach(s => {
         s.it.rot = s.rot + rotD;
+        
         if (App.drag.anchorFix && App.drag.anchorDoc) {
           App.placeItemAtDocPoint(s.it, App.drag.anchorFix.x, App.drag.anchorFix.y, App.drag.anchorDoc.x, App.drag.anchorDoc.y);
         } else {
+          
           App.applySnapCenterKeep(s); 
         }
         App.applyItemTransform(s.it);
@@ -1335,15 +1497,19 @@ App.onEditPointerMove = function (e) {
     if (App.scheduleFrameUpdate) App.scheduleFrameUpdate('edit');
     else { App.drawOutlines(); App.updateEditValue(); }
   } else if (App.drag.kind === 'editskew') {
+    
     const dx = (e.clientX - App.drag.startX) / App.drag.scale;
+    
     const _ksp = (App.drag.speed > 0) ? App.drag.speed : 1;
     const skewD = -(dx / 200) * 60 * _ksp;
     if (App.drag.snap.length > 1) {
+      
       const g0 = App.drag.g0;
       if (g0) { App.editSession.grp.skew = App.clampSkew(g0.skew + skewD); App.groupDecompose(); }
     } else {
       apply(() => App.drag.snap.forEach(s => {
         s.it.skew = App.clampSkew(s.skew + skewD);
+        
         if (App.drag.anchorFix && App.drag.anchorDoc) {
           App.placeItemAtDocPoint(s.it, App.drag.anchorFix.x, App.drag.anchorFix.y, App.drag.anchorDoc.x, App.drag.anchorDoc.y);
         } else {
@@ -1355,10 +1521,12 @@ App.onEditPointerMove = function (e) {
     if (App.scheduleFrameUpdate) App.scheduleFrameUpdate('edit');
     else { App.drawOutlines(); App.updateEditValue(); }
   } else if (App.drag.kind === 'edithandle') {
+    
     const _hsp = (App.drag.speed > 0) ? App.drag.speed : 1;
     const dx = (e.clientX - App.drag.startX) / App.drag.scale * _hsp;
     const dy = (e.clientY - App.drag.startY) / App.drag.scale * _hsp;
     const h = App.drag.h;
+    
     const items = App.editTargets();
     const it = items[0];
     let dxx = 1, dxy = 0, dyx = 0, dyy = 1;
@@ -1370,6 +1538,7 @@ App.onEditPointerMove = function (e) {
     const lx = dx * dxx + dy * dxy; 
     const ly = dx * dyx + dy * dyy; 
     const _lcs = App.localContentSize(it);
+    
     const _hc = (it && it.kind === 'merged') ? App.mergedLocalCenter(it) : { lcx: 0, lcy: 0 };
     const _denFor = function (hx, hy) {
       let denX = 2 * Math.abs(hx);
@@ -1380,12 +1549,14 @@ App.onEditPointerMove = function (e) {
         denX = 2 * Math.abs(_ox);
         denY = 2 * Math.abs(_oy);
       }
+      
       if (!isFinite(denX) || Math.abs(denX) < 1e-6) denX = Math.max(1, _lcs.w);
       if (!isFinite(denY) || Math.abs(denY) < 1e-6) denY = Math.max(1, _lcs.h);
       return { denX: denX, denY: denY };
     };
     let gx = 0, gy = 0;
     if (h === 'box') {
+      
       const _bw = (App.drag.snap.length > 1) ? Math.max(1, App.drag.box.w || 1) : _lcs.w;
       const _bh = (App.drag.snap.length > 1) ? Math.max(1, App.drag.box.h || 1) : _lcs.h;
       gx = -lx / _denFor(-_bw / 2, 0).denX;
@@ -1395,6 +1566,7 @@ App.onEditPointerMove = function (e) {
       const _sy = h.includes('s') ? 1 : h.includes('n') ? -1 : 0;
       const _d = _denFor(_sx * _lcs.w / 2, _sy * _lcs.h / 2);
       if (App.drag.snap.length > 1 && App.drag.handleDoc && App.drag.groupC) {
+        
         const _th0 = ((App.drag.g0 && App.drag.g0.rot) || 0) * D2R;
         const _ox = App.drag.handleDoc.x - App.drag.groupC.x;
         const _oy = App.drag.handleDoc.y - App.drag.groupC.y;
@@ -1410,14 +1582,17 @@ App.onEditPointerMove = function (e) {
     }
     if (App.state.sizeMode === 'prop') {
       if (App.drag.snap.length === 1 && it) {
+        
         const p = App.propScalePair(gx, gy);
         gx = p[0]; gy = p[1];
       } else {
+        
         const g = (h === 'box') ? (Math.abs(gx) >= Math.abs(gy) ? gx : gy)
           : ((h.includes('e') || h.includes('w')) ? gx : gy);
         gx = g; gy = g;
       }
     }
+    
     let rotD = 0;
     if (App.state.shiftDown && (h === 'nw' || h === 'ne' || h === 'sw' || h === 'se')) {
       gx = 0; gy = 0;
@@ -1428,6 +1603,7 @@ App.onEditPointerMove = function (e) {
     } else {
       rotD = App.drag.rotLock || 0;
     }
+    
     let skewD = 0;
     if (App.state.shiftDown && (h === 'n' || h === 's')) {
       gx = 0; gy = 0;
@@ -1438,6 +1614,7 @@ App.onEditPointerMove = function (e) {
       skewD = App.drag.skewLock || 0;
     }
     if (App.drag.snap.length > 1) {
+      
       const g0 = App.drag.g0;
       if (g0 && App.editSession && App.editSession.grp) {
         App.editSession.grp.rot = g0.rot + (rotD || 0);
@@ -1448,8 +1625,11 @@ App.onEditPointerMove = function (e) {
       }
     } else {
     apply(() => App.drag.snap.forEach(s => {
+      
+      
       const ssx = (s.flipH ? -1 : 1) * (s.sx || 1);
       const ssy = (s.flipV ? -1 : 1) * (s.sy || 1);
+      
       if (App.drag.anchorFix && App.drag.anchorDoc) {
         const af = App.drag.anchorFix, ad = App.drag.anchorDoc;
         s.it.rot = rotD ? s.rot + rotD : s.it.rot;
@@ -1457,6 +1637,7 @@ App.onEditPointerMove = function (e) {
         App.applyScaleWithFlip(s.it, ssx + 2 * gx, ssy + 2 * gy);
         App.placeItemAtDocPoint(s.it, af.x, af.y, ad.x, ad.y);
       } else if (s.it.kind === 'merged') {
+        
         const cx = App.drag.center.x, cy = App.drag.center.y;
         const nsx = ssx + 2 * gx, nsy = ssy + 2 * gy;
         const { lcx, lcy } = App.mergedLocalCenter(s.it);
@@ -1467,12 +1648,14 @@ App.onEditPointerMove = function (e) {
         s.it.y = cy - (M.b * lcx + M.d * lcy);
         App.applyScaleWithFlip(s.it, nsx, nsy);
       } else {
+        
         s.it.x = s.x;
         s.it.y = s.y;
         App.applyScaleWithFlip(s.it, ssx + 2 * gx, ssy + 2 * gy);
         if (rotD) s.it.rot = s.rot + rotD;
         if (skewD) s.it.skew = App.clampSkew(s.skew + skewD);
       }
+      
       if (s.it.kind === 'merged' && !(App.drag.anchorFix && App.drag.anchorDoc)) {
         if (rotD) s.it.rot = s.rot + rotD;
         if (skewD) s.it.skew = App.clampSkew(s.skew + skewD);
@@ -1487,15 +1670,19 @@ App.onEditPointerMove = function (e) {
 };
 
 App.onEditPointerUp = function () {
+  
   if (App.drag && App.drag.kind === 'editmove') App.groupRebase();
   App.drag = null;
   App.editHist.endGesture(); 
 };
 
+
+
 App.duplicateEditing = function () {
   if (!App.state.edit || App.state.edit.type === 'bg') return;
   const items = App.editTargets();
   if (!items.length) return;
+  
   App.editHist.endGesture();
   const cp = App.editHist.checkpoint();
   App.editHist.endGesture();
@@ -1507,15 +1694,18 @@ App.duplicateEditing = function () {
   copies.forEach((c, i) => {
     const it = items[i];
     if (!c.el) App.buildLayerElement(c);
+    
     App.layersRoot.insertBefore(c.el, it.el);
     App.state.layers.splice(App.state.layers.indexOf(it), 0, c);
     App.registerChildren(c);
     c.thumbDirty = true;
     if (c.kind === 'merged' && App.maybeBakeProxy) App.maybeBakeProxy(c);
   });
+  
   if (cp) cp.despawn = copies.map(c => c.id);
   App.refreshPanel();
   App.refreshCount();
+  
   const first = items[0];
   const boxIdx = App.panelLayers().indexOf(first);
   if (boxIdx >= 0) App.lastWheelIdx = boxIdx;
@@ -1524,6 +1714,7 @@ App.duplicateEditing = function () {
   if (App.requestFlashRefresh) App.requestFlashRefresh(false);
   showToast(App.i18n.tf('toast.edit.copied', { n: copies.length }));
 };
+
 
 App.editFlipCycle = function () {
   const items = App.editTargets();
@@ -1534,6 +1725,7 @@ App.editFlipCycle = function () {
   const names = ['edit.flip.none', 'edit.flip.h', 'edit.flip.hv', 'edit.flip.v'];
   const wantH = App.state.editFlipStep === 1 || App.state.editFlipStep === 2;
   const wantV = App.state.editFlipStep === 2 || App.state.editFlipStep === 3;
+  
   if (items.length >= 2 && App.editSession && App.editSession.grp) {
     App.groupTransformApply(g => {
       g.sx = Math.abs(g.sx) * (wantH ? -1 : 1);
@@ -1545,7 +1737,9 @@ App.editFlipCycle = function () {
     return;
   }
   items.forEach(it => {
+    
     const c = it.kind === 'merged' && App.mergedContentCenter ? App.mergedContentCenter(it) : null;
+    
     const af = App.anchorFixedLocal(it);
     const p0 = af ? App.itemLocalToDoc(it, af.x, af.y) : null;
     it.flipH = wantH;
@@ -1558,6 +1752,7 @@ App.editFlipCycle = function () {
   App.drawOutlines();
   App.refreshLayerThumbs();
   if (App.contentChanged) App.contentChanged();
+  
   App.groupRebase();
   showToast(App.i18n.tf('toast.edit.flip', { v: App.i18n.t(names[App.state.editFlipStep]) }));
 };

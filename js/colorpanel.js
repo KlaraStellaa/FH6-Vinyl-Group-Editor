@@ -1,4 +1,5 @@
 'use strict';
+
 App.initColorPanel = function () {
   App.cp = { h: 0, s: 0, v: 100, hex: '#ffffff', suppress: false, syncing: false };
   App.previewColor = null;
@@ -6,10 +7,12 @@ App.initColorPanel = function () {
   App.histColors = [];
   App.wheelCanvas = $('#colorWheel');
   App.wheelCtx = App.wheelCanvas.getContext('2d');
+  
   if (App.ensurePreviewColorFilter) App.ensurePreviewColorFilter();
   App.loadFavs();
   App.setPanelColor(App.state.lastColor, false);
 
+  
   $('#hexInput').addEventListener('change', () => {
     const v = $('#hexInput').value.trim();
     const rgb = hexToRgb(v);
@@ -21,6 +24,7 @@ App.initColorPanel = function () {
     e.stopPropagation();
   });
 
+  
   const syncFromNums = () => {
     if (App.cp.suppress) return;
     const h = clamp(parseFloat($('#hInput').value) || 0, 0, 100) * 3.6;
@@ -30,12 +34,14 @@ App.initColorPanel = function () {
   };
   ['hInput', 'sInput', 'bInput'].forEach(id => {
     $('#' + id).addEventListener('input', syncFromNums);
+    
     $('#' + id).addEventListener('keydown', e => {
       if (e.key === 'Enter') e.target.blur();
       e.stopPropagation();
     });
   });
 
+  
   const syncFromRanges = () => {
     if (App.cp.suppress) return;
     const h = clamp(parseFloat($('#hRange').value) || 0, 0, 100) * 3.6;
@@ -45,6 +51,7 @@ App.initColorPanel = function () {
   };
   ['hRange', 'sRange', 'bRange'].forEach(id => {
     $('#' + id).addEventListener('input', syncFromRanges);
+    
     $('#' + id).addEventListener('wheel', e => {
       e.preventDefault();
       const step = (id === 'hRange' ? 1 : 1) * (e.deltaY > 0 ? -1 : 1);
@@ -55,6 +62,7 @@ App.initColorPanel = function () {
     }, { passive: false });
   });
 
+  
   const wheelPick = e => {
     const r = App.wheelCanvas.getBoundingClientRect();
     const cx = r.width / 2, cy = r.height / 2;
@@ -71,11 +79,14 @@ App.initColorPanel = function () {
   App.wheelCanvas.addEventListener('pointermove', e => { if (wheelDrag) wheelPick(e); });
   App.wheelCanvas.addEventListener('pointerup', () => { wheelDrag = false; });
 
+  
   $('#btnEyeLayer').addEventListener('click', () => App.eyedropperToggle('layer'));
   $('#btnEyeBg').addEventListener('click', () => App.eyedropperToggle('bg'));
 
+  
   $('#btnApplyColor').addEventListener('click', () => App.commitColor(App.cp.hex));
 
+  
   $('#btnFav').addEventListener('click', App.addFavorite);
 };
 
@@ -105,6 +116,7 @@ App.drawWheel = function () {
     }
   }
   cx.putImageData(img, 0, 0);
+  
   const ang = App.cp.h * Math.PI / 180;
   const rr = App.cp.s / 100 * (R - 1);
   const ix = R + Math.cos(ang) * rr, iy = R + Math.sin(ang) * rr;
@@ -113,6 +125,7 @@ App.drawWheel = function () {
   cx.strokeStyle = '#000000'; cx.lineWidth = 1;
   cx.beginPath(); cx.arc(ix, iy, 6.5, 0, Math.PI * 2); cx.stroke();
 };
+
 
 App.setPanelHSV = function (h, s, v, apply, preview) {
   h = clamp(h, 0, 360);
@@ -135,19 +148,23 @@ App.setPanelHSV = function (h, s, v, apply, preview) {
   }
   $('#colorSwatch').style.background = hex;
   App.drawWheel();
+  
   if (App.cp.syncing) return;
   if (apply) App.commitColor(hex);
   else if (preview !== false) App.applyColorPreview(hex);
 };
+
 
 App.setPanelColor = function (hex, apply, preview) {
   const rgb = hexToRgb(hex);
   if (!rgb) return;
   const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
   let h = hsv.h;
+  
   if (h === 0 && App.cp.h >= 359) h = 360;
   App.setPanelHSV(h, hsv.s, hsv.v, apply, preview);
 };
+
 
 App.commitColor = function (hex) {
   const items = (App.state.edit ? App.editTargets() : App.operationTargets()).slice();
@@ -159,13 +176,14 @@ App.commitColor = function (hex) {
     catch (e) { console.warn('[color] 记录整体换色日志失败', e && e.message); }
     return;
   }
-  App.previewBitmapYield(items);          
-  App.paintColorImmediate(items, hex);    
+  App.previewBitmapYield(items);         
+  App.paintColorImmediate(items, hex);   
   App.applyColorToTargets(hex, items);
   App.recordHistColor(hex);
   App.settleColorPreview(items);
-  try { App.log('info', '应用颜色', { hex, targets: items.length }); } catch (e) {   }
+  try { App.log('info', '应用颜色', { hex, targets: items.length }); } catch (e) {  }
 };
+
 
 App.previewBitmapYield = function (items) {
   App._colorYield = 1;
@@ -184,9 +202,10 @@ App.previewBitmapRestore = function () {
   App._colorYield = 0;
   const un = App._previewUnproxied || [];
   App._previewUnproxied = [];
-  un.forEach(l => { try { if (App.maybeBakeProxy) App.maybeBakeProxy(l); } catch (e) {   } });
-  if (wasYield && App.autoStaticMaybe) App.autoStaticMaybe();    
+  un.forEach(l => { try { if (App.maybeBakeProxy) App.maybeBakeProxy(l); } catch (e) {  } });
+  if (wasYield && App.autoStaticMaybe) App.autoStaticMaybe();   
 };
+
 
 App.claimPreviewRestore = function (key, fn, el) {
   const set = App.previewRestoreKeys || (App.previewRestoreKeys = new Set());
@@ -195,6 +214,7 @@ App.claimPreviewRestore = function (key, fn, el) {
   if (!Array.isArray(App.previewRestore)) App.previewRestore = [];
   App.previewRestore.push({ k: String(key).split(':')[0], key: key, el: el || null, fn: () => { set.delete(key); fn(); } });
 };
+
 App.releasePreviewRestores = function (onlyKind) {
   const recs = Array.isArray(App.previewRestore) ? App.previewRestore : [];
   App.previewRestore = [];
@@ -202,9 +222,10 @@ App.releasePreviewRestores = function (onlyKind) {
   recs.forEach(rec => {
     if (!rec) return;
     if (onlyKind && rec.k !== onlyKind) return;
-    try { (rec.fn || rec)(); } catch (e) {   }
+    try { (rec.fn || rec)(); } catch (e) {  }
   });
 };
+
 
 App.paintColorImmediate = function (items, hex) {
   const paint = l => {
@@ -217,6 +238,7 @@ App.paintColorImmediate = function (items, hex) {
   };
   (items || []).forEach(paint);
 };
+
 
 App.settleColorPreview = function (items) {
   const list = [];
@@ -232,6 +254,8 @@ App.settleColorPreview = function (items) {
   if (!list.length) { clear(); return; }
   Promise.race([Promise.all(list), new Promise(r => setTimeout(r, 1500))]).then(clear, clear);
 };
+
+
 
 App.previewColorFilterId = 'svePreviewTint';
 App.previewColorMatrix = function (hex) {
@@ -253,12 +277,14 @@ App.ensurePreviewColorFilter = function () {
   App._previewColorMatrixEl = m;
   return m;
 };
+
 App.previewColorFilter = function (hex) {
   const m = App.ensurePreviewColorFilter();
   if (!m) return '';
   m.setAttribute('values', App.previewColorMatrix(hex));
   return 'url(#' + App.previewColorFilterId + ')';
 };
+
 
 App.wholeSymbolColorPlan = function (items) {
   const layers = App.state.layers || [];
@@ -306,6 +332,7 @@ App.wholeSymbolColorTargets = function (items) {
 App.beginWholeSymbolColorVisual = function (items, hex) {
   const root = App.layersRoot;
   if (!root) return false;
+  
   const bitmap = App.autoStatic && App.autoStatic.active && !App.autoStatic.baking &&
     App.autoStaticBgEl && App.autoStaticBgEl.isConnected ? App.autoStaticBgEl : null;
   const target = bitmap || root;
@@ -336,6 +363,7 @@ App.clearWholeSymbolColorVisual = function (commitSeq) {
   App._wholeSymbolColorVisual = null;
   App.previewColor = null;
 };
+
 
 App.materializeWholeSymbolColor = function (leaves, hex, revision) {
   const seq = (App._wholeSymbolColorCommitSeq || 0) + 1;
@@ -398,6 +426,7 @@ App.materializeWholeSymbolColor = function (leaves, hex, revision) {
 };
 
 App.applyColorPreview = function (hex) {
+  
   App.previewColor = null;
   const items = App.state.edit ? App.editTargets() : App.operationTargets();
   if (!items.length) { App.resetPreviewVisual(); return; }
@@ -405,12 +434,14 @@ App.applyColorPreview = function (hex) {
     App.beginWholeSymbolColorVisual(items, hex);
     return;
   }
-  App.previewBitmapYield(items);    
+  App.previewBitmapYield(items);   
   const liveEls = new Set();
   const previewOne = l => {
     if (!l || l.isMask) return;
+    
     if (App.updateImpDisplay) App.updateImpDisplay(l);
     if (l.kind === 'symbol' && l.el && !l.isMask) {
+      
       const el = l.el;
       liveEls.add(el);
       const oldFilter = el.style.filter || '';
@@ -435,32 +466,38 @@ App.applyColorPreview = function (hex) {
   };
   items.forEach(it => {
     if (it.kind === 'bg') return;
+    
     const walk = l => {
       if (l.kind === 'merged') (l.children || []).forEach(walk);
       else previewOne(l);
     };
     walk(it);
   });
+  
   const recs = Array.isArray(App.previewRestore) ? App.previewRestore : [];
   const stale = recs.filter(rec => rec && rec.el && !liveEls.has(rec.el));
   if (stale.length) {
     App.previewRestore = recs.filter(rec => stale.indexOf(rec) < 0);
-    stale.forEach(rec => { try { if (App.previewRestoreKeys) App.previewRestoreKeys.delete(rec.key); rec.fn(); } catch (e) {   } });
+    stale.forEach(rec => { try { if (App.previewRestoreKeys) App.previewRestoreKeys.delete(rec.key); rec.fn(); } catch (e) {  } });
   }
   App.previewColor = hex;
+  
 };
+
 
 App.resetPreviewVisual = function () {
   App.previewColor = null;
   App.clearWholeSymbolColorVisual();
   App.releasePreviewRestores();
-  App.previewBitmapRestore();    
+  App.previewBitmapRestore();   
 };
+
 
 App.cancelColorPreview = function () {
   const had = App.previewRestore && App.previewRestore.length > 0;
   App.resetPreviewVisual();
   if (had && App.state.edit) {
+    
     const items = App.editTargets().filter(it => it && it.kind !== 'bg' && it.kind !== 'merged');
     if (items.length === 1) {
       const hex = (items[0].color && hexToRgb(items[0].color)) ? items[0].color : '#ffffff';
@@ -478,6 +515,7 @@ App.applyColorToTargets = function (hex, targetItems) {
   const wholeSymbolFast = !!wholeSymbolPlan;
   if (wholeSymbolFast) App.beginWholeSymbolColorVisual(items, hex);
   if (App.state.edit) {
+    
     App.editHist.checkpoint();
     App.editHist.scheduleEnd();
   } else if (items.length) {
@@ -510,8 +548,10 @@ App.applyColorToTargets = function (hex, targetItems) {
   if (items.some(it => it.kind !== 'bg') && App.contentChanged) App.contentChanged({ preserveAutoStatic: false });
 };
 
+
 App.syncColorPanelToTargets = function () {
   if (App.state.edit) return;
+  
   App.cancelColorPreview();
   const items = App.operationTargets();
   if (items.length !== 1 || items[0].kind === 'merged' || items[0].kind === 'bg') return;
@@ -519,6 +559,7 @@ App.syncColorPanelToTargets = function () {
   App.cp.syncing = true;
   try { App.setPanelColor(hex, false); } finally { App.cp.syncing = false; }
 };
+
 
 App.recordHistColor = function (hex) {
   hex = String(hex || '').toLowerCase();
@@ -528,6 +569,7 @@ App.recordHistColor = function (hex) {
   if (App.histColors.length > 16) App.histColors.length = 16;
   App.renderHistGrid();
 };
+
 App.applyColorNoHist = function (hex) {
   App.setPanelColor(hex, false, false); 
   App.cancelColorPreview();
@@ -549,7 +591,9 @@ App.renderHistGrid = function () {
     const sw = document.createElement('div');
     sw.className = 'hist-swatch';
     sw.style.background = hex;
+    
     sw.addEventListener('click', () => App.applyColorNoHist(hex));
+    
     const del = document.createElement('span');
     del.className = 'fav-del';
     del.textContent = '×';
@@ -563,8 +607,9 @@ App.removeHistColor = function (hex) {
   App.renderHistGrid();
 };
 
+
 App.eyedropperToggle = function (mode) {
-  try { App.log('info', '取色器', { mode }); } catch (e) {   }
+  try { App.log('info', '取色器', { mode }); } catch (e) {  }
   if (App.state.eyeMode === mode) { App.setEyedropper(null); return; }
   App.setEyedropper(mode);
 };
@@ -574,16 +619,20 @@ App.setEyedropper = function (mode) {
     showToast(App.i18n.t('toast.bg.noBg2'));
     return;
   }
+  
   if (App.state.eyeMode === 'bg') {
     if (App.eyeLayersDisplay !== undefined) {
+      
       App.layersRoot.style.display = App.state.layersHidden ? 'none' : (App.eyeLayersDisplay || '');
       App.eyeLayersDisplay = undefined;
     }
     if (App.eyeBgDisplay !== undefined) {
+      
       App.bgG.style.display = App.state.bg.hidden ? 'none' : (App.eyeBgDisplay || '');
       App.eyeBgDisplay = undefined;
     }
     if (App.eyeBgDispOpacity !== undefined) {
+      
       if (!App.eyeOpacityUserChanged) {
         App.state.bgDisplayOpacity = App.eyeBgDispOpacity;
         if (App.applyBgDisplayOpacity) App.applyBgDisplayOpacity();
@@ -603,6 +652,7 @@ App.setEyedropper = function (mode) {
   }
   App.eyeOpacityUserChanged = false; 
   App.state.eyeMode = mode;
+  
   if (mode) {
     if (App.endEditStatic && App.state.edit) App.endEditStatic();
   } else if (App.state.edit) {
@@ -612,6 +662,7 @@ App.setEyedropper = function (mode) {
   $('#btnEyeLayer').classList.toggle('active', mode === 'layer');
   $('#btnEyeBg').classList.toggle('active', mode === 'bg');
   if (mode === 'bg') {
+    
     App.stopFlash();
     App.eyeLayersDisplay = App.layersRoot.style.display;
     App.layersRoot.style.display = 'none';
@@ -623,26 +674,32 @@ App.setEyedropper = function (mode) {
     App.updateBgOpacitySlider();
     showToast(App.i18n.t('toast.color.bgPick'));
   } else if (mode === 'layer') {
+    
     App.eyeLayersDispOpacity = App.state.layersDisplayOpacity;
     App.state.layersDisplayOpacity = 1;
     App.applyLayersDisplayOpacity();
     App.updateLayersDisplaySlider();
 
   }
+  
   if (App.drawOutlines) App.drawOutlines();
 };
+
 App.colorOfLayer = function (layer) {
   if (!layer || layer.isMask) return null;
   if (layer.kind === 'symbol' || layer.kind === 'pattern' || layer.kind === 'import') return layer.color || null;
   return null;
 };
+
 App.eyePickColor = function (layer, clientX, clientY) {
   if (!layer) return null;
   if (layer.kind === 'merged') {
+    
     if (App.proxySampleColor && App._proxyBake && App._proxyBake.has(layer.id)) {
       const ps = App.proxySampleColor(layer, clientX, clientY);
       if (ps) return ps;
     }
+    
     const kids = layer.children || [];
     for (let j = kids.length - 1; j >= 0; j--) {
       const ch = kids[j];
@@ -663,6 +720,7 @@ App.onEyeMove = function (e) {
   const mode = App.state.eyeMode;
   if (!mode) return;
   if (mode === 'bg') {
+    
     const hex = App.sampleBackgroundColor(e.clientX, e.clientY);
     if (hex) App.setPanelColor(hex, false, false);
   } else {
@@ -675,18 +733,23 @@ App.onEyeDown = function (e) {
   const mode = App.state.eyeMode;
   if (!mode) return;
   if (mode === 'bg') {
+    
     const hex = App.sampleBackgroundColor(e.clientX, e.clientY);
     if (!hex) return;
+    
     App.setPanelColor(hex, true);
     App.setEyedropper(null);
   } else {
+    
     const layer = App.hitLayerPaintedSync(e.clientX, e.clientY);
     const hex = App.eyePickColor(layer, e.clientX, e.clientY);
     if (!hex) return;
+    
     App.setPanelColor(hex, true);
     App.setEyedropper(null);
   }
 };
+
 
 App.favKey = 'sve-fav-colors';
 App.loadFavs = function () {
@@ -696,7 +759,7 @@ App.loadFavs = function () {
   App.renderFavGrid();
 };
 App.saveFavs = function () {
-  try { localStorage.setItem(App.favKey, JSON.stringify(App.favs)); } catch (e) {   }
+  try { localStorage.setItem(App.favKey, JSON.stringify(App.favs)); } catch (e) {  }
 };
 App.addFavorite = function () {
   const hex = App.cp.hex;
@@ -729,6 +792,7 @@ App.renderFavGrid = function () {
     const sw = document.createElement('div');
     sw.className = 'fav-swatch';
     sw.style.background = hex;
+    
     sw.addEventListener('click', () => App.applyColorNoHist(hex));
     const del = document.createElement('span');
     del.className = 'fav-del';

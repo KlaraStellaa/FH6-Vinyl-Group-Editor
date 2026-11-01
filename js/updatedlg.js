@@ -1,4 +1,5 @@
 'use strict';
+
 App.UPD_I18N = {
   'zh-CN': {
     'upd.title': '检测到更新 🎆🎆',
@@ -115,16 +116,17 @@ App.updateDlg = {
   info: null,
   busy: false,
 
+  
   plainNotes(md) {
     let t = String(md || '');
     if (!t.trim()) return '';
     t = t.replace(/\r\n/g, '\n');
-    t = t.replace(/```[\s\S]*?```/g, m => m.replace(/```[a-z]*\n?/gi, '').replace(/```/g, ''));   
-    t = t.replace(/!\[[^\]]*\]\([^)]*\)/g, '');                     
-    t = t.replace(/\[([^\]]*)\]\(([^)]*)\)/g, '$1（$2）');           
-    t = t.replace(/^\s{0,3}#{1,6}\s*/gm, '');                        
-    t = t.replace(/^\s{0,3}>\s?/gm, '');                             
-    t = t.replace(/^\s{0,3}[-*+]\s+/gm, '· ');                       
+    t = t.replace(/```[\s\S]*?```/g, m => m.replace(/```[a-z]*\n?/gi, '').replace(/```/g, ''));  
+    t = t.replace(/!\[[^\]]*\]\([^)]*\)/g, '');                    
+    t = t.replace(/\[([^\]]*)\]\(([^)]*)\)/g, '$1（$2）');          
+    t = t.replace(/^\s{0,3}#{1,6}\s*/gm, '');                       
+    t = t.replace(/^\s{0,3}>\s?/gm, '');                            
+    t = t.replace(/^\s{0,3}[-*+]\s+/gm, '· ');                      
     t = t.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/__([^_]+)__/g, '$1');
     t = t.replace(/`([^`]+)`/g, '$1');
     t = t.replace(/\n{3,}/g, '\n\n');
@@ -134,6 +136,7 @@ App.updateDlg = {
   show(info) {
     if (!info || this.busy) return;
     this.info = info;
+    
     Array.from(document.querySelectorAll('#updateOv')).forEach(el => el.remove());
     this.el = null;
     const ov = document.createElement('div');
@@ -162,6 +165,7 @@ App.updateDlg = {
     if (pick) pick.textContent = App.i18n.t('upd.pick');
     const hint = ov.querySelector('.upd-hint');
 
+    
     const blocked = !!(info.isDev || !info.exeUrl);
     if (blocked) {
       hint.textContent = App.i18n.t(info.isDev ? 'upd.devHint' : 'upd.noAsset');
@@ -179,22 +183,26 @@ App.updateDlg = {
   },
 
   close() {
+    
     const el = this.el || document.getElementById('updateOv');
     this.el = null;
     if (el && el.parentNode) el.parentNode.removeChild(el);
   },
 
+  
   fmtMB(n) {
     const mb = Number(n || 0) / 1048576;
     if (!mb) return '0 MB';
     return (mb >= 100 ? mb.toFixed(0) : mb.toFixed(1)) + ' MB';
   },
 
+  
   applyProgress(pr) {
     if (!this.el || !pr) return false;
     const go = this.el.querySelector('#updGo');
     const hint = this.el.querySelector('.upd-hint');
     if (go && typeof pr.pct === 'number') {
+      
       go.textContent = pr.pct < 0
         ? App.i18n.t('upd.busyUnknown')
         : App.i18n.t('upd.busy').replace('{v}', String(pr.pct));
@@ -208,6 +216,7 @@ App.updateDlg = {
     return true;
   },
 
+  
   friendlyError(raw) {
     const s = String(raw || '');
     if (/ERR_CONNECTION_RESET|ERR_CONNECTION_CLOSED|ERR_CONNECTION_ABORTED|ERR_NETWORK_CHANGED|ERR_INTERNET_DISCONNECTED/i.test(s)) {
@@ -215,10 +224,12 @@ App.updateDlg = {
     }
     if (/timeout/i.test(s)) return App.i18n.t('upd.errTimeout');
     if (/incomplete/i.test(s)) return App.i18n.t('upd.errIncomplete');
+    
     if (/bad-package/i.test(s)) return App.i18n.t('upd.pickBad');
     return s.slice(0, 80);
   },
 
+  
   _opener: null,
   _installer: null,
   _picker: null,
@@ -230,6 +241,7 @@ App.updateDlg = {
     return run();
   },
 
+  
   openRepo() {
     const hint = this.el && this.el.querySelector('.upd-hint');
     if (hint) {
@@ -238,8 +250,8 @@ App.updateDlg = {
     }
     try {
       const p = this.openRepoArg();
-      if (p && typeof p.catch === 'function') p.catch(function () {   });
-    } catch (e) {   }
+      if (p && typeof p.catch === 'function') p.catch(function () {  });
+    } catch (e) {  }
     return true;
   },
 
@@ -259,7 +271,7 @@ App.updateDlg = {
       const r = await install({ exeUrl: this.info.exeUrl, version: this.info.remote });
       if (r && r.ok) {
         if (go) go.textContent = App.i18n.t('upd.done');
-        return;    
+        return;   
       }
       throw new Error((r && r.error) || 'unknown');
     } catch (e) {
@@ -273,10 +285,12 @@ App.updateDlg = {
       const msg = App.i18n.t('upd.fail').replace('{v}', this.friendlyError(e && e.message || e));
       if (typeof showToast === 'function') showToast(msg, 4200);
       else console.warn('[update]', msg);
+      
       this.openRepo();
     }
   },
 
+  
   async pick() {
     if (this.busy || !this.info) return;
     const btn = this.el && this.el.querySelector('#updPick');
@@ -291,6 +305,7 @@ App.updateDlg = {
     try { r = await call(); }
     catch (e) { r = { ok: false, error: String(e && e.message || e) }; }
     if (r && r.ok) {
+      
       if (hint) { hint.textContent = App.i18n.t('upd.pickDone'); hint.classList.remove('hidden'); }
       if (go) go.textContent = App.i18n.t('upd.done');
       return;
