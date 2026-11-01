@@ -197,6 +197,36 @@ function scheduleExeReplace(newExe, targetExe) {
   return bat;
 }
 
+const STALE_TMP_MS = 10 * 60 * 1000;
+function looksLikeOurExtraction(dir) {
+  try {
+    if (fs.existsSync(path.join(dir, 'app-64.7z'))) return true;
+    if (!fs.existsSync(path.join(dir, 'FH6 Vinyl Group Editor.exe'))) return false;
+    return fs.statSync(path.join(dir, 'resources')).isDirectory();
+  } catch (e) { return false; }
+}
+function cleanStalePortableTemp() {
+  let self = '', selfParent = '';
+  try { self = path.dirname(process.execPath); selfParent = path.dirname(self); } catch (e) {   }
+  const tmp = os.tmpdir();
+  let names = [];
+  try { names = fs.readdirSync(tmp); } catch (e) { return 0; }
+  let killed = 0;
+  for (const n of names) {
+    const dir = path.join(tmp, n);
+    if (dir === self || dir === selfParent) continue;
+    let st;
+    try { st = fs.statSync(dir); } catch (e) { continue; }
+    if (!st.isDirectory()) continue;
+    if (Date.now() - st.mtimeMs < STALE_TMP_MS) continue;
+    if (!looksLikeOurExtraction(dir)) continue;
+    try { fs.rmSync(dir, { recursive: true, force: true }); killed++; }
+    catch (e) {   }
+  }
+  if (killed) appendLog('info', '已清理异常退出留下的临时解压目录', { dirs: killed, tmp: tmp });
+  return killed;
+}
+
 const ISOLATE = process.env.SVGBIANJI_ISOLATE === '1';
 if (ISOLATE) {
   const isoDir = process.env.SVGBIANJI_ISOLATE_DIR || path.join(os.tmpdir(), 'svgbianji-cdp-' + process.pid);
@@ -763,6 +793,7 @@ app.whenReady().then(() => {
       }
     });
   } catch (e) {   }
+  if (app.isPackaged) setTimeout(() => cleanStalePortableTemp(), 5000);
   protocol.handle('app', (request) => {
     const u = new URL(request.url);
     if (u.hostname === 'thumb-cache') {
