@@ -697,6 +697,10 @@ App.clearAllLayers = function () {
 App.setLayerColor = function (layer, color) {
   layer.color = color;
   layer.thumbDirty = true;
+  
+  App._colorRev = (App._colorRev || 0) + 1;
+  
+  if (App.autoStaticMaybe) { try { App.autoStaticMaybe(); } catch (e) {  } }
   if (layer.kind === 'symbol') {
     
     layer._symbolColorEpoch = (layer._symbolColorEpoch || 0) + 1;

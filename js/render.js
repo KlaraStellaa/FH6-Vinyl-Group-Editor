@@ -838,111 +838,27 @@ App.setAutoStaticHidden = function (l, hide) {
 App.restoreAutoStaticDisplay = function (l) { App.setAutoStaticHidden(l, false); };
 
 ﻿
-App.autoStatic = { active: false, baking: false, bit: null, view: null, token: 0, hiding: [], url: null, flashUrls: null, contentRevision: null };
+App.autoStatic = { active: false, baking: false, bit: null, view: null, token: 0, hiding: [], url: null, flashUrls: null, contentRevision: null, colorRev: 0 };
+
+App._colorRev = 0;
 App.autoStaticBgEl = null;
-
-App.autoStaticBitCache = new Map();
-App.autoStaticBitCacheMax = 10;
-App.autoStaticCacheKey = function (bit) {
-  return Math.round(bit.x) + ',' + Math.round(bit.y) + ',' +
-    Math.round(bit.w * 1000) + ',' + Math.round(bit.h * 1000) + '@' + Math.round((bit.f || 1) * 1000);
-};
-App.autoStaticCacheHasUrl = function (url) {
-  if (!url) return false;
-  let found = false;
-  App.autoStaticBitCache.forEach(function (ev) {
-    if (!found && ev && ev.bit && ev.bit.url === url) found = true;
-  });
-  return found;
-};
-App.autoStaticCacheHasFlashUrls = function (urls) {
-  if (!urls) return false;
-  let found = false;
-  App.autoStaticBitCache.forEach(function (ev) {
-    if (!found && ev && ev.bit && ev.bit.flashUrls === urls) found = true;
-  });
-  return found;
-};
-App.autoStaticCachePut = function (bit, rect) {
-  if (!bit || !bit.url || bit.url.indexOf('blob:') !== 0) return;
-  const c = App.autoStaticBitCache;
-  const key = App.autoStaticCacheKey(bit);
-  if (c.has(key)) c.delete(key);
-  c.set(key, { bit: bit, rect: rect, rev: App.contentRevision || 0 });
-  while (c.size > App.autoStaticBitCacheMax) {
-    const first = c.keys().next();
-    if (first.done) break;
-    const ev = c.get(first.value);
-    c.delete(first.value);
-    if (!ev || !ev.bit) continue;
-    if (ev.bit.flashUrls) { try { App.revokeAutoStaticFlashUrls(ev.bit.flashUrls); } catch (e) {  } }
-    
-    if (ev.bit.url !== App.autoStatic.url) {
-      try { URL.revokeObjectURL(ev.bit.url); } catch (e) {  }
-    }
-  }
-};
-App.autoStaticCacheFind = function (rect, needF) {
-  const c = App.autoStaticBitCache;
-  if (!c.size || !rect) return null;
-  const rev = App.contentRevision || 0;
-  let hitKey = null, hit = null;
-  c.forEach(function (ev, key) {
-    if (hit) return;
-    if (!ev || !ev.bit || !ev.rect || ev.rev !== rev) return;
-    const b = ev.rect;
-    if (!(b.x <= rect.x && b.y <= rect.y && (b.x + b.w) >= (rect.x + rect.w) && (b.y + b.h) >= (rect.y + rect.h))) return;
-    const f = Number(ev.bit.f) || 0;
-    if (!(f > 0) || f < needF * 0.8) return;
-    hit = ev; hitKey = key;
-  });
-  if (!hit) return null;
-  c.delete(hitKey); c.set(hitKey, hit);   
-  return hit;
-};
-
-App.autoStaticParked = [];
-App.autoStaticParkedMax = 3;
-App.autoStaticParkHits = 0;
-App.autoStaticParkTake = function (url) {
-  if (!url) return null;
-  const list = App.autoStaticParked;
-  for (let i = 0; i < list.length; i++) {
-    if (list[i].url === url) { App.autoStaticParkHits++; return list.splice(i, 1)[0]; }
-  }
-  return null;
-};
-App.autoStaticParkPut = function (entry) {
-  if (!entry || !entry.stage || !entry.url) return false;
-  const list = App.autoStaticParked;
-  if (list.length >= App.autoStaticParkedMax) return false;
-  entry.stage.style.display = 'none';
-  entry.stage.style.visibility = '';
-  list.push(entry);
-  return true;
-};
-App.autoStaticParkClear = function () {
-  const list = App.autoStaticParked;
-  list.forEach(function (e) {
-    try { if (e.stage && e.stage.isConnected) e.stage.remove(); } catch (err) {  }
-    try { if (e.flashPair) App.removeAutoStaticFlashPair(e.flashPair); } catch (err) {  }
-  });
-  list.length = 0;
-};
-App.autoStaticCacheClear = function () {
-  const c = App.autoStaticBitCache;
-  if (!c.size) return;
-  c.forEach(function (ev) {
-    if (!ev || !ev.bit) return;
-    if (ev.bit.url === App.autoStatic.url) return;   
-    if (ev.bit.flashUrls) { try { App.revokeAutoStaticFlashUrls(ev.bit.flashUrls); } catch (e) {  } }
-    if (ev.bit.url) {
-      try { URL.revokeObjectURL(ev.bit.url); } catch (e) {  }
-    }
-  });
-  c.clear();
-};
 App.autoStaticFlashPair = null;
+
+App._bakeCanvasSpare = null;
+App.takeBakeCanvas = function (w, h) {
+  let cv = App._bakeCanvasSpare;
+  App._bakeCanvasSpare = null;
+  if (!cv) cv = document.createElement('canvas');
+  if (cv.width !== w) cv.width = w;
+  if (cv.height !== h) cv.height = h;
+  const cx = cv.getContext('2d');
+  if (cx) cx.clearRect(0, 0, w, h);
+  return cv;
+};
+App.releaseBakeCanvas = function (cv) {
+  
+  if (cv) App._bakeCanvasSpare = cv;
+};
 App.autoStaticLayerThreshold = 300;
 
 App.renderPointerActive = false;
@@ -997,7 +913,9 @@ App.autoStaticViewUpToDate = function () {
 
 App.autoStaticKeepStale = function () {
   if (!App.autoStatic || !App.autoStatic.active) return false;
-  return !!(App.renderInteractionBusy && App.renderInteractionBusy());
+  if (!(App.renderInteractionBusy && App.renderInteractionBusy())) return false;
+  
+  return App.autoStaticKeepOld();
 };
 
 App.autoStaticDeferStart = function () {
@@ -1290,16 +1208,13 @@ App.autoStaticRelease = function () {
     App.autoStaticStageEl = null;
   }
   if (App.autoStatic.url) {
-    
-    if (!App.autoStaticCacheHasUrl(App.autoStatic.url)) {
-      try { URL.revokeObjectURL(App.autoStatic.url); }
-      catch (e) { console.warn('[bake] 回收静态位图失败', String(e && e.message || e).slice(0, 120)); }
-    }
+    try { URL.revokeObjectURL(App.autoStatic.url); }
+    catch (e) { console.warn('[bake] 回收静态位图失败', String(e && e.message || e).slice(0, 120)); }
     App.autoStatic.url = null;
   }
   App.removeAutoStaticFlashPair(App.autoStaticFlashPair);
   App.autoStaticFlashPair = null;
-  if (!App.autoStaticCacheHasFlashUrls(App.autoStatic.flashUrls)) App.revokeAutoStaticFlashUrls(App.autoStatic.flashUrls);
+  App.revokeAutoStaticFlashUrls(App.autoStatic.flashUrls);
   App.autoStatic.flashUrls = null;
   if (App.autoStaticBgEl) {
     App.autoStaticBgEl.style.display = 'none';
@@ -1425,7 +1340,7 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
         f = Math.min(1, Math.min(Math.max(1024, Math.ceil(Math.max(bw, bh) * sc * dpr2)), 4096) / Math.max(bw, bh));
       }
       const cw = Math.max(1, Math.round(bw * f)), ch = Math.max(1, Math.round(bh * f));
-      const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+      const cv = App.takeBakeCanvas(cw, ch);
       const cx = cv.getContext('2d');
       
       let maxLeafSide = 1;
@@ -1455,19 +1370,22 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
             const finish = function (url) {
               if (!alive()) {
                 if (url && url.indexOf('blob:') === 0) { try { URL.revokeObjectURL(url); } catch (e) {  } }
+                App.releaseBakeCanvas(cv);   
                 finishResult(null);
                 return;
               }
               const bit = { url: url, x: bx, y: by, w: bw, h: bh, f: f, failedTop: ready.failedTop, flashUrls: null };
-              if (leaves.length <= 400 || !url) { finishResult(bit); return; }
+              if (leaves.length <= 400 || !url) { App.releaseBakeCanvas(cv); finishResult(bit); return; }
               App.buildAutoStaticFlashUrls(cv, alive).then(function (urls) {
                 if (!alive()) {
                   if (url && url.indexOf('blob:') === 0) { try { URL.revokeObjectURL(url); } catch (e) {  } }
                   if (urls) App.revokeAutoStaticFlashUrls(urls);
+                  App.releaseBakeCanvas(cv);
                   finishResult(null);
                   return;
                 }
                 bit.flashUrls = urls;
+                App.releaseBakeCanvas(cv);     
                 finishResult(bit);
               });
             };
@@ -1502,14 +1420,9 @@ App.autoStaticInstall = function (bit, token) {
   const oldUrl = App.autoStatic.url;
   const oldFlashPair = App.autoStaticFlashPair;
   const oldFlashUrls = App.autoStatic.flashUrls;
-  
-  const parked = App.autoStaticParkTake(bit.url);
-  const stage = parked ? parked.stage : svgEl('image', { 'pointer-events': 'none', preserveAspectRatio: 'none', class: 'sve-auto-static' });
+  const stage = svgEl('image', { 'pointer-events': 'none', preserveAspectRatio: 'none', class: 'sve-auto-static' });
   let flashPair = null;
-  if (parked && parked.flashPair && parked.flashUrls === bit.flashUrls) {
-    flashPair = parked.flashPair;          
-    flashPair.target = stage;
-  } else if (bit.flashUrls && App.autoStaticFlashG) {
+  if (bit.flashUrls && App.autoStaticFlashG) {
     const g = svgEl('g', { 'pointer-events': 'none' });
     const make = function (href) {
       const el = svgEl('image', {
@@ -1564,12 +1477,8 @@ App.autoStaticInstall = function (bit, token) {
         stage.style.visibility = '';
         stage.style.display = '';
         
-        let parkedOld = false;
-        if (oldEl && oldEl !== stage) {
-          parkedOld = App.autoStaticParkPut({ url: oldUrl, stage: oldEl, flashPair: oldFlashPair, flashUrls: oldFlashUrls });
-          if (!parkedOld) oldEl.remove();
-        }
-        if (oldFlashPair && oldFlashPair !== flashPair && !parkedOld) App.removeAutoStaticFlashPair(oldFlashPair);
+        if (oldEl && oldEl !== stage) oldEl.remove();
+        if (oldFlashPair && oldFlashPair !== flashPair) App.removeAutoStaticFlashPair(oldFlashPair);
         App.autoStaticBgEl = stage;
         if (flashPair) flashPair.target = stage;
         App.autoStaticFlashPair = flashPair;
@@ -1588,9 +1497,9 @@ App.autoStaticInstall = function (bit, token) {
           delete bit._view;
         }
         App.autoStatic.active = true;
-        if (oldUrl && oldUrl !== bit.url && !App.autoStaticCacheHasUrl(oldUrl)) setTimeout(function () { try { URL.revokeObjectURL(oldUrl); } catch (e) { console.warn('[bake] 回收旧位图失败', String(e && e.message || e).slice(0, 120)); } }, 0);
+        if (oldUrl && oldUrl !== bit.url) setTimeout(function () { try { URL.revokeObjectURL(oldUrl); } catch (e) { console.warn('[bake] 回收旧位图失败', String(e && e.message || e).slice(0, 120)); } }, 0);
         if (oldFlashUrls && oldFlashUrls !== bit.flashUrls) {
-          if (!App.autoStaticCacheHasFlashUrls(oldFlashUrls)) setTimeout(function () { App.revokeAutoStaticFlashUrls(oldFlashUrls); }, 0);
+          setTimeout(function () { App.revokeAutoStaticFlashUrls(oldFlashUrls); }, 0);
         }
         
         if (flashPair) {
@@ -1604,16 +1513,9 @@ App.autoStaticInstall = function (bit, token) {
         resolve(true);
       }); });
     };
-    if (parked) {
-      
-      stage.style.display = '';
-      stage.style.visibility = 'hidden';
-      ready();
-    } else {
-      stage.addEventListener('load', ready);
-      stage.addEventListener('error', failed);
-      stage.setAttribute('href', bit.url);
-    }
+    stage.addEventListener('load', ready);
+    stage.addEventListener('error', failed);
+    stage.setAttribute('href', bit.url);
   });
 };
 
@@ -1654,12 +1556,8 @@ App.autoStaticRebake = function () {
   App.autoStatic.lastErr = null;
   App.autoStatic.baking = true;
   const token = ++App.autoStatic.token;
-  
-  const cached = App.autoStaticCacheFind(rect, needF);
-  if (cached) {
-    rect = { x: cached.rect.x, y: cached.rect.y, w: cached.rect.w, h: cached.rect.h,
-             scale: rect.scale, _f: cached.rect._f, _pad: cached.rect._pad };
-  }
+  App.autoStatic.bakingToken = token;      
+  App.autoStatic.bakingSince = performance.now();
   const items = App.state.layers.slice();
   const contentRevision = App.contentRevision || 0;
   const structSig = App.autoStaticStructSig();   
@@ -1687,17 +1585,22 @@ App.autoStaticRebake = function () {
     }
     return true;
   };
-  try { __p = cached ? Promise.resolve(cached.bit) : App.bakeAutoStatic(items, rect, shouldContinue); }
+  try { __p = App.bakeAutoStatic(items, rect, shouldContinue); }
   catch (e) { App.autoStatic.baking = false; App.autoStatic.lastErr = 'bake-sync-throw: ' + String(e && e.message || e).slice(0, 120); return; }
   if (!__p || typeof __p.then !== 'function') { App.autoStatic.baking = false; App.autoStatic.lastErr = 'bake-not-promise'; return; }
   __p.then(function (bit) {
     const drop = function (why, releaseCurrent) {
-      if (bit && bit.url && bit.url.indexOf('blob:') === 0 && !App.autoStaticCacheHasUrl(bit.url)) {
+      if (bit && bit.url && bit.url.indexOf('blob:') === 0) {
         try { URL.revokeObjectURL(bit.url); }
         catch (e) { console.warn('[bake] 回收废弃位图失败', String(e && e.message || e).slice(0, 120)); }
       }
-      if (bit && bit.flashUrls && !App.autoStaticCacheHasFlashUrls(bit.flashUrls)) App.revokeAutoStaticFlashUrls(bit.flashUrls);
+      if (bit && bit.flashUrls) App.revokeAutoStaticFlashUrls(bit.flashUrls);
       
+      if (App.autoStatic.baking && App.autoStatic.bakingToken === token) {
+        App.autoStatic.baking = false;
+        App.autoStatic.bakingToken = 0;
+        if (App.autoStaticSchedule) App.autoStaticSchedule(0);   
+      }
       if (token !== App.autoStatic.token) return;
       App.autoStatic.baking = false;
       App.autoStatic.lastErr = why;
@@ -1726,31 +1629,18 @@ App.autoStaticRebake = function () {
       if (!App.autoStaticEligible()) { drop('stale-ineligible', true); return; }
       
       const want = App.autoStaticViewportRect(0);
-      const interacting = !!(App.renderInteractionBusy && App.renderInteractionBusy());
       const covered = rect.x <= want.x && rect.y <= want.y &&
         (rect.x + rect.w) >= (want.x + want.w) && (rect.y + rect.h) >= (want.y + want.h);
       if (!covered) {
         
-        let cover = 0;
-        if (interacting) {
-          const ix = Math.max(0, Math.min(rect.x + rect.w, want.x + want.w) - Math.max(rect.x, want.x));
-          const iy = Math.max(0, Math.min(rect.y + rect.h, want.y + want.h) - Math.max(rect.y, want.y));
-          cover = (ix * iy) / Math.max(1, want.w * want.h);
-        }
-        if (cover < 0.7) {
-          
-          drop('stale-cover', !(App.autoStaticKeepOld() || App.autoStaticKeepStale()));
-          App.autoStaticSchedule();
-          return;
-        }
+        drop('stale-cover', !(App.autoStaticKeepOld() || App.autoStaticKeepStale()));
+        App.autoStaticSchedule();
+        return;
       }
       if (!(bit.f > 0) || bit.f < App.autoStaticNeedF() * 0.8) {
-        
-        if (!interacting) {
-          drop('stale-quality', !(App.autoStaticKeepOld() || App.autoStaticKeepStale()));
-          App.autoStaticSchedule(80);
-          return;
-        }
+        drop('stale-quality', !(App.autoStaticKeepOld() || App.autoStaticKeepStale()));
+        App.autoStaticSchedule(80);
+        return;
       }
       if (typeof bit.f === 'number' && bit.f > 0) rect._f = bit.f;
       bit._view = rect;
@@ -1759,8 +1649,8 @@ App.autoStaticRebake = function () {
         if (token === App.autoStatic.token) {
           
           App.autoStatic.contentRevision = contentRevision;
+          App.autoStatic.colorRev = App._colorRev || 0;
           App.autoStatic.baking = false;
-          App.autoStaticCachePut(bit, rect);
           App.renderPerfCounters.autoBakeInstalls++;
           App.traceRenderTask('autoStatic', 'install', {
             docId: docId, contentRevision: contentRevision, viewRevision: viewRevision,
@@ -1795,10 +1685,18 @@ App.autoStaticSchedule = function (delay) {
     App.autoStaticRebake();
   }, typeof delay === 'number' ? delay
      
-     : (App.autoStaticBitCache && App.autoStaticBitCache.size ? 120 : 280));
+     : 280);
 };
 App.autoStaticMaybe = function () {
   if (!App.autoStaticEnabled) return;
+  
+  if (App.autoStatic.baking && App.autoStatic.bakingSince &&
+      performance.now() - App.autoStatic.bakingSince > 4000) {
+    console.warn('[bake] baking 卡死 4s，强制复位');
+    App.autoStatic.baking = false;
+    App.autoStatic.bakingToken = 0;
+    App.autoStatic.bakingSince = 0;
+  }
   const nowTs = Date.now();
   const gap = nowTs - (App.autoStaticLastCheck || 0);
   if (gap < 60) {
@@ -1820,6 +1718,8 @@ App.autoStaticMaybe = function () {
   if (!App.autoStaticEligible()) { if (App.autoStatic.active) App.autoStaticRelease(); return; }
   if (!App.autoStatic.active || !App.autoStatic.view) { App.autoStaticRebake(); return; }
   
+  if (App.autoStatic.colorRev !== (App._colorRev || 0)) { App.autoStaticSchedule(0); return; }
+  
   const v = App.autoStatic.view;
   
   const pad = (v && v._pad !== undefined) ? v._pad : 0.5;
@@ -1827,6 +1727,12 @@ App.autoStaticMaybe = function () {
   const covered = v.x <= rect.x && v.y <= rect.y && (v.x + v.w) >= (rect.x + rect.w) && (v.y + v.h) >= (rect.y + rect.h);
   const enoughRes = !!(v._f && v._f >= App.autoStaticNeedF() * 0.8);
   if (covered && enoughRes) return;
+  if (!covered && App.autoStatic.active) {
+    
+    App.autoStaticRelease();
+    App.autoStaticSchedule(0);
+    return;
+  }
   App.autoStaticSchedule();
 };
 
@@ -1842,9 +1748,6 @@ App.invalidateEditStatic = function () {
 App.contentChanged = function (options) {
   if (App.state.batching) return;   
   App.contentRevision = (App.contentRevision || 0) + 1;
-  
-  if (App.autoStaticCacheClear) App.autoStaticCacheClear();
-  if (App.autoStaticParkClear) App.autoStaticParkClear();
   
   App._lodQueue = null;
   App._lodDirty = true;
