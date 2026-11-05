@@ -785,33 +785,8 @@ App.handleFiles = function (files) {
 App.SKEW_MODEL_VERSION = 2;
 
 App.SKEW_LOGIC_SINCE = 1793298600000;   
+
 App.migrateWorkCopyModel = function (data, writtenAtMs) {
-  if (!data || data.type !== 'sve-work-copy') return data;
-  if ((Number(data.version) || 1) >= App.SKEW_MODEL_VERSION) return data;
-  
-  if (isFinite(writtenAtMs) && writtenAtMs >= App.SKEW_LOGIC_SINCE) {
-    console.warn('[io] 这份工作进程是「新倾斜口径 + 旧版本号」写出来的（' +
-      new Date(writtenAtMs).toLocaleString() + '），只补版本标记、不做换算');
-    data.version = App.SKEW_MODEL_VERSION;
-    return data;
-  }
-  const fix = it => {
-    if (!it) return;
-    const sk = Number(it.skew) || 0;
-    if (sk) {
-      const sxf = (it.flipH ? -1 : 1) * (Number(it.sx) || 1);
-      const syf = (it.flipV ? -1 : 1) * (Number(it.sy) || 1);
-      
-      if (Math.abs(sxf) > 1e-9 && Math.abs(syf) > 1e-9) {
-        const t = Math.tan(sk * D2R) * sxf / syf;
-        it.skew = App.FZA.normalizeSkew(Math.atan(t) / D2R);
-      }
-    }
-    if (it.children) it.children.forEach(fix);
-  };
-  (data.layers || []).forEach(fix);
-  if (data.bg) fix(data.bg);
-  data.version = App.SKEW_MODEL_VERSION;
   return data;
 };
 
@@ -831,7 +806,8 @@ App.buildWorkCopyData = function (layers, b, stateData, histColors) {
   stateData = stateData || {};
   return {
     type: 'sve-work-copy',
-    version: App.SKEW_MODEL_VERSION,   
+    
+    version: App.skewMode === '132' ? 1 : App.SKEW_MODEL_VERSION,
     layers: layers || [],
     bg: b ? {
       dataUrl: b.dataUrl, x: b.x, y: b.y, w: b.w, h: b.h,
@@ -943,15 +919,24 @@ App.openWorkCopyByName = async function (name) {
 };
 
 
-App.openWorkCopyContent = function (content, name, source, mtimeMs) {
+
+App.openWorkCopyContent = function (content, name, source, mtimeMs, opts) {
+  opts = opts || {};
   let data;
   try { data = JSON.parse(content); }
   catch (e) { showToast(App.i18n.t('toast.io.workBroken')); return; }
   if (!data || data.type !== 'sve-work-copy') { showToast(App.i18n.t('toast.io.notWorkFile')); return; }
   if (App.state.edit) App.exitEdit(false);
+  
+  const mode = opts.legacy ? '132' : 'v2';
+  if (App.SkewMode) App.SkewMode.set(mode); else App.skewMode = mode;
   App.restoreWorkCopy(data, mtimeMs);
   App.recordWorkSource(source || null);
   showToast(App.i18n.tf('toast.io.workOpened', { v: name }));
+  if (App.LegacyHint) {
+    if (opts.silentHint) App.LegacyHint.hide();
+    else App.LegacyHint.maybeShow({ content: content, name: name, source: source, mtimeMs: mtimeMs });
+  }
 };
 
 

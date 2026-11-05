@@ -325,6 +325,8 @@ App.Tabs = {
     
     const d = { id: 'doc' + (this.nextId++), label: opts.label || null, bg: null, historyU: [], historyR: [], svgSource: opts.svgSource || null, workSource: null, dirty: false,
       
+      skewMode: 'v2',
+      
       contentRevision: 0 };
     if (this.current) this.captureDoc(this.current);
     this.docs.push(d);
@@ -365,6 +367,8 @@ App.Tabs = {
     
     this.prewarmDocThumb(d);
     d.bg = b;
+    
+    d.skewMode = App.skewMode === '132' ? '132' : 'v2';
     d.historyU = App.history.undoStack;
     d.historyR = App.history.redoStack;
   },
@@ -389,6 +393,8 @@ App.Tabs = {
 
   
   loadDoc(d) {
+    
+    App.skewMode = (d && d.skewMode === '132') ? '132' : 'v2';
     
     if (App.speedEditor) App.speedEditor.cancel();
     
@@ -631,10 +637,13 @@ App.Tabs = {
     if (App.Home) App.Home.hide();
     return d;
   },
-  prodNewWork(content, name, source) {
+  
+  prodNewWork(content, name, source, mode) {
     const label = String(name || App.i18n.t('name.workcopy')).replace(/\.svework$/i, '') || App.i18n.t('name.workcopy');
     const d = this.addDoc({ silent: true, label });
-    App.openWorkCopyContent(content, name, source);
+    const legacy = mode === '132';
+    if (legacy) App.SkewMode.set('132');
+    App.openWorkCopyContent(content, name, source, undefined, legacy ? { legacy: true, silentHint: true } : undefined);
     this.setLabel(label);
     if (App.Home) App.Home.hide();
     return d;

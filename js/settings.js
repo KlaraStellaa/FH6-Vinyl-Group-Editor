@@ -9,6 +9,8 @@ App.settings = {
   customTheme: null,
   
   helpHintAck: false,
+  
+  legacyHintAck: false,
   themeOf(id) { return App.theme.presetOf(id) || (id === App.theme.CUSTOM_ID ? { id: id, scheme: App.theme.schemeOf((this.customTheme || {}).bg || '#F8FAFD') } : null); },
   
   applyTheme(id, seeds) {
@@ -348,6 +350,8 @@ App.settings = {
       if (App.fonts) App.fonts.load(s);
       
       if (s.helpHintAck === true) this.helpHintAck = true;
+      
+      if (s.legacyHintAck === true) this.legacyHintAck = true;
     } catch (e) {  }
     
     try {
@@ -436,6 +440,8 @@ App.settings = {
       favorites: App.Favorites ? App.Favorites.payload() : [],
       
       helpHintAck: this.helpHintAck === true,
+      
+      legacyHintAck: this.legacyHintAck === true,
       
       font: App.fonts ? App.fonts.payload() : undefined
     };

@@ -46,11 +46,23 @@ App.FZA.skewTan = function (deg) {
 };
 
 
+App.FZA.isLegacySkew = function () { return App.skewMode === '132'; };
+
+
 App.FZA.layerMatrix = function (l) {
   const sxf = (l.flipH ? -1 : 1) * (l.sx || 1);
   const syf = (l.flipV ? -1 : 1) * (l.sy || 1);
   const t = App.FZA.skewTan(l.skew);
   const a0 = Math.cos((l.rot || 0) * D2R), b0 = Math.sin((l.rot || 0) * D2R);
+  if (App.skewMode === '132') {
+    
+    return {
+      a: a0 * sxf,
+      b: b0 * sxf,
+      c: sxf * a0 * t - syf * b0,
+      d: sxf * b0 * t + syf * a0
+    };
+  }
   return {
     a: a0 * sxf,
     b: b0 * sxf,
@@ -113,7 +125,9 @@ App.FZA.decomposeToModel = function (M) {
   const rr = rot * D2R;
   const ca = Math.cos(rr), sa = Math.sin(rr);
   const sy = -c * sa + d * ca;
-  const t = Math.abs(sy) > 1e-9 ? (c * ca + d * sa) / sy : 0;
+  
+  const den = App.skewMode === '132' ? (a * ca + b * sa) : sy;
+  const t = Math.abs(den) > 1e-9 ? (c * ca + d * sa) / den : 0;
   
   const skew = App.FZA.normalizeSkew(Math.atan(t) * 180 / Math.PI);
   return { rot, sx, sy, skew };
@@ -127,7 +141,16 @@ App.FZA.modelToFzaMatrix = function (l) {
   const t = App.FZA.skewTan(l.skew);
   
   const a0 = Math.cos((l.rot || 0) * D2R), b0 = Math.sin((l.rot || 0) * D2R);
-  const a = a0 * sx, b = b0 * sx, c = sy * (a0 * t - b0), d = sy * (b0 * t + a0);
+  let a, b, c, d;
+  if (App.skewMode === '132') {
+    a = a0 * sx; b = b0 * sx;
+    c = sx * a0 * t - sy * b0;
+    d = sx * b0 * t + sy * a0;
+  } else {
+    a = a0 * sx; b = b0 * sx;
+    c = sy * (a0 * t - b0);
+    d = sy * (b0 * t + a0);
+  }
   
   const sxF = Math.hypot(a, b);
   const rotF = Math.atan2(-b, a);

@@ -322,6 +322,14 @@ App.Home = {
       
       card.addEventListener('click', () => this.selectItem(it));
       card.addEventListener('dblclick', () => this.openItem(it));
+      
+      if (it.type === 'workcopy') {
+        card.addEventListener('contextmenu', e => {
+          e.preventDefault();
+          this.selectItem(it);
+          this.openWorkLegacy(it);
+        });
+      }
       frag.appendChild(card);
     });
     grid.appendChild(frag);
@@ -474,6 +482,24 @@ App.Home = {
     return App.buildSvgFromWorkCopy(name);
   },
 
+  
+  async openWorkLegacy(it) {
+    if (!it || it.type !== 'workcopy') return;
+    const ok = await fzaConfirm(
+      App.i18n.t('legacy.confirm.title'),
+      App.i18n.t('legacy.confirm.msg'),
+      App.i18n.t('legacy.confirm.ok')
+    );
+    if (!ok) return;
+    const r = await window.sveApi.fileRead('workcopy', it.name);
+    if (!r.ok) { showToast(App.i18n.tf('toast.home.openWorkFail', { v: (r.error || '') })); return; }
+    const prod = !!(App.Tabs && !App.Tabs.testMode);
+    if (prod) { App.Tabs.prodNewWork(r.content, r.name, r.source, '132'); return; }
+    App.SkewMode.set('132');
+    App.openWorkCopyContent(r.content, r.name, r.source, r.mtimeMs, { legacy: true, silentHint: true });
+    this.hide();
+  },
+
   async openItem(it) {
     this.clearSelect();
     const prod = !!(App.Tabs && !App.Tabs.testMode);
@@ -538,10 +564,11 @@ App.buildSvgFromWorkCopy = async function (name) {
   try { data = JSON.parse(r.content); }
   catch (e) { console.warn('[home] 工作进程内容解析失败', String(e && e.message || e).slice(0, 160)); return null; }
   if (!data || data.type !== 'sve-work-copy') return null;
-  
-  App.migrateWorkCopyModel(data, r.mtimeMs);
   const T = App.Tabs;
   let prevSilent = false;
+  
+  const prevMode = App.skewMode;
+  App.skewMode = 'v2';
   try {
     if (T) { prevSilent = !!T._silentRender; T._silentRender = true; }  
     App._workCopyRenderSeq = (App._workCopyRenderSeq || 0) + 1;
@@ -552,6 +579,7 @@ App.buildSvgFromWorkCopy = async function (name) {
     return null;
   } finally {
     if (T) T._silentRender = prevSilent;
+    App.skewMode = prevMode;
   }
 };
 
@@ -563,10 +591,11 @@ App.buildSvgFromAnchor = async function (name) {
   try { data = JSON.parse(r.content); }
   catch (e) { console.warn('[anchor] 锚点内容解析失败', String(e && e.message || e).slice(0, 160)); return null; }
   if (!data || data.type !== 'sve-work-copy') return null;
-  
-  App.migrateWorkCopyModel(data, r.mtimeMs);
   const T = App.Tabs;
   let prevSilent = false;
+  
+  const prevMode = App.skewMode;
+  App.skewMode = 'v2';
   try {
     if (T) { prevSilent = !!T._silentRender; T._silentRender = true; }  
     App._workCopyRenderSeq = (App._workCopyRenderSeq || 0) + 1;
@@ -577,6 +606,7 @@ App.buildSvgFromAnchor = async function (name) {
     return null;
   } finally {
     if (T) T._silentRender = prevSilent;
+    App.skewMode = prevMode;
   }
 };
 

@@ -318,8 +318,10 @@ App.applyBgTransform = function (m) {
   if (!m.el) return;
   const sfx = m.flipH ? -1 : 1, sfy = m.flipV ? -1 : 1;
   
-  m.el.setAttribute('transform',
-    'translate(' + m.x + ' ' + m.y + ') rotate(' + m.rot + ') skewX(' + m.skew + ') scale(' + (m.sx * sfx) + ' ' + (m.sy * sfy) + ')');
+  const head = 'translate(' + m.x + ' ' + m.y + ') rotate(' + m.rot + ') ';
+  const sc = 'scale(' + (m.sx * sfx) + ' ' + (m.sy * sfy) + ')';
+  const sk = 'skewX(' + m.skew + ')';
+  m.el.setAttribute('transform', head + (App.skewMode === '132' ? sc + ' ' + sk : sk + ' ' + sc));
   m.el.setAttribute('opacity', m.opacity);
   m.el.setAttribute('pointer-events', App.state.edit && App.state.edit.type === 'bg' && App.state.editMode === 'move' ? 'all' : 'none');
 };
@@ -368,8 +370,9 @@ App.sampleBackgroundColor = function (clientX, clientY) {
   cx.translate(m.x, m.y);
   
   cx.rotate(m.rot * D2R);
-  cx.transform(1, 0, Math.tan(m.skew * D2R), 1, 0, 0);
-  cx.scale(m.sx * (m.flipH ? -1 : 1), m.sy * (m.flipV ? -1 : 1));
+  const _sk = () => cx.transform(1, 0, Math.tan(m.skew * D2R), 1, 0, 0);
+  const _sc = () => cx.scale(m.sx * (m.flipH ? -1 : 1), m.sy * (m.flipV ? -1 : 1));
+  if (App.skewMode === '132') { _sc(); _sk(); } else { _sk(); _sc(); }
   cx.drawImage(m.imgEl, -m.w / 2, -m.h / 2, m.w, m.h);
   const px = clamp(Math.round(clientX - r.left), 0, w - 1);
   const py = clamp(Math.round(clientY - r.top), 0, h - 1);

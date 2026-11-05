@@ -429,8 +429,11 @@ App.ensurePatternDef = function (layer) {
 App.applyLayerTransform = function (layer) {
   if (!layer.el) return;
   const sfx = layer.flipH ? -1 : 1, sfy = layer.flipV ? -1 : 1;
-  layer.el.setAttribute('transform',
-    'translate(' + layer.x + ' ' + layer.y + ') rotate(' + layer.rot + ') skewX(' + layer.skew + ') scale(' + (layer.sx * sfx) + ' ' + (layer.sy * sfy) + ')');
+  
+  const head = 'translate(' + layer.x + ' ' + layer.y + ') rotate(' + layer.rot + ') ';
+  const sc = 'scale(' + (layer.sx * sfx) + ' ' + (layer.sy * sfy) + ')';
+  const sk = 'skewX(' + layer.skew + ')';
+  layer.el.setAttribute('transform', head + (App.skewMode === '132' ? sc + ' ' + sk : sk + ' ' + sc));
   layer.el.setAttribute('opacity', layer.opacity);
   if (layer.kind !== 'bg') layer.thumbDirty = true;
 };

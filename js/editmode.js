@@ -544,22 +544,18 @@ function groupCenter(items) {
 }
 
 
+
 function layerDocMatrix(it) {
-  const sxf = (it.flipH ? -1 : 1) * (it.sx || 1);
-  const syf = (it.flipV ? -1 : 1) * (it.sy || 1);
-  const t = Math.tan((it.skew || 0) * D2R);
-  const a0 = Math.cos((it.rot || 0) * D2R), b0 = Math.sin((it.rot || 0) * D2R);
-  return {
-    a: a0 * sxf, b: b0 * sxf,
-    c: syf * (a0 * t - b0), d: syf * (b0 * t + a0),
-    e: it.x, f: it.y
-  };
+  const m = App.FZA.layerMatrix(it);
+  return { a: m.a, b: m.b, c: m.c, d: m.d, e: it.x, f: it.y };
 }
 
 function groupMatrix(g, C) {
-  return App.FZA.matFromString('translate(' + C.x + ' ' + C.y + ') rotate(' + (g.rot || 0) +
-    ') skewX(' + (g.skew || 0) + ') scale(' + (g.sx || 1) + ' ' + (g.sy || 1) +
-    ') translate(' + (-C.x) + ' ' + (-C.y) + ')');
+  const sc = 'scale(' + (g.sx || 1) + ' ' + (g.sy || 1) + ')';
+  const sk = 'skewX(' + (g.skew || 0) + ')';
+  return App.FZA.matFromString('translate(' + C.x + ' ' + C.y + ') rotate(' + (g.rot || 0) + ') ' +
+    (App.skewMode === '132' ? sc + ' ' + sk : sk + ' ' + sc) +
+    ' translate(' + (-C.x) + ' ' + (-C.y) + ')');
 }
 
 App.groupDecompose = function () {
@@ -1101,7 +1097,9 @@ App.applyEditSkew = function (dd) {
   }
   App.withTransformBatch(() => items.forEach(it => {
     
-    const _h = Math.max(1, App.localContentSize(it).h);
+    
+    const _sxf = App.skewMode === '132' ? Math.max(0.01, Math.abs(it.sx || 1)) : 1;
+    const _h = Math.max(1, App.localContentSize(it).h) * _sxf;
     const _th = it.skew * D2R;
     const _t0 = Math.tan(_th);
     const _t1 = _t0 + (128 / _h) * (Math.tan(_th + dd * D2R) - _t0);

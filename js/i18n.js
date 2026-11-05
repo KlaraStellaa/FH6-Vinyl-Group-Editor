@@ -5,6 +5,12 @@ App.i18n = {
   dicts: {
     'zh-CN': {
       
+      'legacy.title': '读取图案出现问题？点更改切换旧版读取机制',
+      'legacy.sub': '可以在主页中鼠标右键点击工作进程更改该工作进程的读取规则',
+      'legacy.change': '更改', 'legacy.noPrompt': '不再提示', 'legacy.close': '关闭',
+      'legacy.confirm.title': '读取规则', 'legacy.confirm.msg': '确定使用1.3.2版本的读取规则吗？', 'legacy.confirm.ok': '确定',
+      'refwin.close': '关闭参考窗',
+      
       'home.sort.recent': '最近使用', 'home.sort.name': '名称', 'home.sort.size': '大小',
       'tab.home': '主页', 'tab.new': '新建文档', 'tab.settings': '设置',
       'edit.finish': '完成',
@@ -67,7 +73,7 @@ App.i18n = {
       'toolbar.baseLight': '背景：灰白', 'toolbar.baseDark': '背景：灰黑',
       'toolbar.gridOn': '网格：开', 'toolbar.gridOff': '网格：关',
       'toolbar.zoomOn': '滚轮缩放：开', 'toolbar.zoomOff': '滚轮缩放：关',
-      'toolbar.openImage': '打开背景图片文件', 'toolbar.bgNone': '背景图片：未设置',
+      'toolbar.openImage': '打开背景图片文件', 'toolbar.refWin': '打开悬浮窗参考图', 'toolbar.bgNone': '背景图片：未设置',
       'toolbar.bgSet': '背景图片：已设置', 'toolbar.shortcuts': '快捷键', 'toolbar.shortcutsAria': '查看快捷键', 'toolbar.tip': 'QuQ',
       
       'edit.mode.move': '移动', 'edit.mode.size': '大小', 'edit.mode.rotate': '旋转',
@@ -114,6 +120,12 @@ App.i18n = {
       'loading.lib': '正在加载图案库…'
     },
     'zh-TW': {
+      
+      'legacy.title': '讀取圖案出現問題？點更改切換舊版讀取機制',
+      'legacy.sub': '可以在主頁中滑鼠右鍵點擊工作進程更改該工作進程的讀取規則',
+      'legacy.change': '更改', 'legacy.noPrompt': '不再提示', 'legacy.close': '關閉',
+      'legacy.confirm.title': '讀取規則', 'legacy.confirm.msg': '確定使用 1.3.2 版本的讀取規則嗎？', 'legacy.confirm.ok': '確定',
+      'refwin.close': '關閉參考窗',
       'home.sort.recent': '最近使用', 'home.sort.name': '名稱', 'home.sort.size': '大小',
       'tab.home': '主頁', 'tab.new': '新建文件', 'tab.settings': '設定',
       'edit.finish': '完成',
@@ -171,7 +183,7 @@ App.i18n = {
       'toolbar.baseLight': '背景：灰白', 'toolbar.baseDark': '背景：灰黑',
       'toolbar.gridOn': '網格：開', 'toolbar.gridOff': '網格：關',
       'toolbar.zoomOn': '滾輪縮放：開', 'toolbar.zoomOff': '滾輪縮放：關',
-      'toolbar.openImage': '開啟背景圖片檔案', 'toolbar.bgNone': '背景圖片：未設定',
+      'toolbar.openImage': '開啟背景圖片檔案', 'toolbar.refWin': '開啟懸浮窗參考圖', 'toolbar.bgNone': '背景圖片：未設定',
       'toolbar.bgSet': '背景圖片：已設定', 'toolbar.shortcuts': '快速鍵', 'toolbar.shortcutsAria': '檢視快速鍵', 'toolbar.tip': 'QuQ',
       'edit.mode.move': '移動', 'edit.mode.size': '大小', 'edit.mode.rotate': '旋轉',
       'edit.mode.skew': '傾斜', 'edit.mode.opacity': '透明度',
@@ -210,6 +222,12 @@ App.i18n = {
       'loading.lib': '正在載入圖案庫…'
     },
     'en': {
+      
+      'legacy.title': 'Pattern looks wrong? Click Change to switch to the legacy reading rule',
+      'legacy.sub': 'You can also right-click a work copy on the home page to change its reading rule',
+      'legacy.change': 'Change', 'legacy.noPrompt': "Don't show again", 'legacy.close': 'Close',
+      'legacy.confirm.title': 'Reading rule', 'legacy.confirm.msg': 'Use the 1.3.2 reading rule for this work copy?', 'legacy.confirm.ok': 'OK',
+      'refwin.close': 'Close reference window',
       'home.sort.recent': 'Recent', 'home.sort.name': 'Name', 'home.sort.size': 'Size',
       'tab.home': 'Home', 'tab.new': 'New document', 'tab.settings': 'Settings',
       'edit.finish': 'Finish',
@@ -267,7 +285,7 @@ App.i18n = {
       'toolbar.baseLight': 'Background: light gray', 'toolbar.baseDark': 'Background: dark gray',
       'toolbar.gridOn': 'Grid: on', 'toolbar.gridOff': 'Grid: off',
       'toolbar.zoomOn': 'Wheel zoom: on', 'toolbar.zoomOff': 'Wheel zoom: off',
-      'toolbar.openImage': 'Open background image', 'toolbar.bgNone': 'Background: none',
+      'toolbar.openImage': 'Open background image', 'toolbar.refWin': 'Open reference window', 'toolbar.bgNone': 'Background: none',
       'toolbar.bgSet': 'Background: set', 'toolbar.shortcuts': 'Shortcuts', 'toolbar.shortcutsAria': 'View shortcuts', 'toolbar.tip': 'QuQ',
       'edit.mode.move': 'Move', 'edit.mode.size': 'Size', 'edit.mode.rotate': 'Rotate',
       'edit.mode.skew': 'Skew', 'edit.mode.opacity': 'Opacity',
@@ -307,6 +325,12 @@ App.i18n = {
       'loading.lib': 'Loading shape library…'
     },
     'ja': {
+      
+      'legacy.title': '図形が正しく表示されない場合は「変更」で旧読み込み方式に切り替え',
+      'legacy.sub': 'ホーム画面でワークコピーを右クリックしても読み込み方式を変更できます',
+      'legacy.change': '変更', 'legacy.noPrompt': '今後表示しない', 'legacy.close': '閉じる',
+      'legacy.confirm.title': '読み込み方式', 'legacy.confirm.msg': 'このワークコピーを 1.3.2 の読み込み方式で開きますか？', 'legacy.confirm.ok': 'OK',
+      'refwin.close': '参照ウィンドウを閉じる',
       'home.sort.recent': '最近', 'home.sort.name': '名前', 'home.sort.size': 'サイズ',
       'tab.home': 'ホーム', 'tab.new': '新規ドキュメント', 'tab.settings': '設定',
       'edit.finish': '完了',
@@ -364,7 +388,7 @@ App.i18n = {
       'toolbar.baseLight': '背景：ライトグレー', 'toolbar.baseDark': '背景：ダークグレー',
       'toolbar.gridOn': 'グリッド：オン', 'toolbar.gridOff': 'グリッド：オフ',
       'toolbar.zoomOn': 'ホイール拡大：オン', 'toolbar.zoomOff': 'ホイール拡大：オフ',
-      'toolbar.openImage': '背景画像を開く', 'toolbar.bgNone': '背景画像：未設定',
+      'toolbar.openImage': '背景画像を開く', 'toolbar.refWin': '参照ウィンドウを開く', 'toolbar.bgNone': '背景画像：未設定',
       'toolbar.bgSet': '背景画像：設定済み', 'toolbar.shortcuts': 'ショートカット', 'toolbar.shortcutsAria': 'ショートカットを表示', 'toolbar.tip': 'QuQ',
       'edit.mode.move': '移動', 'edit.mode.size': 'サイズ', 'edit.mode.rotate': '回転',
       'edit.mode.skew': '傾き', 'edit.mode.opacity': '不透明度',
@@ -404,6 +428,12 @@ App.i18n = {
       'loading.lib': '図形ライブラリを読み込み中…'
     },
     'ko': {
+      
+      'legacy.title': '패턴이 잘못 보이나요? 변경을 눌러 이전 읽기 방식으로 전환하세요',
+      'legacy.sub': '홈에서 작업 복사본을 마우스 오른쪽 버튼으로 클릭해 읽기 규칙을 변경할 수 있습니다',
+      'legacy.change': '변경', 'legacy.noPrompt': '다시 표시 안 함', 'legacy.close': '닫기',
+      'legacy.confirm.title': '읽기 규칙', 'legacy.confirm.msg': '이 작업 복사본을 1.3.2 읽기 규칙으로 여시겠습니까?', 'legacy.confirm.ok': '확인',
+      'refwin.close': '참조 창 닫기',
       'home.sort.recent': '최근', 'home.sort.name': '이름', 'home.sort.size': '크기',
       'tab.home': '홈', 'tab.new': '새 문서', 'tab.settings': '설정',
       'edit.finish': '완료',
@@ -461,7 +491,7 @@ App.i18n = {
       'toolbar.baseLight': '배경: 밝은 회색', 'toolbar.baseDark': '배경: 어두운 회색',
       'toolbar.gridOn': '격자: 켜짐', 'toolbar.gridOff': '격자: 꺼짐',
       'toolbar.zoomOn': '휠 확대: 켜짐', 'toolbar.zoomOff': '휠 확대: 꺼짐',
-      'toolbar.openImage': '배경 이미지 열기', 'toolbar.bgNone': '배경 이미지: 없음',
+      'toolbar.openImage': '배경 이미지 열기', 'toolbar.refWin': '참조 창 열기', 'toolbar.bgNone': '배경 이미지: 없음',
       'toolbar.bgSet': '배경 이미지: 설정됨', 'toolbar.shortcuts': '단축키', 'toolbar.shortcutsAria': '단축키 보기', 'toolbar.tip': 'QuQ',
       'edit.mode.move': '이동', 'edit.mode.size': '크기', 'edit.mode.rotate': '회전',
       'edit.mode.skew': '기울기', 'edit.mode.opacity': '불투명도',

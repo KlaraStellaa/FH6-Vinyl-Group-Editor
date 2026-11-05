@@ -2836,9 +2836,12 @@ function fitDrawRect(img, size) {
 }
 
 function tfPoint(x, y, f) {
+  const sx = f.sx * (f.flipH ? -1 : 1);
   const sy = f.sy * (f.flipV ? -1 : 1);
   const py0 = y * sy;
-  const px = x * (f.sx * (f.flipH ? -1 : 1)) + Math.tan(f.skew * D2R) * py0;
+  const t = Math.tan(f.skew * D2R);
+  
+  const px = App.skewMode === '132' ? (x + t * y) * sx : x * sx + t * py0;
   const a = f.rot * D2R, c = Math.cos(a), s = Math.sin(a);
   return [px * c - py0 * s, px * s + py0 * c];
 }
@@ -2850,8 +2853,10 @@ App.computeLocalBBox = function (layer) {
     const hw = (l.w || 0) / 2, hh = (l.h || 0) / 2;
     [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].forEach(p => {
       
+      const sx = l.sx * (l.flipH ? -1 : 1);
       const py = p[1] * (l.sy * (l.flipV ? -1 : 1));
-      const px = p[0] * (l.sx * (l.flipH ? -1 : 1)) + Math.tan(l.skew * D2R) * py;
+      const tt = Math.tan(l.skew * D2R);
+      const px = App.skewMode === '132' ? (p[0] + tt * p[1]) * sx : p[0] * sx + tt * py;
       const a = l.rot * D2R, c = Math.cos(a), s = Math.sin(a);
       const rx = px * c - py * s, ry = px * s + py * c;
       minx = Math.min(minx, rx + l.x); maxx = Math.max(maxx, rx + l.x);
@@ -2882,8 +2887,9 @@ App.renderTransformedThumb = function (base, rect, f) {
   cx.scale(s, s);
   cx.rotate(f.rot * D2R);
   
-  cx.transform(1, 0, Math.tan(f.skew * D2R), 1, 0, 0);
-  cx.scale(f.sx * (f.flipH ? -1 : 1), f.sy * (f.flipV ? -1 : 1));
+  const _sk = () => cx.transform(1, 0, Math.tan(f.skew * D2R), 1, 0, 0);
+  const _sc = () => cx.scale(f.sx * (f.flipH ? -1 : 1), f.sy * (f.flipV ? -1 : 1));
+  if (App.skewMode === '132') { _sc(); _sk(); } else { _sk(); _sc(); }
   cx.drawImage(base, -(rect.x + rect.w / 2), -(rect.y + rect.h / 2));
   return c;
 };
@@ -3229,8 +3235,12 @@ App.mergedThumbGeometry = function (layer) {
   const modelMatrix = function (l) {
     const sx = (Number.isFinite(Number(l.sx)) ? Number(l.sx) : 1) * (l.flipH ? -1 : 1);
     const sy = (Number.isFinite(Number(l.sy)) ? Number(l.sy) : 1) * (l.flipV ? -1 : 1);
-    return new DOMMatrix().translate(Number(l.x) || 0, Number(l.y) || 0)
-      .rotate(Number(l.rot) || 0).skewX(Number(l.skew) || 0).scale(sx, sy);
+    const base = new DOMMatrix().translate(Number(l.x) || 0, Number(l.y) || 0)
+      .rotate(Number(l.rot) || 0);
+    
+    return App.skewMode === '132'
+      ? base.scale(sx, sy).skewX(Number(l.skew) || 0)
+      : base.skewX(Number(l.skew) || 0).scale(sx, sy);
   };
   (function walk(l, parent, isRoot) {
     if (!l) return;
@@ -3357,7 +3367,10 @@ App.svgRasterThumb = async function (layer, size) {
     if (!isFinite(w) || !isFinite(h) || w <= 0 || h <= 0) return Promise.resolve('');
     const pad = Math.max(w, h) * 0.05;
     const sfx = f.flipH ? -1 : 1, sfy = f.flipV ? -1 : 1;
-    clone.setAttribute('transform', 'rotate(' + f.rot + ') skewX(' + f.skew + ') scale(' + (f.sx * sfx) + ' ' + (f.sy * sfy) + ')');
+    clone.setAttribute('transform', 'rotate(' + f.rot + ') ' +
+      (App.skewMode === '132'
+        ? 'scale(' + (f.sx * sfx) + ' ' + (f.sy * sfy) + ') skewX(' + f.skew + ')'
+        : 'skewX(' + f.skew + ') scale(' + (f.sx * sfx) + ' ' + (f.sy * sfy) + ')'));
     const host = svgEl('svg');
     host.setAttribute('viewBox', (minx - pad) + ' ' + (miny - pad) + ' ' + (w + 2 * pad) + ' ' + (h + 2 * pad));
     
