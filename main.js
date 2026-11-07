@@ -543,7 +543,7 @@ function dropWorkcopyThumbs(names) {
 }
 
 
-const LOG_MAX = 3000;
+const LOG_MAX = 12000;
 const logBuf = [];
 let logSavedPath = null;
 
@@ -589,11 +589,93 @@ function fmtLogTime(d) {
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
     p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + '.' + String(d.getMilliseconds()).padStart(3, '0');
 }
+
+const AUTOLOG_MAX_BYTES = 3 * 1024 * 1024;  
+const AUTOLOG_KEEP = 2;                     
+const AUTOLOG_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const AUTOLOG_FLUSH_MS = 400;
+const AUTOLOG_FLUSH_LINES = 32;
+let autoLogReady = false;
+let autoLogPath = null;
+let autoPending = [];
+let autoFlushTimer = null;
+function autoLogEnabled() {
+  try {
+    const s = JSON.parse(fs.readFileSync(settingsPath(), 'utf8'));
+    return !(s && s.diag && s.diag.autoWrite === false);
+  } catch (e) { return true; }   
+}
+function autoLogDay() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+function autoLogFileFor(day, idx) {
+  return path.join(logDirPath(), 'session-' + day + (idx ? '-' + idx : '') + '.log');
+}
+function rotateAutoLog(fp) {
+  try {
+    if (!fs.existsSync(fp) || fs.statSync(fp).size < AUTOLOG_MAX_BYTES) return;
+    const day = autoLogDay();
+    for (let i = AUTOLOG_KEEP - 1; i >= 1; i--) {
+      const src = autoLogFileFor(day, i), dst = autoLogFileFor(day, i + 1);
+      try {
+        if (fs.existsSync(src)) {
+          if (fs.existsSync(dst)) fs.unlinkSync(dst);
+          fs.renameSync(src, dst);
+        }
+      } catch (e) {  }
+    }
+    const f1 = autoLogFileFor(day, 1);
+    if (fs.existsSync(f1)) fs.unlinkSync(f1);
+    fs.renameSync(fp, f1);
+  } catch (e) {  }
+}
+function cleanOldAutoLogs() {
+  try {
+    const dir = logDirPath();
+    const re = /^session-(\d{4})-(\d{2})-(\d{2})(?:-\d+)?\.log$/;
+    fs.readdirSync(dir).forEach(n => {
+      const m = re.exec(n);
+      if (!m) return;   
+      const t = new Date(+m[1], +m[2] - 1, +m[3]).getTime();
+      if (Date.now() - t > AUTOLOG_MAX_AGE_MS) {
+        try { fs.unlinkSync(path.join(dir, n)); } catch (e) {  }
+      }
+    });
+  } catch (e) {  }
+}
+
+function flushAutoLog() {
+  if (!autoLogReady || !autoPending.length) {
+    if (autoFlushTimer) { clearTimeout(autoFlushTimer); autoFlushTimer = null; }
+    return;
+  }
+  const lines = autoPending;
+  autoPending = [];
+  if (autoFlushTimer) { clearTimeout(autoFlushTimer); autoFlushTimer = null; }
+  if (!autoLogEnabled()) return;
+  try {
+    const fp = autoLogFileFor(autoLogDay(), 0);
+    rotateAutoLog(fp);
+    fs.appendFileSync(fp, lines.join('\n') + '\n', 'utf8');
+    autoLogPath = fp;
+  } catch (e) {  }
+}
+function queueAutoLog(line, urgent) {
+  if (!autoLogReady) return;
+  autoPending.push(line);
+  if (urgent || autoPending.length >= AUTOLOG_FLUSH_LINES) flushAutoLog();
+  else if (!autoFlushTimer) {
+    autoFlushTimer = setTimeout(() => { autoFlushTimer = null; flushAutoLog(); }, AUTOLOG_FLUSH_MS);
+  }
+}
 function appendLog(level, msg, data) {
   try {
     const line = '[' + fmtLogTime(new Date()) + '] [' + level + '] ' + msg + (data !== undefined ? ' | ' + JSON.stringify(data) : '');
     logBuf.push(line);
     if (logBuf.length > LOG_MAX) logBuf.splice(0, logBuf.length - LOG_MAX);
+    
+    queueAutoLog(line, level === 'error' || String(msg).indexOf('FLIP ') === 0);
   } catch (e) {  }
 }
 
@@ -808,6 +890,21 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  
+  try {
+    cleanOldAutoLogs();
+    autoLogReady = true;
+    if (autoLogEnabled() && logBuf.length) {
+      autoPending = logBuf.slice().concat(autoPending);
+      flushAutoLog();
+    }
+    appendLog('info', '会话开始', {
+      ver: app.getVersion(), platform: process.platform, pid: process.pid,
+      packaged: app.isPackaged,
+      exe: String(process.env.PORTABLE_EXECUTABLE_FILE || app.getPath('exe') || '').slice(-160),
+      autoLog: autoLogEnabled()
+    });
+  } catch (e) {  }
   
   try {
     require('./update-check').check({
@@ -1832,15 +1929,31 @@ app.whenReady().then(() => {
     const data = (entry && entry.data !== undefined) ? entry.data : undefined;
     appendLog(lv, msg, data);
   });
-  ipcMain.handle('sve-log-path', async () => ({ path: logSavedPath, buffered: logBuf.length }));
+  ipcMain.handle('sve-log-path', async () => ({
+    path: logSavedPath, buffered: logBuf.length,
+    auto: autoLogEnabled(), autoPath: autoLogPath || autoLogFileFor(autoLogDay(), 0)
+  }));
+  
   ipcMain.handle('sve-log-read', async (e, payload) => {
     try {
       const maxLen = Math.min(parseInt(payload && payload.maxLen, 10) || 200000, 500000);
-      const content = logBuf.join('\n');
-      return { ok: true, content: content.length > maxLen ? content.slice(-maxLen) : content };
+      const filter = (payload && payload.filter) ? String(payload.filter) : null;
+      const lines = filter
+        ? logBuf.filter(x => x.indexOf('"cat":"' + filter + '"') >= 0)
+        : logBuf;
+      const content = lines.join('\n');
+      return {
+        ok: true,
+        content: content.length > maxLen ? content.slice(-maxLen) : content,
+        total: lines.length, filtered: !!filter
+      };
     } catch (err) {
       return { ok: false, error: String(err) };
     }
+  });
+  ipcMain.handle('sve-log-flush', async () => {
+    flushAutoLog();
+    return { ok: true, path: autoLogPath, buffered: logBuf.length };
   });
   ipcMain.handle('sve-log-save', async () => saveLogFile());
   ipcMain.handle('sve-log-open', async () => {
@@ -1884,6 +1997,14 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+
+app.on('before-quit', () => {
+  try {
+    appendLog('info', '会话结束', { lines: logBuf.length });
+    flushAutoLog();
+  } catch (e) {  }
 });
 
 app.on('window-all-closed', () => {

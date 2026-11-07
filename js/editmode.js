@@ -119,18 +119,31 @@ App.editHist = {
       });
     }
     let patDirty = false;
+    
+    const __flipRestore = [];
     snap.forEach(s => {
       const l = App.findLayer(s.id);
       if (!l) return;
+      const __h0 = !!l.flipH, __v0 = !!l.flipV;
       
       if (s.pat && App.editPatternRestore(l, s.pat)) patDirty = true;
       l.x = s.x; l.y = s.y; l.sx = s.sx; l.sy = s.sy;
       l.rot = s.rot; l.skew = s.skew; l.opacity = s.opacity;
       l.flipH = !!s.flipH; l.flipV = !!s.flipV;
+      if (App.diag && App.diag.enabled && (__h0 !== !!s.flipH || __v0 !== !!s.flipV)) {
+        __flipRestore.push({
+          id: s.id,
+          from: (__h0 ? 'H' : '') + (__v0 ? 'V' : '') || 'none',
+          to: (s.flipH ? 'H' : '') + (s.flipV ? 'V' : '') || 'none'
+        });
+      }
       App.applyItemTransform(l);
       App.markThumbDirty(l);
       (s.colors || []).forEach(p => App.setLayerColor(p.c, p.color));
     });
+    if (App.diag && __flipRestore.length) {
+      App.diag.log('hist.restore', { trigger: 'undo', changed: __flipRestore });
+    }
     App.groupRebase(); 
     App.drawOutlines();
     App.updateEditValue();
@@ -246,6 +259,14 @@ App.enterEdit = function (spec) {
   if (App.autoStaticRelease) App.autoStaticRelease();
   
   if (App.beginEditStatic) App.beginEditStatic();
+  
+  if (App.diag) App.diag.log('enter', {
+    targets: App.diag.geoms(App.editTargets()),
+    grp: !!(App.editSession && App.editSession.grp),
+    grpInit: App.editSession && App.editSession.grp ? {
+      sx: App.diag.num(App.editSession.grp.sx), sy: App.diag.num(App.editSession.grp.sy)
+    } : null
+  });
 };
 App.editTargets2 = function (spec) {
   const old = App.state.edit;
@@ -258,8 +279,21 @@ App.editTargets2 = function (spec) {
 App.exitEdit = function (cancel) {
   if (!App.state.edit) return;
   
+  App.state.quickModDown = false;
+  App.state.quickClickOn = false;
+  App.state.quickModUsed = false;
+  
   App.clearAnchor();
   try { App.log('info', '退出编辑', { cancel: !!cancel, type: App.state.edit.type }); } catch (e) {  }
+  
+  if (App.diag) App.diag.log('exit', {
+    cancel: !!cancel,
+    targets: App.diag.geoms(App.editTargets()),
+    grp: App.editSession && App.editSession.grp ? {
+      sx: App.diag.num(App.editSession.grp.sx), sy: App.diag.num(App.editSession.grp.sy),
+      rot: App.diag.num(App.editSession.grp.rot), skew: App.diag.num(App.editSession.grp.skew)
+    } : null
+  });
   App.editHistStart = undefined; 
   
   if (App.cancelColorPreview) App.cancelColorPreview();
@@ -294,6 +328,13 @@ App.exitEdit = function (cancel) {
     App.refreshCount();
     App.refreshLayerThumbs();
     if (App.contentChanged) App.contentChanged();
+    
+    if (App.diag) App.diag.log('exit.cancel', {
+      restored: App.diag.flips(es.snapshot.map(s => s.it)),
+      wanted: es.snapshot.slice(0, App.diag.maxItems).map(s => ({
+        id: s.it && s.it.id, h: !!s.flipH, v: !!s.flipV
+      }))
+    });
     App.history.cancelTop();
     showToast(App.i18n.t('toast.edit.cancelled'));
   } else {
@@ -362,6 +403,8 @@ App.setEditMode = function (mode) {
   if (App.cancelColorPreview) App.cancelColorPreview();
   
   if (App.state.anchorPlacing && mode !== 'size' && mode !== 'rotate' && mode !== 'skew') App.cancelAnchorPlacing();
+  
+  App.state.quickClickOn = false;
   App.state.editMode = mode;
   App.updateEditBar();
   App.drawOutlines();
@@ -498,12 +541,27 @@ App.applyEditMove = function (dx, dy) {
 };
 
 App.applyScaleWithFlip = function (it, sx, sy) {
+  
+  const h0 = !!it.flipH, v0 = !!it.flipV;
+  const sxIn = App.diag ? App.diag.num(sx) : sx;
+  const syIn = App.diag ? App.diag.num(sy) : sy;
   if (sx < 0) { it.flipH = true; sx = -sx; }
   else if (sx > 0) { it.flipH = false; }
   if (sy < 0) { it.flipV = true; sy = -sy; }
   else if (sy > 0) { it.flipV = false; }
   it.sx = clamp(sx, 1e-6, 1e6);
   it.sy = clamp(sy, 1e-6, 1e6);
+  if (App.diag && App.diag.enabled && (h0 !== !!it.flipH || v0 !== !!it.flipV)) {
+    let src = '';
+    try { src = String((new Error().stack || '').split('\n')[2] || '').trim().slice(0, 160); } catch (e) {  }
+    App.diag.log('scale.sign', {
+      trigger: 'scale', src: src,
+      in: { sx: sxIn, sy: syIn },
+      from: { flipH: h0, flipV: v0 },
+      to: { flipH: !!it.flipH, flipV: !!it.flipV },
+      item: App.diag.geom(it)
+    });
+  }
 };
 
 
@@ -589,8 +647,28 @@ App.groupTransformApply = function (upd) {
   if (!es || !es.grp) return false;
   const items = App.editTargets();
   if (items.length < 2) return false;
+  
+  const s0 = App.diag ? {
+    sx: App.diag.num(es.grp.sx), sy: App.diag.num(es.grp.sy),
+    rot: App.diag.num(es.grp.rot), skew: App.diag.num(es.grp.skew)
+  } : null;
+  const lightBefore = (App.diag && App.diag.enabled) ? App.diag.flips(items) : null;
   upd(es.grp);
-  return App.groupDecompose();
+  const r = App.groupDecompose();
+  if (App.diag && App.diag.enabled && s0 &&
+      (Math.sign(s0.sx) !== Math.sign(es.grp.sx) || Math.sign(s0.sy) !== Math.sign(es.grp.sy))) {
+    App.diag.log('group.sign', {
+      trigger: 'groupTransformApply',
+      from: s0,
+      to: {
+        sx: App.diag.num(es.grp.sx), sy: App.diag.num(es.grp.sy),
+        rot: App.diag.num(es.grp.rot), skew: App.diag.num(es.grp.skew)
+      },
+      flipsBefore: lightBefore,
+      flipsAfter: App.diag.flips(items)
+    });
+  }
+  return r;
 };
 
 App.groupRebase = function () {
@@ -719,6 +797,16 @@ App.propScalePair = function (ddx, ddy) {
   return [ddx, ddy];
 };
 App.applyEditScaleDelta = function (ddx, ddy) {
+  
+  const __t = App.editTargets();
+  const __isGroup = __t.length >= 2 && !!(App.editSession && App.editSession.grp);
+  if (!__isGroup) {
+    const __it = __t[0];
+    const __sh = (__it && __it.flipH) ? -1 : 1;
+    const __sv = (__it && __it.flipV) ? -1 : 1;
+    ddx *= __sh;
+    ddy *= __sv;
+  }
   if (App.state.sizeMode === 'prop') {
     const p = App.propScalePair(ddx, ddy);
     ddx = p[0]; ddy = p[1];
@@ -1346,18 +1434,9 @@ App.onEditPointerDown = function (e) {
     const inside = App.editPointerInside(e.clientX, e.clientY);
     
     let h = hEl ? hEl.getAttribute('data-h') : null;
-    if (!h && !inside && gizmo) {
+    if (!h && gizmo) {
       
-      const R = App.handleHitPx(g.box) / 2;
-      let best = null, bestD = R;
-      for (const k of ['nw', 'ne', 'se', 'sw']) {
-        const hp = g[k];
-        if (!hp) continue;
-        const sp = App.docToScreen(hp.x, hp.y);
-        const d = Math.hypot(e.clientX - sp.x, e.clientY - sp.y);
-        if (d < bestD) { bestD = d; best = k; }
-      }
-      h = best;
+      h = App.handleHitAt(e.clientX, e.clientY);
     }
     if (h) {
       
@@ -1592,7 +1671,7 @@ App.onEditPointerMove = function (e) {
     }
     
     let rotD = 0;
-    if (App.state.shiftDown && (h === 'nw' || h === 'ne' || h === 'sw' || h === 'se')) {
+    if (App.quickModActive() && (h === 'nw' || h === 'ne' || h === 'sw' || h === 'se')) {
       gx = 0; gy = 0;
       const pd = App.screenToDoc(e.clientX, e.clientY);
       const ang = Math.atan2(pd.y - App.drag.center.y, pd.x - App.drag.center.x);
@@ -1603,7 +1682,7 @@ App.onEditPointerMove = function (e) {
     }
     
     let skewD = 0;
-    if (App.state.shiftDown && (h === 'n' || h === 's')) {
+    if (App.quickModActive() && (h === 'n' || h === 's')) {
       gx = 0; gy = 0;
       const skewDir = (h === 'n') ? -1 : 1;
       skewD = (skewDir * lx / (App.drag.box.h || 1)) * 60;
@@ -1717,6 +1796,11 @@ App.duplicateEditing = function () {
 App.editFlipCycle = function () {
   const items = App.editTargets();
   if (!items.length) return;
+  
+  const __fxBefore = App.diag ? App.diag.geoms(items) : null;
+  const __fxGrp0 = (App.diag && App.editSession && App.editSession.grp) ? {
+    sx: App.diag.num(App.editSession.grp.sx), sy: App.diag.num(App.editSession.grp.sy)
+  } : null;
   App.editHist.checkpoint();
   App.editHist.endGesture();
   App.state.editFlipStep = (App.state.editFlipStep + 1) % 4; 
@@ -1726,11 +1810,27 @@ App.editFlipCycle = function () {
   
   if (items.length >= 2 && App.editSession && App.editSession.grp) {
     App.groupTransformApply(g => {
+      
+      App.flipSkewByScale(g, wantH, wantV);
       g.sx = Math.abs(g.sx) * (wantH ? -1 : 1);
       g.sy = Math.abs(g.sy) * (wantV ? -1 : 1);
     });
     App.refreshLayerThumbs();
     if (App.contentChanged) App.contentChanged();
+    
+    if (App.diag) {
+      const __fxAfter = App.diag.geoms(items);
+      const g = App.editSession.grp;
+      App.diag.log('edit.group', {
+        trigger: 'tab', step: App.state.editFlipStep, wantH: wantH, wantV: wantV,
+        branch: 'groupMatrix',
+        grpBefore: __fxGrp0,
+        grpAfter: { sx: App.diag.num(g.sx), sy: App.diag.num(g.sy),
+                    rot: App.diag.num(g.rot), skew: App.diag.num(g.skew) },
+        before: __fxBefore, after: __fxAfter,
+        diff: App.diag.diff(__fxBefore, __fxAfter)
+      });
+    }
     showToast(App.i18n.tf('toast.edit.flip', { v: App.i18n.t(names[App.state.editFlipStep]) }));
     return;
   }
@@ -1740,6 +1840,8 @@ App.editFlipCycle = function () {
     
     const af = App.anchorFixedLocal(it);
     const p0 = af ? App.itemLocalToDoc(it, af.x, af.y) : null;
+    
+    App.flipSkewByParity(it, wantH, wantV);
     it.flipH = wantH;
     it.flipV = wantV;
     if (af && p0) App.placeItemAtDocPoint(it, af.x, af.y, p0.x, p0.y);
@@ -1752,5 +1854,15 @@ App.editFlipCycle = function () {
   if (App.contentChanged) App.contentChanged();
   
   App.groupRebase();
+  
+  if (App.diag) {
+    const __fxAfter = App.diag.geoms(items);
+    App.diag.log('edit.single', {
+      trigger: 'tab', step: App.state.editFlipStep, wantH: wantH, wantV: wantV,
+      branch: 'directFlags', rebased: !!(App.editSession && App.editSession.grp),
+      before: __fxBefore, after: __fxAfter,
+      diff: App.diag.diff(__fxBefore, __fxAfter)
+    });
+  }
   showToast(App.i18n.tf('toast.edit.flip', { v: App.i18n.t(names[App.state.editFlipStep]) }));
 };

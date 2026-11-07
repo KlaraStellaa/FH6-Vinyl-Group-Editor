@@ -120,6 +120,15 @@ App.gpmap = {
   },
 
   
+  removeButton(id, slot) {
+    const arr = this.map[id];
+    if (!arr || slot < 0 || slot >= arr.length) return false;
+    arr.splice(slot, 1);
+    this.reindex();
+    return true;
+  },
+
+  
   conflicts() {
     const KM = window.SVE_KEYMAP;
     if (!KM) return [];

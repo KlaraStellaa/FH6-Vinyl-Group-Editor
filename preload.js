@@ -83,7 +83,10 @@ contextBridge.exposeInMainWorld('sveApi', Object.assign({
   
   log: (level, msg, data) => ipcRenderer.send('sve-log', { level, msg, data }),
   logPath: () => ipcRenderer.invoke('sve-log-path'),
-  logRead: (maxLen) => ipcRenderer.invoke('sve-log-read', { maxLen }),
+  
+  logRead: (arg) => ipcRenderer.invoke('sve-log-read',
+    (arg && typeof arg === 'object') ? arg : { maxLen: arg }),
+  logFlush: () => ipcRenderer.invoke('sve-log-flush'),
   logSave: () => ipcRenderer.invoke('sve-log-save'),
   logOpen: () => ipcRenderer.invoke('sve-log-open'),
   

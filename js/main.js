@@ -102,6 +102,8 @@ App.wirePointer = function () {
   
   window.addEventListener('pointerdown', () => {
     if (App.noteRenderInteraction) App.noteRenderInteraction(true);
+    
+    if (App.state.quickModDown) App.state.quickModUsed = true;
   }, true);
   window.addEventListener('pointerup', () => {
     if (App.noteRenderInteraction) App.noteRenderInteraction(false);
@@ -233,6 +235,22 @@ App.dispatchAction = function (A, e) {
   
   const inSpeedWin = !!(e && e.target && e.target.closest && e.target.closest('#speedPanel'));
   
+  if (A === 'quickMod') {
+    if (inSpeedWin) return;
+    if (!e.repeat) {
+      App.state.quickModDown = true;
+      App.state.quickModUsed = false;
+    }
+    
+    if (!App.settings || !App.settings.quickClick) {
+      if (App.state.edit && App.state.editMode === 'size' && App.drawOutlines) App.drawOutlines();
+    }
+    e.preventDefault();
+    return;
+  }
+  
+  if (A && App.state.quickModDown) App.state.quickModUsed = true;
+  
   if (A === 'pan') {
     if (inSpeedWin) return;
     App.state.spaceDown = true; e.preventDefault(); return;
@@ -257,7 +275,7 @@ App.dispatchAction = function (A, e) {
     e.preventDefault();
     return;
   }
-  if (e.key === 'Shift') { App.state.shiftDown = true; return; }
+  
   if (A === 'escape') {
     if (inSpeedWin) return;   
     
@@ -427,6 +445,24 @@ App.dispatchAction = function (A, e) {
 
 
 App.releaseAction = function (A, e) {
+  if (A === 'quickMod') {
+    
+    const wasDown = !!App.state.quickModDown;
+    App.state.quickModDown = false;
+    const tap = wasDown && !App.state.quickModUsed;
+    App.state.quickModUsed = false;
+    if (!wasDown) return;
+    
+    if (tap && App.settings && App.settings.quickClick &&
+        App.state.edit && App.state.editMode === 'size') {
+      App.state.quickClickOn = !App.state.quickClickOn;
+      if (App.drawOutlines) App.drawOutlines();
+    } else if (!App.settings || !App.settings.quickClick) {
+      
+      if (App.state.edit && App.state.editMode === 'size' && App.drawOutlines) App.drawOutlines();
+    }
+    return;
+  }
   if (A === 'pan') { App.state.spaceDown = false; return; }
   if (A === 'highlight' || A === 'editFlip') {
     App.state.tabDown = false;
@@ -469,13 +505,52 @@ App.wireKeyboard = function () {
       return;
     }
 
-    const A = App.keymap.actionFor(e, App.state.edit ? 'edit' : 'canvas');
+    let A = App.keymap.actionFor(e, App.state.edit ? 'edit' : 'canvas');
+    
+    if (!A && App.state.quickModDown) {
+      const qm = App.keymap.combos('quickMod');
+      const bareMod = qm.some(c => c === 'Control' || c === 'Alt');
+      if (bareMod && (e.ctrlKey || e.altKey) && !(e.ctrlKey && e.metaKey)) {
+        const shim = {
+          key: e.key, code: e.code, repeat: e.repeat, target: e.target,
+          ctrlKey: false, altKey: false, metaKey: false, shiftKey: e.shiftKey,
+          preventDefault() { e.preventDefault(); },
+          stopPropagation() { e.stopPropagation(); }
+        };
+        A = App.keymap.actionFor(shim, App.state.edit ? 'edit' : 'canvas');
+      }
+    }
     App.dispatchAction(A, e);
   });
   
+  const mouseDownAction = e => {
+    const combo = window.SVE_KEYMAP.mouseComboFromEvent(e);
+    if (!combo) return;
+    if (App.keymapUI && App.keymapUI.isOpen()) return;
+    const ctx = App.state.edit ? 'edit' : 'canvas';
+    const A = App.keymap.actionForCombo(combo, ctx);
+    if (!A) return;
+    e.preventDefault();
+    App.dispatchAction(A, {
+      repeat: false, key: '', shiftKey: false, target: null,
+      preventDefault() { e.preventDefault(); }
+    });
+    App._mouseAct = { id: A, combo: combo };
+  };
+  const mouseUpAction = e => {
+    const cur = App._mouseAct;
+    if (!cur) return;
+    if (window.SVE_KEYMAP.mouseComboFromEvent(e) !== cur.combo) return;
+    App._mouseAct = null;
+    ['pan', 'highlight', 'editFlip', 'quickMod', 'moveUp', 'moveDown', 'moveLeft', 'moveRight']
+      .forEach(id => { if (id === cur.id) App.releaseAction(id, { key: '' }); });
+  };
+  window.addEventListener('mousedown', mouseDownAction, true);
+  window.addEventListener('mouseup', mouseUpAction, true);
+  
   const anyMatch = (id, e) => App.keymap.combos(id).some(c => window.SVE_KEYMAP.matchesEvent(c, e));
   window.addEventListener('keyup', e => {
-    ['pan', 'highlight', 'editFlip', 'moveUp', 'moveDown', 'moveLeft', 'moveRight']
+    ['pan', 'highlight', 'editFlip', 'quickMod', 'moveUp', 'moveDown', 'moveLeft', 'moveRight']
       .forEach(id => { if (anyMatch(id, e)) App.releaseAction(id, e); });
     if (e.key === 'Shift') App.state.shiftDown = false;
     if (!App.state.keys.size && App.state.edit) App.editHist.endGesture(); 
@@ -486,7 +561,12 @@ App.wireKeyboard = function () {
     App.state.spaceDown = false;
     App.state.tabDown = false;
     App.state.shiftDown = false;
+    
+    App.state.quickModDown = false;
+    App.state.quickClickOn = false;
+    App.state.quickModUsed = false;
     App.state.keys.clear();
+    if (App.state.edit) App.drawOutlines();
   });
 };
 

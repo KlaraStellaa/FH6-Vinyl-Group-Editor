@@ -571,12 +571,18 @@ App.setSelectedMask = function (flag) {
 App.flipSelected = function (axis) {
   const items = App.operationTargets();
   if (!items.length) return;
+  
+  const __flipBefore = App.diag ? App.diag.geoms(items) : null;
   App.history.markDiscrete();
   items.forEach(l => {
     
     const c = l.kind === 'merged' && App.mergedContentCenter ? App.mergedContentCenter(l) : null;
-    if (axis === 'h') l.flipH = !l.flipH;
-    else l.flipV = !l.flipV;
+    
+    const wantH = axis === 'h' ? !l.flipH : !!l.flipH;
+    const wantV = axis === 'v' ? !l.flipV : !!l.flipV;
+    App.flipSkewByParity(l, wantH, wantV);
+    l.flipH = wantH;
+    l.flipV = wantV;
     if (c) App.anchorToKeepCenter(l, c.x, c.y);
     l.thumbDirty = true;
     l.thumbCache = null;
@@ -589,6 +595,14 @@ App.flipSelected = function (axis) {
   items.forEach(l => { if (App.dropEditStaticItem) App.dropEditStaticItem(l); });
   if (App.contentChanged) App.contentChanged();
   try { App.log('info', '翻转', { axis, layers: items.length }); } catch (e) {  }
+  if (App.diag) {
+    const __flipAfter = App.diag.geoms(items);
+    App.diag.log('select', {
+      trigger: 'toolbar', axis: axis,
+      before: __flipBefore, after: __flipAfter,
+      diff: App.diag.diff(__flipBefore, __flipAfter)
+    });
+  }
   showToast(axis === 'h' ? App.i18n.t('toast.sel.flipH') : App.i18n.t('toast.sel.flipV'));
 };
 

@@ -312,6 +312,36 @@ App.buildForzaExportString = function (quiet, layers) {
     String(d.getMinutes()).padStart(2, '0') + '.svg';
 
   
+  
+  if (App.diag && App.diag.enabled && nodes && nodes.length) {
+    const all = [];
+    (function walk(ns) {
+      (ns || []).forEach(n => {
+        if (!n) return;
+        if (n.layer) all.push(n.layer);
+        if (n.children) walk(n.children);
+      });
+    })(nodes);
+    const ex = { total: all.length, flipH: 0, flipV: 0, both: 0, samples: [] };
+    all.forEach(l => {
+      const h = !!l.flipH, v = !!l.flipV;
+      if (h) ex.flipH++;
+      if (v) ex.flipV++;
+      if (h && v) ex.both++;
+      if ((h || v) && ex.samples.length < 20) {
+        ex.samples.push({
+          id: l.id, name: App.diag.str(l.name, 60), kind: l.kind,
+          flipH: h, flipV: v, sx: App.diag.num(l.sx), sy: App.diag.num(l.sy),
+          rot: App.diag.num(l.rot)
+        });
+      }
+    });
+    App.diag.log('export.write', {
+      trigger: 'save', stat: ex,
+      layers: useLayers.length, skipped: skipped || 0,
+      matrixRule: App.skewMode === '132' ? '132' : 'latest'
+    });
+  }
   const warns = [];
   if (skipped) warns.push(App.i18n.tf('toast.forza.exportSkipped', { n: skipped }));
   if (warns.length && !quiet) showToast(App.i18n.tf('toast.forza.exportWarn', { v: warns.join('；') }));
@@ -367,6 +397,11 @@ App.importForza = function (root) {
   };
 
   
+  const flipStat = {
+    total: 0, flipH: 0, flipV: 0, ancFlip: 0, slimOverride: 0,
+    rot180: 0, negSy: 0, samples: []
+  };
+  
   const slimOf = el => {
     const raw = el.getAttribute('data-sve');
     if (!raw) return null;
@@ -393,6 +428,29 @@ App.importForza = function (root) {
       flipH = !!slim.flipH; flipV = !!slim.flipV;
       
       if (flipH) rot = normalizeDeg(p.rot - 180);
+    }
+    
+    if (App.diag && App.diag.enabled) {
+      flipStat.total++;
+      if (flipH) flipStat.flipH++;
+      if (flipV) flipStat.flipV++;
+      if (ancFlip) flipStat.ancFlip++;
+      if (p.sy < 0) flipStat.negSy++;
+      const ov = !!(slim && slim.kind === 'symbol' && !ancFlip);
+      if (ov) flipStat.slimOverride++;
+      if (ov && slim.flipH) flipStat.rot180++;
+      if (flipStat.samples.length < 20) {
+        flipStat.samples.push({
+          id: App.diag.str(id, 60), ancFlip: !!ancFlip,
+          slim: slim ? { kind: slim.kind, flipH: !!slim.flipH, flipV: !!slim.flipV } : null,
+          dec: { sx: App.diag.num(p.sx), sy: App.diag.num(p.sy), rot: App.diag.num(p.rot), skew: App.diag.num(p.skew) },
+          slimOverride: ov, rot180: !!(ov && slim.flipH),
+          out: {
+            flipH: !!flipH, flipV: !!flipV,
+            sx: App.diag.num(Math.abs(p.sx)), sy: App.diag.num(sy), rot: App.diag.num(rot)
+          }
+        });
+      }
     }
     const op = clamp(opacity, 0, 1);
     if (sym) {
@@ -467,6 +525,16 @@ App.importForza = function (root) {
   if (count && App.contentChanged && !App._importingSvg) App.contentChanged();
   if (!count) showToast(App.i18n.t('toast.forza.noRecognized'));
   else showToast(App.i18n.tf('toast.imported', { n: count }));
+  
+  if (App.diag && flipStat.total) {
+    App.diag.log('import.parse', {
+      trigger: 'open',
+      canvas: App.diag.str(root.getAttribute('data-sve-canvas') || root.getAttribute('viewBox') || '', 80),
+      rootId: App.diag.str(root.getAttribute('id') || '', 60),
+      count: count,
+      stat: Object.assign({}, flipStat, { sampleCount: flipStat.samples.length })
+    });
+  }
 };
 
 

@@ -498,6 +498,9 @@ App.Tabs = {
   switchTo(id) {
     const d = this.docs.find(x => x.id === id);
     if (!d || d === this.current) { if (App.Home) App.Home.hide(); this.renderBar(); return; }   
+    
+    App.state.quickClickOn = false;
+    App.state.quickModDown = false;
     if (this.current) this.captureDoc(this.current);
     this.loadDoc(d);
     if (App.Home) App.Home.hide();

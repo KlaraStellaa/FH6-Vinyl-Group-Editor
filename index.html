@@ -44,9 +44,9 @@
       </svg>
     </button>
     <span class="bg-tools">
-      <button id="btnOpenImage" data-i18n="toolbar.openImage">打开背景图片文件</button>
       
       <button id="btnRefWin" data-i18n="toolbar.refWin">打开悬浮窗参考图</button>
+      <button id="btnOpenImage" data-i18n="toolbar.openImage">打开背景图片文件</button>
       <button id="btnBgImage" data-i18n="toolbar.bgNone">背景图片：未设置</button>
     </span>
   </div>
@@ -221,9 +221,9 @@
       <div class="ev-tabs ev-tabs-panel">
         <div class="ev-tabs-track">
           <input type="radio" id="ptab-lib" name="panelTab" value="lib" checked>
-          <label for="ptab-lib" data-tab="lib" data-i18n="panel.lib">彩绘纹饰形状</label>
+          <label for="ptab-lib" data-tab="lib" data-xbind="ptab:lib" data-i18n="panel.lib">彩绘纹饰形状</label>
           <input type="radio" id="ptab-color" name="panelTab" value="color">
-          <label for="ptab-color" data-tab="color" data-i18n="panel.color">颜色</label>
+          <label for="ptab-color" data-tab="color" data-xbind="ptab:color" data-i18n="panel.color">颜色</label>
           <span class="ev-glider"></span>
         </div>
       </div>
@@ -278,6 +278,7 @@
   <div class="lp-path" id="logPathText"></div>
   <div class="lp-btns">
     <button id="btnLogCopy" data-i18n="log.copy">复制最近日志</button>
+    <button id="btnLogCopyFlip" data-i18n="log.copyFlip">复制翻转诊断</button>
     <button id="btnLogOpen" data-i18n="log.open">保存日志</button>
     <button id="btnLogClose" data-i18n="log.close">关闭</button>
   </div>
@@ -305,6 +306,8 @@
 
 <script src="keymap.js"></script>
 <script src="js/keymap.js"></script>
+
+<script src="js/xbind.js"></script>
 <script src="js/theme.js"></script>
 
 <script src="js/favorites.js"></script>
