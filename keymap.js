@@ -35,6 +35,8 @@ var ACTIONS = [
   { id: 'anchor', ctx: 'edit', def: ['f'], label: 'km.a.anchor' },
   { id: 'sizeMode', ctx: 'edit', def: ['Backspace'], label: 'km.a.sizeMode' },
   
+  { id: 'quickMod', ctx: 'edit', def: ['Shift'], label: 'km.a.quickMod' },
+  
   { id: 'editFlip', ctx: 'edit', def: ['Tab'], label: 'km.a.editFlip', overrides: 'highlight' },
   { id: 'mode1', ctx: 'edit', def: ['1'], label: 'km.a.mode1' },
   { id: 'mode2', ctx: 'edit', def: ['2'], label: 'km.a.mode2' },
@@ -68,6 +70,28 @@ ACTIONS.forEach(function (a) { ACTIONS_BY_ID[a.id] = a; });
 var REJECT_KEYS = { 'Dead': 1, 'Unidentified': 1, 'Process': 1, 'Compose': 1 };
 var MODS = ['ctrl', 'alt', 'shift'];
 
+
+function isMouseCombo(combo) {
+  return /^mouse[345]$/.test(String(combo || '').split('+').pop());
+}
+function mouseComboFromEvent(e) {
+  if (!e) return null;
+  if (e.button === 3) return 'mouse4';
+  if (e.button === 4) return 'mouse5';
+  return null;
+}
+
+function matchesMouse(combo, e) {
+  if (!isValidCombo(combo) || !isMouseCombo(combo)) return false;
+  var s = splitCombo(combo);
+  if (s.mods.ctrl || s.mods.alt || s.mods.shift) return false;
+  return combo === mouseComboFromEvent(e);
+}
+
+
+function modOnly(combo) {
+  return /^(Shift|Control|Alt|Meta|ctrl|alt|shift)$/.test(String(combo || ''));
+}
 function isAction(id) { return !!ACTIONS_BY_ID[id]; }
 function defaultCombo(id) { var a = ACTIONS_BY_ID[id]; return a ? a.def.slice() : null; }
 function contextOf(id) { var a = ACTIONS_BY_ID[id]; return a ? a.ctx : null; }
@@ -82,9 +106,9 @@ function normalizeKey(e) {
   else if (k === 'Esc') k = 'Escape';
   var parts = [];
   
-  if (e.ctrlKey || e.metaKey) parts.push('ctrl');
-  if (e.altKey) parts.push('alt');
-  if (e.shiftKey) parts.push('shift');
+  if ((e.ctrlKey || e.metaKey) && k !== 'Control' && k !== 'Meta') parts.push('ctrl');
+  if (e.altKey && k !== 'Alt') parts.push('alt');
+  if (e.shiftKey && k !== 'Shift') parts.push('shift');
   parts.push(k);
   return parts.join('+');
 }
@@ -126,6 +150,8 @@ function matchesEvent(combo, e) {
 function matchSet(combo) {
   if (!isValidCombo(combo)) return [];
   var s = splitCombo(combo);
+  
+  if (isMouseCombo(combo)) return [combo];
   if (s.mods.ctrl || s.mods.alt) return [combo];
   return s.mods.shift ? ['shift+' + s.key, s.key] : [s.key, 'shift+' + s.key];
 }
@@ -149,7 +175,8 @@ function resolve(saved) {
       if (!isValidCombo(canon)) return;
       if (keep.indexOf(canon) < 0) keep.push(canon);
     });
-    out[a.id] = keep.length ? keep : def;    
+    
+    out[a.id] = keep.length ? keep : (v.length ? def : []);
   });
   return out;
 }
@@ -200,7 +227,11 @@ var SPECIAL = {
   'ArrowLeft': { text: '←' }, 'ArrowRight': { text: '→' }, 'Escape': { text: 'Esc' },
   'Tab': { text: 'Tab' }, 'Enter': { text: 'Enter' }, 'Delete': { text: 'Delete' },
   'Backspace': { text: 'Backspace' }, 'ctrl': { text: 'Ctrl' }, 'alt': { text: 'Alt' },
-  'shift': { text: 'Shift' }
+  'shift': { text: 'Shift' },
+  
+  'mouse3': { text: 'M3' }, 'mouse4': { text: 'M4' }, 'mouse5': { text: 'M5' },
+  
+  'Control': { text: 'Ctrl' }
 };
 function displayParts(combo) {
   if (!isValidCombo(combo)) return [];
@@ -218,7 +249,10 @@ var API = {
   isAction: isAction, defaultCombo: defaultCombo, contextOf: contextOf,
   normalizeKey: normalizeKey, comboFromEvent: comboFromEvent, splitCombo: splitCombo,
   isValidCombo: isValidCombo, matchesEvent: matchesEvent, sameBinding: sameBinding, matchSet: matchSet,
-  resolve: resolve, toSaved: toSaved, conflicts: conflicts, canConflict: canConflict, displayParts: displayParts
+  resolve: resolve, toSaved: toSaved, conflicts: conflicts, canConflict: canConflict, displayParts: displayParts,
+  
+  isMouseCombo: isMouseCombo, mouseComboFromEvent: mouseComboFromEvent, matchesMouse: matchesMouse,
+  modOnly: modOnly
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = API;
 if (typeof window !== 'undefined') window.SVE_KEYMAP = API;

@@ -26,6 +26,8 @@ App.settings = {
   },
   
   panNeedsSpace: true,
+  
+  quickClick: false,
 
   
   autoSave: { enabled: true, intervalMin: 15, limit: 15 },
@@ -341,12 +343,16 @@ App.settings = {
       if (this.themeOf(s.theme)) this.theme = s.theme;
       
       if (s.panNeedsSpace === false) this.panNeedsSpace = false;
+      
+      if (s.quickClick === true) this.quickClick = true;
       this.applyAutoSave(s.autoSave);
       this.applySpeeds(s);
       this.applyKeymap(s);
       
       if (App.Favorites) App.Favorites.load(s.favorites);
       if (App.gpmap) App.gpmap.load(s.gpmap);
+      
+      if (App.xbind) App.xbind.load(s.xbind);
       if (App.fonts) App.fonts.load(s);
       
       if (s.helpHintAck === true) this.helpHintAck = true;
@@ -361,6 +367,7 @@ App.settings = {
         if (ls.customTheme && typeof ls.customTheme === 'object') this.customTheme = ls.customTheme;
         if (this.themeOf(ls.theme)) this.theme = ls.theme;
         if (ls.panNeedsSpace === false) this.panNeedsSpace = false;
+        if (ls.quickClick === true) this.quickClick = true;
         this.applyAutoSave(ls.autoSave);
       }
       this.applySpeeds(ls);
@@ -368,6 +375,7 @@ App.settings = {
       
       if (App.Favorites && !window.sveApi.settingsGet) App.Favorites.load(ls.favorites);
       if (App.gpmap && !window.sveApi.settingsGet) App.gpmap.load(ls.gpmap);
+      if (App.xbind && !window.sveApi.settingsGet) App.xbind.load(ls.xbind);
     } catch (e) {  }
     
     if (App.restartHistAnchors) App.restartHistAnchors();
@@ -424,6 +432,8 @@ App.settings = {
       customTheme: this.theme === App.theme.CUSTOM_ID ? Object.assign({}, this.customTheme) : undefined,
       panNeedsSpace: this.panNeedsSpace !== false,
       
+      quickClick: this.quickClick === true,
+      
       autoSave: {
         enabled: this.autoSave.enabled !== false,
         intervalMin: this.autoSave.intervalMin,
@@ -436,6 +446,8 @@ App.settings = {
       keymap: App.keymap ? App.keymap.payload() : undefined,
       
       gpmap: App.gpmap ? App.gpmap.payload() : undefined,
+      
+      xbind: App.xbind ? App.xbind.payload() : undefined,
       
       favorites: App.Favorites ? App.Favorites.payload() : [],
       

@@ -4,7 +4,9 @@
   const MAX_MS = 12000;      
   const POLL_MS = 90;
 
-  const G = App.renderGate = { on: false, armed: false, t0: 0, timer: null, el: null, tip: null };
+  
+  const G = App.renderGate = { on: false, armed: false, t0: 0, timer: null, el: null, tip: null,
+    allowUntil: 0, done: false };
 
   function ensureEl() {
     if (G.el && G.el.parentNode) return G.el;
@@ -74,6 +76,8 @@
   }
 
   App.renderGateBegin = function (text) {
+    if (G.done) return;                       
+    if (Date.now() > (G.allowUntil || 0)) return;   
     G.armed = true;
     if (G.on) return;
     G.on = true;
@@ -86,6 +90,7 @@
 
   App.renderGateEnd = function () {
     G.armed = false;
+    G.done = true;            
     if (!G.on) return;
     G.on = false;
     App.state.renderGate = false;
@@ -108,17 +113,20 @@
     .forEach(t => window.addEventListener(t, swallow, true));
 
   
-  function watchEntry(name, text) {
+  function watchEntry(name, text, always) {
     const orig = App[name];
     if (typeof orig !== 'function') return;
     App[name] = function () {
-      let r;
-      try {
+      const tabBefore = (App.Tabs && App.Tabs.current) ? App.Tabs.current.id : null;
+      const countBefore = (App.Tabs && App.Tabs.list) ? App.Tabs.list.length : 0;
+      const r = orig.apply(this, arguments);
+      const tabAfter = (App.Tabs && App.Tabs.current) ? App.Tabs.current.id : null;
+      const countAfter = (App.Tabs && App.Tabs.list) ? App.Tabs.list.length : 0;
+      const freshDoc = always || (tabAfter !== tabBefore) || (countAfter > countBefore);
+      if (freshDoc) {
+        G.done = false;                                   
+        G.allowUntil = Date.now() + 15000;                
         App.renderGateBegin(text);
-        r = orig.apply(this, arguments);
-      } catch (e) {
-        App.renderGateEnd();
-        throw e;
       }
       if (r && typeof r.then === 'function') {
         return r.then(v => v, e => { App.renderGateEnd(); throw e; });
@@ -126,13 +134,14 @@
       return r;
     };
   }
-  watchEntry('importSVGContent', 'render.gate');
-  watchEntry('openWorkCopyContent', 'render.gate.open');
+  watchEntry('importSVGContent', 'render.gate', false);
+  watchEntry('openWorkCopyContent', 'render.gate.open', true);
 
   
   let lastDocSig = '';
   setInterval(function () {
-    if (G.on) return;
+    if (G.on || G.done) return;
+    if (Date.now() > (G.allowUntil || 0)) return;   
     const a = App.autoStatic;
     if (!a || !a.baking || a.active) return;
     let n = 0;

@@ -164,6 +164,73 @@ Object.keys(App.KM_I18N).forEach(function (lang) {
 });
 
 
+App.KM_I18N_2 = {
+  'zh-CN': {
+    'km.a.quickMod': '快捷旋转/倾斜切换',
+    'km.quickClick': '快捷旋转/倾斜单击切换',
+    'km.moreKeys': '更多绑定键',
+    'km.unbind': '取消绑定',
+    'km.unbindTip': '请点击要取消绑定的按键（Esc退出）',
+    'km.g.extra': '额外添加',
+    'km.mix': '同一动作不能同时绑定键盘键与鼠标键',
+    'km.mouse3': '鼠标中键不能绑定（用于平移画布）',
+    'km.extraAdded': '已添加按键绑定',
+    'km.unbound': '已取消绑定'
+  },
+  'zh-TW': {
+    'km.a.quickMod': '快捷旋轉/傾斜切換',
+    'km.quickClick': '快捷旋轉/傾斜單擊切換',
+    'km.moreKeys': '更多綁定鍵',
+    'km.unbind': '取消綁定',
+    'km.unbindTip': '請點擊要取消綁定的按鍵（Esc退出）',
+    'km.g.extra': '額外新增',
+    'km.mix': '同一動作不能同時綁定鍵盤鍵與滑鼠鍵',
+    'km.mouse3': '滑鼠中鍵不能綁定（用於平移畫布）',
+    'km.extraAdded': '已新增按鍵綁定',
+    'km.unbound': '已取消綁定'
+  },
+  'en': {
+    'km.a.quickMod': 'Quick rotate/skew modifier',
+    'km.quickClick': 'Click the quick rotate/skew key to toggle',
+    'km.moreKeys': 'More bindable keys',
+    'km.unbind': 'Unbind',
+    'km.unbindTip': 'Click the shortcut to unbind (Esc to exit)',
+    'km.g.extra': 'Added',
+    'km.mix': 'Keyboard keys and mouse buttons cannot be mixed in one action',
+    'km.mouse3': 'The middle mouse button cannot be bound (it pans the canvas)',
+    'km.extraAdded': 'Key binding added',
+    'km.unbound': 'Binding removed'
+  },
+  'ja': {
+    'km.a.quickMod': '回転/傾きの修飾キー',
+    'km.quickClick': '回転/傾きキーをクリックで切替',
+    'km.moreKeys': 'その他のバインドキー',
+    'km.unbind': 'バインド解除',
+    'km.unbindTip': 'バインドを解除するキーをクリック（Esc で終了）',
+    'km.g.extra': '追加分',
+    'km.mix': '同じ動作にキーボードとマウスのボタンは併用できません',
+    'km.mouse3': '中ボタンはバインドできません（キャンバスの移動用）',
+    'km.extraAdded': 'キーのバインドを追加しました',
+    'km.unbound': 'バインドを解除しました'
+  },
+  'ko': {
+    'km.a.quickMod': '회전/기울기 보조 키',
+    'km.quickClick': '회전/기울기 키 클릭 전환',
+    'km.moreKeys': '추가 바인딩 키',
+    'km.unbind': '바인딩 해제',
+    'km.unbindTip': '바인딩을 해제할 키를 클릭하세요 (Esc 종료)',
+    'km.g.extra': '추가됨',
+    'km.mix': '한 동작에 키보드와 마우스 버튼을 함께 바인딩할 수 없습니다',
+    'km.mouse3': '가운데 버튼은 바인딩할 수 없습니다(캔버스 이동용)',
+    'km.extraAdded': '키 바인딩을 추가했습니다',
+    'km.unbound': '바인딩을 해제했습니다'
+  }
+};
+Object.keys(App.KM_I18N_2).forEach(function (lang) {
+  if (App.i18n.dicts[lang]) Object.assign(App.i18n.dicts[lang], App.KM_I18N_2[lang]);
+});
+
+
 App.keymap = {
   map: null,
   index: null,     
@@ -208,6 +275,14 @@ App.keymap = {
   },
 
   
+  actionForCombo(combo, ctx) {
+    if (!this.index || !combo) return null;
+    const local = this.index[ctx];
+    if (local && local[combo]) return local[combo];
+    return this.index.global[combo] || null;
+  },
+
+  
   setCombo(id, slot, combo) {
     const KM = window.SVE_KEYMAP;
     const mine = this.map[id];
@@ -244,6 +319,48 @@ App.keymap = {
     return '';
   },
 
+  
+  applyCombos(id, combos) {
+    const KM = window.SVE_KEYMAP;
+    if (!KM || !this.map[id]) return { error: 'noaction' };
+    const list = [];
+    (combos || []).forEach(c => {
+      if (KM.isValidCombo(c) && list.indexOf(c) < 0) list.push(c);
+    });
+    const hasMouse = list.some(c => KM.isMouseCombo(c));
+    const hasKey = list.some(c => !KM.isMouseCombo(c));
+    if (hasMouse && hasKey) return { error: 'mix' };
+    
+    if (!list.length && (combos || []).length) return { error: 'invalid' };
+    const out = list.slice(0, 4);
+    const sameSet = (a, b) => a.length === b.length &&
+      a.every(c => b.some(d => KM.sameBinding(c, d)));
+    const old = (this.map[id] || []).slice();
+    let swapWith = null;
+    let clashId = null;
+    KM.ACTIONS.forEach(a => {
+      if (a.id === id || !KM.canConflict(a.id, id)) return;
+      const other = this.map[a.id] || [];
+      if (!other.length) return;
+      if (sameSet(out, other)) { swapWith = a.id; return; }
+      if (out.some(c => other.some(d => KM.sameBinding(c, d)))) clashId = a.id;
+    });
+    if (clashId && !swapWith) return { error: 'conflict', with: clashId };
+    this.map[id] = out;
+    if (swapWith) this.map[swapWith] = old;
+    this.reindex();
+    return { swapped: swapWith ? [swapWith] : [] };
+  },
+
+  
+  removeCombo(id, slot) {
+    const arr = this.map[id];
+    if (!arr || slot < 0 || slot >= arr.length) return false;
+    arr.splice(slot, 1);
+    this.reindex();
+    return true;
+  },
+
   snapshot() { return JSON.parse(JSON.stringify(this.map)); },
   restore(snap) { this.map = JSON.parse(JSON.stringify(snap)); this.reindex(); },
   resetToDefaults() { this.map = window.SVE_KEYMAP.resolve(null); this.reindex(); },
@@ -266,7 +383,11 @@ App.keymapUI = {
   gpCap: null,       
   snapshot: null,
   gpSnapshot: null,
+  xSnapshot: null,   
   mode: 'key',       
+  
+  keepRows: new Set(),
+  unbinding: false,  
   
   PENDING: ['tabPrev', 'tabNext'],
 
@@ -283,6 +404,14 @@ App.keymapUI = {
           '<span class="sve-switch-track" aria-hidden="true"></span></label>' +
       '</div>' +
       
+      '<div class="km-opt-row">' +
+        '<label class="km-opt-label" for="kmQuickClick" data-i18n="km.quickClick"></label>' +
+        '<label class="sve-switch"><input type="checkbox" id="kmQuickClick">' +
+          '<span class="sve-switch-track" aria-hidden="true"></span></label>' +
+      '</div>' +
+      
+      '<div class="km-more-row"><button type="button" class="km-more" data-i18n="km.moreKeys"></button></div>' +
+      
       '<div class="km-mode-row">' +
         '<div class="ev-tabs"><div class="ev-tabs-track">' +
           '<input type="radio" id="kmModeKey" name="kmMode" value="key" checked>' +
@@ -293,9 +422,14 @@ App.keymapUI = {
         '</div></div>' +
       '</div>' +
       '<div class="km-hint" id="kmHint" data-i18n="km.hint"></div>' +
+      
+      '<div class="km-info hidden" id="kmUnbindTip" data-i18n="km.unbindTip"></div>' +
       '<div class="km-scroll" id="kmList"></div>' +
       '<div class="km-warn hidden" id="kmWarn"></div>' +
-      '<div class="speed-reset-row"><button class="speed-reset km-reset" data-i18n="speed.reset"></button></div>' +
+      '<div class="speed-reset-row">' +
+        '<button class="speed-reset km-reset" data-i18n="speed.reset"></button>' +
+        '<button class="speed-reset km-unbind" data-i18n="km.unbind"></button>' +
+      '</div>' +
       '<div class="anchor-btns">' +
         '<button class="km-cancel" data-i18n="speed.cancel"></button>' +
         '<button class="km-ok" data-i18n="speed.ok"></button>' +
@@ -309,6 +443,31 @@ App.keymapUI = {
         App.settings.panNeedsSpace = !!panSw.checked;
         App.settings.save();
       });
+    }
+    
+    const qcSw = view.querySelector('#kmQuickClick');
+    if (qcSw) {
+      qcSw.checked = !!App.settings.quickClick;
+      qcSw.addEventListener('change', () => {
+        App.settings.quickClick = !!qcSw.checked;
+        
+        if (!App.settings.quickClick) App.state.quickClickOn = false;
+        App.settings.save();
+        if (App.state.edit && App.state.editMode === 'size' && App.drawOutlines) App.drawOutlines();
+      });
+    }
+    
+    const moreBtn = view.querySelector('.km-more');
+    if (moreBtn) {
+      moreBtn.addEventListener('click', () => {
+        this.stopCapture();
+        if (App.xbind) App.xbind.startPick();
+      });
+    }
+    
+    const unbindBtn = view.querySelector('.km-unbind');
+    if (unbindBtn) {
+      unbindBtn.addEventListener('click', () => this.toggleUnbind());
     }
     
     const modeWrap = view.querySelector('.km-mode-row');
@@ -339,8 +498,12 @@ App.keymapUI = {
     
     view.querySelector('#kmList').addEventListener('click', e => {
       const b = e.target && e.target.closest ? e.target.closest('.km-key') : null;
-      if (!b) return;
+      if (!b) return;                       
       e.preventDefault();
+      
+      if (this.unbinding) { this.doUnbind(b); return; }
+      
+      if (b.classList.contains('km-xkey')) return;
       
       if (this.mode === 'pad') {
         if (this.gpCap && this.gpCap.btn === b) { this.stopCapture(); return; }   
@@ -352,7 +515,7 @@ App.keymapUI = {
       }
       const id = b.getAttribute('data-act'), slot = parseInt(b.getAttribute('data-slot'), 10);
       if (this.capturing && this.capturing.btn === b) { this.stopCapture(); return; }   
-      this.startCapture(id, slot, b, b.getAttribute('data-add') === '1');
+      this.startCapture(id, slot, b);
     });
     this.render();
     return view;
@@ -379,7 +542,8 @@ App.keymapUI = {
     window.SVE_KEYMAP.GROUPS.forEach(g => {
       
       const acts = window.SVE_KEYMAP.ACTIONS.filter(a =>
-        a.ctx === g.ctx && (combosOf(a.id).length || PENDING.indexOf(a.id) >= 0));
+        a.ctx === g.ctx && (combosOf(a.id).length || PENDING.indexOf(a.id) >= 0 ||
+          (this.mode === 'key' && this.keepRows.has(a.id))));
       if (!acts.length) return;                  
       const box = document.createElement('div');
       box.className = 'km-group';
@@ -389,6 +553,9 @@ App.keymapUI = {
       h.textContent = t(g.title);
       box.appendChild(h);
       acts.forEach(a => {
+        const vals = combosOf(a.id);
+        
+        if (vals.length && this.mode === 'key') this.keepRows.add(a.id);
         const row = document.createElement('div');
         row.className = 'km-row';
         row.setAttribute('data-km-act', a.id);
@@ -398,7 +565,6 @@ App.keymapUI = {
         row.appendChild(lab);
         const keys = document.createElement('div');
         keys.className = 'km-keys';
-        const vals = combosOf(a.id);
         vals.forEach((v, slot) => keys.appendChild(makeChip(a.id, v, slot)));
         if (!vals.length) keys.appendChild(makeAdd(a.id));   
         row.appendChild(keys);
@@ -406,6 +572,41 @@ App.keymapUI = {
       });
       list.appendChild(box);
     });
+    
+    if (this.mode !== 'pad' && App.xbind) {
+      const extras = App.xbind.entries();
+      if (extras.length) {
+        const box = document.createElement('div');
+        box.className = 'km-group km-group-extra';
+        box.setAttribute('data-km-ctx', 'extra');
+        const h = document.createElement('div');
+        h.className = 'km-group-title';
+        h.textContent = t('km.g.extra');
+        box.appendChild(h);
+        extras.forEach(en => {
+          const row = document.createElement('div');
+          row.className = 'km-row';
+          row.setAttribute('data-km-xkey', en.key);
+          const lab = document.createElement('div');
+          lab.className = 'km-label';
+          lab.textContent = en.name;
+          row.appendChild(lab);
+          const keys = document.createElement('div');
+          keys.className = 'km-keys';
+          en.combos.forEach((c, slot) => {
+            const b = document.createElement('button');
+            b.className = 'km-key km-xkey';
+            b.setAttribute('data-xkey', en.key);
+            b.setAttribute('data-xslot', String(slot));
+            this.fillButton(b, c);
+            keys.appendChild(b);
+          });
+          row.appendChild(keys);
+          box.appendChild(row);
+        });
+        list.appendChild(box);
+      }
+    }
     if (this.mode === 'pad') this.renderGpConflicts();
     else this.renderConflicts();
   },
@@ -423,6 +624,7 @@ App.keymapUI = {
       const add = document.createElement('button');
       add.className = 'km-key km-add';
       add.setAttribute('data-act', id);
+      add.setAttribute('data-slot', '-1');
       add.setAttribute('data-add', '1');
       add.textContent = '+';
       return add;
@@ -485,8 +687,10 @@ App.keymapUI = {
   
   showMainView() {
     this.stopCapture();
+    this.exitUnbind();
     this.snapshot = null;
     this.gpSnapshot = null;
+    this.xSnapshot = null;
     
     if (this.el) this.setMode('key'); else this.mode = 'key';
     const box = document.getElementById('settingsPanel');
@@ -527,6 +731,11 @@ App.keymapUI = {
     this.snapshot = App.keymap.snapshot();
     this.gpSnapshot = App.gpmap ? App.gpmap.snapshot() : null;
     
+    this.xSnapshot = App.xbind ? App.xbind.snapshot() : null;
+    
+    this.keepRows = new Set();
+    this.exitUnbind();
+    
     this.setMode('key');
     const main = box.querySelector('#settingsMainView');
     const key = box.querySelector('#settingsKeyView');
@@ -545,8 +754,11 @@ App.keymapUI = {
   
   reset() {
     this.stopCapture();
+    this.exitUnbind();
     App.keymap.resetToDefaults();
     if (App.gpmap) App.gpmap.resetToDefaults();
+    if (App.xbind) App.xbind.clear();
+    this.keepRows = new Set();
     this.render();
     return true;
   },
@@ -554,8 +766,10 @@ App.keymapUI = {
   
   cancel() {
     this.stopCapture();
+    this.exitUnbind();
     if (this.snapshot) { App.keymap.restore(this.snapshot); this.snapshot = null; }
     if (this.gpSnapshot) { App.gpmap.restore(this.gpSnapshot); this.gpSnapshot = null; }
+    if (this.xSnapshot && App.xbind) { App.xbind.restore(this.xSnapshot); this.xSnapshot = null; }
     const box = document.getElementById('settingsPanel');
     if (box) App.hideOverlay(box);
     return true;
@@ -564,8 +778,10 @@ App.keymapUI = {
   
   commit() {
     this.stopCapture();
+    this.exitUnbind();
     this.snapshot = null;
     this.gpSnapshot = null;
+    this.xSnapshot = null;
     const box = document.getElementById('settingsPanel');
     if (box) App.hideOverlay(box);
     
@@ -582,14 +798,34 @@ App.keymapUI = {
   },
 
   
-  startCapture(id, slot, btn, isNew) {
+  startCapture(id, slot, btn) {
     this.stopCapture();
-    this.capturing = { id, slot, btn, isNew: !!isNew };   
+    const cap = { id: id, slot: slot, btn: btn, pending: [], down: new Set() };
+    this.capturing = cap;
     btn.classList.add('km-capturing');
+    this.paintCapturing(cap);
+  },
+
+  
+  paintCapturing(cap) {
+    const btn = cap && cap.btn;
+    if (!btn) return;
     btn.innerHTML = '';
-    const kbd = document.createElement('kbd');
-    kbd.textContent = App.i18n.t('km.press');
-    btn.appendChild(kbd);
+    if (cap.pending.length) {
+      const box = document.createElement('span');
+      box.className = 'km-cap-list';
+      cap.pending.forEach(c => {
+        const kbd = document.createElement('kbd');
+        kbd.textContent = window.SVE_KEYMAP.displayParts(c)
+          .map(p => (p.i18n ? App.i18n.t(p.i18n) : p.text)).join('+');
+        box.appendChild(kbd);
+      });
+      btn.appendChild(box);
+    } else {
+      const kbd = document.createElement('kbd');
+      kbd.textContent = App.i18n.t('km.press');
+      btn.appendChild(kbd);
+    }
     const tip = document.createElement('span');
     tip.className = 'km-esc';
     tip.textContent = App.i18n.t('km.escCancel');
@@ -620,7 +856,8 @@ App.keymapUI = {
     this.render();
   },
 
-  stopCapture() {
+  
+  stopCapture(restore) {
     
     const g = this.gpCap;
     this.gpCap = null;
@@ -632,10 +869,11 @@ App.keymapUI = {
     this.capturing = null;
     if (!c || !c.btn) return;
     c.btn.classList.remove('km-capturing');
+    if (restore === false) return;
     
     const cur = App.keymap.combos(c.id)[c.slot];
     if (cur) this.fillButton(c.btn, cur);
-    else if (c.isNew) { c.btn.textContent = '+'; }   
+    else { c.btn.textContent = '+'; }   
   },
 
   
@@ -649,24 +887,113 @@ App.keymapUI = {
     const combo = window.SVE_KEYMAP.comboFromEvent(e);
     if (!combo) return true;
     
-    const parts = combo.split('+');
-    if (parts.length === 1 && ['ctrl', 'alt', 'shift'].indexOf(parts[0]) >= 0) return true;
-    const name = id => App.i18n.t((window.SVE_KEYMAP.ACTIONS_BY_ID[id] || {}).label || id);
-    
-    if (c.isNew) {
-      const clash = App.keymap.addCombo(c.id, combo);
-      this.stopCapture();
-      this.render();
-      if (clash) showToast(App.i18n.t('km.conflict').replace('{v}', name(c.id) + ' ↔ ' + name(clash)));
+    if (window.SVE_KEYMAP.modOnly(combo)) return true;
+    if (c.pending.indexOf(combo) < 0) c.pending.push(combo);
+    c.down.add(e.code || e.key);
+    this.paintCapturing(c);
+    return true;
+  },
+
+  
+  onKeyup(e) {
+    const c = this.capturing;
+    if (!c) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    if (e.key === 'Escape') return true;
+    c.down.delete(e.code || e.key);
+    if (!c.down.size) this.finishCapture();
+    return true;
+  },
+
+  
+  onMouseDown(e) {
+    const c = this.capturing;
+    if (!c) return false;
+    if (e.button === 1) {
+      e.preventDefault(); e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+      showToast(App.i18n.t('km.mouse3'));
       return true;
     }
-    const swapped = App.keymap.setCombo(c.id, c.slot, combo);
-    this.stopCapture();
-    this.render();
-    if (swapped.length) {
-      showToast(App.i18n.tf('km.swapped', { v: swapped.map(name).join('、') }));
-    }
+    const combo = window.SVE_KEYMAP.mouseComboFromEvent(e);
+    if (!combo) return false;
+    e.preventDefault(); e.stopPropagation();
+    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    if (c.pending.indexOf(combo) < 0) c.pending.push(combo);
+    this.finishCapture();
     return true;
+  },
+
+  
+  finishCapture() {
+    const c = this.capturing;
+    if (!c) return;
+    const list = c.pending.slice();
+    this.stopCapture(false);
+    if (!list.length) { this.render(); return; }
+    const name = id => App.i18n.t((window.SVE_KEYMAP.ACTIONS_BY_ID[id] || {}).label || id);
+    
+    if (list.length === 1 && c.slot >= 0 && c.slot < App.keymap.combos(c.id).length) {
+      const swapped = App.keymap.setCombo(c.id, c.slot, list[0]);
+      if (swapped.length) showToast(App.i18n.tf('km.swapped', { v: swapped.map(name).join('、') }));
+      this.render();
+      return;
+    }
+    const cur = App.keymap.combos(c.id);
+    let out = cur.slice();
+    const at = (c.slot >= 0 && c.slot < out.length) ? c.slot : out.length;
+    if (at < out.length) out.splice(at, 1);
+    const ins = list.filter(x => out.indexOf(x) < 0);
+    out = out.slice(0, at).concat(ins, out.slice(at));
+    const r = App.keymap.applyCombos(c.id, out);
+    if (r && r.error === 'mix') showToast(App.i18n.t('km.mix'));
+    else if (r && r.error === 'conflict') {
+      showToast(App.i18n.t('km.conflict').replace('{v}', name(c.id) + ' ↔ ' + name(r.with)));
+    } else if (r && r.swapped && r.swapped.length) {
+      showToast(App.i18n.tf('km.swapped', { v: r.swapped.map(name).join('、') }));
+    }
+    this.render();
+  },
+
+  
+  toggleUnbind() {
+    this.stopCapture();
+    this.unbinding = !this.unbinding;
+    this.syncUnbindUI();
+  },
+  exitUnbind() {
+    if (!this.unbinding) return;
+    this.unbinding = false;
+    this.syncUnbindUI();
+  },
+  syncUnbindUI() {
+    if (!this.el) return;
+    const btn = this.el.querySelector('.km-unbind');
+    if (btn) btn.classList.toggle('active', this.unbinding);
+    const tip = this.el.querySelector('#kmUnbindTip');
+    if (tip) tip.classList.toggle('hidden', !this.unbinding);
+  },
+  
+  doUnbind(btn) {
+    const xkey = btn.getAttribute('data-xkey');
+    const gpId = btn.getAttribute('data-gp-act');
+    const slot = parseInt(btn.getAttribute('data-xslot') || btn.getAttribute('data-gp-slot') ||
+      btn.getAttribute('data-slot'), 10);
+    let ok = false;
+    if (xkey) {
+      if (App.xbind) ok = App.xbind.removeCombo(xkey, slot);
+    } else if (gpId) {
+      ok = !!(App.gpmap && App.gpmap.removeButton(gpId, slot));
+    } else {
+      const id = btn.getAttribute('data-act');
+      if (id && slot >= 0) ok = App.keymap.removeCombo(id, slot);
+    }
+    if (!ok) return;
+    this.exitUnbind();
+    this.render();
+    showToast(App.i18n.t('km.unbound'));
   },
 
   
@@ -701,10 +1028,22 @@ window.addEventListener('keydown', function (e) {
       if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
       
       if (App.keymapUI.gpCap) { App.keymapUI.stopCapture(); return; }
+      if (App.keymapUI.unbinding) { App.keymapUI.exitUnbind(); return; }
       App.keymapUI.cancel();
     }
   }
 }, true);
+
+window.addEventListener('keyup', function (e) {
+  if (App.keymapUI && App.keymapUI.capturing) App.keymapUI.onKeyup(e);
+}, true);
+
+window.addEventListener('mousedown', function (e) {
+  if (App.keymapUI && App.keymapUI.capturing) App.keymapUI.onMouseDown(e);
+}, true);
+window.addEventListener('blur', function () {
+  if (App.keymapUI && App.keymapUI.capturing) App.keymapUI.stopCapture();
+});
 
 
 if (App.i18n && App.i18n.onApply) {

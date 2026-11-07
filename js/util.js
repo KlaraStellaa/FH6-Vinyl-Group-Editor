@@ -9,6 +9,117 @@ window.App = window.App || {};
 App.log = appLog; 
 
 
+App.diag = {
+  enabled: true,
+  seq: 0,
+  maxItems: 12   
+};
+App.diag.num = function (n) {
+  return (typeof n === 'number' && isFinite(n)) ? Math.round(n * 1000) / 1000 : n;
+};
+App.diag.str = function (s, n) {
+  s = String(s == null ? '' : s);
+  n = n || 120;
+  return s.length > n ? s.slice(0, n) + '…' : s;
+};
+
+App.diag.context = function () {
+  const s = (window.App && App.state) || {};
+  let doc = null, tab = null;
+  try {
+    const T = App.Tabs;
+    if (T && T.current) {
+      doc = T.current.svgSource || T.current.label || null;
+      tab = { i: T.docs ? T.docs.indexOf(T.current) : -1, n: T.docs ? T.docs.length : 0 };
+    }
+  } catch (e) {  }
+  let selIds = [];
+  try { if (s.selected) selIds = Array.from(s.selected).slice(0, 8); } catch (e) {  }
+  return {
+    doc: doc ? App.diag.str(doc, 120) : null,
+    tab: tab,
+    layers: (s.layers || []).length,
+    sel: s.selected ? s.selected.size : 0,
+    selIds: selIds,
+    edit: s.edit ? {
+      type: s.edit.type, mode: s.editMode,
+      ids: s.edit.ids ? s.edit.ids.length : undefined
+    } : null,
+    flipStep: s.editFlipStep,
+    view: s.view ? { scale: App.diag.num(s.view.scale) } : null
+  };
+};
+
+App.diag.geom = function (it) {
+  if (!it) return null;
+  const g = {
+    id: it.id, name: App.diag.str(it.name, 80), kind: it.kind,
+    flipH: !!it.flipH, flipV: !!it.flipV,
+    sx: App.diag.num(it.sx), sy: App.diag.num(it.sy),
+    rot: App.diag.num(it.rot), skew: App.diag.num(it.skew),
+    x: App.diag.num(it.x), y: App.diag.num(it.y),
+    w: App.diag.num(it.w), h: App.diag.num(it.h),
+    opacity: App.diag.num(it.opacity)
+  };
+  try {
+    if (App.anchorFixedLocal) {
+      const a = App.anchorFixedLocal(it);
+      if (a) g.anchor = { x: App.diag.num(a.x), y: App.diag.num(a.y) };
+    }
+  } catch (e) {  }
+  try {
+    if (App.FZA && App.FZA.layerMatrix) {
+      const M = App.FZA.layerMatrix(it);
+      if (M) g.hand = Math.sign(M.a * M.d - M.b * M.c);
+    }
+  } catch (e) {  }
+  return g;
+};
+
+App.diag.flips = function (items) {
+  const arr = Array.isArray(items) ? items : [];
+  return arr.slice(0, App.diag.maxItems).map(it => ({
+    id: it.id, h: !!it.flipH, v: !!it.flipV,
+    sx: App.diag.num(it.sx), sy: App.diag.num(it.sy)
+  }));
+};
+App.diag.geoms = function (items, limit) {
+  const arr = Array.isArray(items) ? items : [];
+  const n = limit || App.diag.maxItems;
+  return {
+    total: arr.length,
+    truncated: arr.length > n,
+    items: arr.slice(0, n).map(App.diag.geom)
+  };
+};
+
+App.diag.diff = function (before, after) {
+  const a = (before && before.items) || [], b = (after && after.items) || [];
+  const f = x => (x.flipH ? 'H' : '') + (x.flipV ? 'V' : '') || 'none';
+  const out = [];
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i].flipH !== b[i].flipH || a[i].flipV !== b[i].flipV || a[i].hand !== b[i].hand) {
+      out.push({
+        id: a[i].id, from: f(a[i]), to: f(b[i]),
+        handFrom: a[i].hand, handTo: b[i].hand
+      });
+    }
+  }
+  return out;
+};
+
+App.diag.log = function (op, data) {
+  if (!App.diag.enabled) return;
+  try {
+    const payload = Object.assign({
+      cat: 'flip', seq: ++App.diag.seq, op: op,
+      ms: Math.round(performance.now())
+    }, App.diag.context(), data || {});
+    App.log('info', 'FLIP ' + op, payload);
+  } catch (e) {  }
+};
+
+
 App.startThumbLoading = function (host) {
   if (!host) return null;
   App.finishThumbLoading(host);
@@ -177,7 +288,24 @@ App.stateSnapshot = function () {
       view: s.view ? { x: +s.view.x.toFixed(1), y: +s.view.y.toFixed(1), scale: +s.view.scale.toFixed(2) } : null,
       lastOp: App.perfCtx.lastOp,
       memory: mem,
-      gpu: g.renderer ? g.renderer.slice(0, 120) : null
+      gpu: g.renderer ? g.renderer.slice(0, 120) : null,
+      
+      doc: (function () {
+        try { const d = App.Tabs && App.Tabs.current; return d ? App.diag.str(d.svgSource || d.label || null, 120) : null; }
+        catch (e) { return null; }
+      })(),
+      flipStep: s.editFlipStep,
+      flips: (function () {
+        const out = [];
+        try {
+          const ids = s.selected ? Array.from(s.selected).slice(0, 8) : [];
+          ids.forEach(id => {
+            const l = (s.layerMap && s.layerMap.get) ? s.layerMap.get(id) : null;
+            if (l) out.push({ id: id, h: !!l.flipH, v: !!l.flipV });
+          });
+        } catch (e) {  }
+        return out;
+      })()
     };
   } catch (e) { return { error: String(e) }; }
 };

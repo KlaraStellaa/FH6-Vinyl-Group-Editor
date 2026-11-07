@@ -55,6 +55,10 @@ App.state = {
   sweepDir: 0,              
   tabGestureUsed: false,    
   tabAutoSel: null,         
+  
+  quickModDown: false,
+  quickClickOn: false,
+  quickModUsed: false,
   shiftDown: false,
   flashTimer: null,
   loaded: false,
@@ -426,6 +430,24 @@ App.ensurePatternDef = function (layer) {
 };
 
 
+App.flipSkewByParity = function (l, wantH, wantV) {
+  if (!l) return;
+  if (App.skewMode === '132') return;
+  const oldP = (l.flipH ? 1 : 0) ^ (l.flipV ? 1 : 0);
+  const newP = (wantH ? 1 : 0) ^ (wantV ? 1 : 0);
+  if (oldP !== newP) l.skew = -(Number(l.skew) || 0);
+};
+
+
+App.flipSkewByScale = function (g, wantH, wantV) {
+  if (!g) return;
+  if (App.skewMode === '132') return;
+  const oldP = ((g.sx || 1) < 0 ? 1 : 0) ^ ((g.sy || 1) < 0 ? 1 : 0);
+  const newP = (wantH ? 1 : 0) ^ (wantV ? 1 : 0);
+  if (oldP !== newP) g.skew = -(Number(g.skew) || 0);
+};
+
+
 App.applyLayerTransform = function (layer) {
   if (!layer.el) return;
   const sfx = layer.flipH ? -1 : 1, sfy = layer.flipV ? -1 : 1;
@@ -537,6 +559,8 @@ App.topOf = function (layer) {
 
 App.mergeLayers = function (ids) {
   
+  
+  
   if (App.cancelColorPreview) App.cancelColorPreview();
   App.perfCtx.lastOp = App.i18n.t('name.mergedLayer');
   const __t0 = performance.now();
@@ -581,6 +605,10 @@ App.mergeLayers = function (ids) {
     App.layersRoot.appendChild(merged.el);
   }
   App.registerChildren(merged);
+  
+  merged._localBB = undefined;
+  
+  setTimeout(function () { try { merged._localBB = undefined; } catch (e) {  } }, 0);
   
   App.lastWheelIdx = App.state.layers.length - 1 - newIdx;
   
@@ -631,6 +659,13 @@ App.splitMerged = function (merged) {
       ch.flipH = false;
       ch.flipV = p.sy < 0;
       App.applyLayerTransform(ch);
+    });
+    
+    if (App.diag && App.diag.enabled) App.diag.log('split.merged', {
+      trigger: 'ungroup',
+      parent: App.diag.geom(merged),
+      children: App.diag.flips(merged.children || []),
+      rule: 'flipH=false; flipV=(p.sy<0)'
     });
   }
   

@@ -54,8 +54,9 @@ App.SHORTCUTS = [
     group: 'sc.g.ops', items: [
       { keys: [{ act: 'moveUp' }, { act: 'moveLeft' }, { act: 'moveDown' }, { act: 'moveRight' }], desc: 'sc.d.wasd' },
       { keys: [{ act: 'nudgeUp' }, { act: 'nudgeDown' }, { act: 'nudgeLeft' }, { act: 'nudgeRight' }], desc: 'sc.d.nudge' },
-      { keys: ['Shift', 'sc.k.shiftCorner'], desc: 'sc.d.rotate' },
-      { keys: ['Shift', 'sc.k.shiftEdge'], desc: 'sc.d.skew' },
+      
+      { keys: [{ act: 'quickMod' }, 'sc.k.shiftCorner'], desc: 'sc.d.rotate' },
+      { keys: [{ act: 'quickMod' }, 'sc.k.shiftEdge'], desc: 'sc.d.skew' },
       { keys: [{ act: 'sizeMode' }], desc: 'sc.d.propMode' },
       { keys: [{ act: 'anchor' }], desc: 'sc.d.anchor' },
       { keys: [{ act: 'editDup' }], desc: 'sc.d.dup' },

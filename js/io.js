@@ -44,7 +44,9 @@ App.initIO = function () {
     if (App.settings) App.settings.toggle();
     App.toggleLogPanel();
   });
-  $('#btnLogCopy').addEventListener('click', App.copyLog);
+  $('#btnLogCopy').addEventListener('click', () => App.copyLog());
+  
+  $('#btnLogCopyFlip').addEventListener('click', () => App.copyLog('flip'));
   $('#btnLogOpen').addEventListener('click', async () => {
     
     const r = await window.sveApi.logSave();
@@ -81,16 +83,21 @@ App.refreshLogPath = async function () {
   if (!el) return;
   try {
     const r = await window.sveApi.logPath();
-    if (r && r.path) el.textContent = App.i18n.tf('log.savedPath', { v: r.path });
+    
+    if (r && r.auto && r.autoPath) el.textContent = App.i18n.tf('log.autoPath', { v: r.autoPath });
+    else if (r && r.path) el.textContent = App.i18n.tf('log.savedPath', { v: r.path });
     else el.textContent = App.i18n.tf('log.inMemory', { n: (r ? r.buffered : 0) });
   } catch (e) {
     el.textContent = App.i18n.t('log.pathUnavailable');
   }
 };
 
-App.copyLog = async function () {
+
+App.copyLog = async function (filter) {
   try {
-    const r = await window.sveApi.logRead(200000);
+    const wantFilter = (typeof filter === 'string' && filter) ? filter : null;
+    const r = await window.sveApi.logRead(
+      wantFilter ? { filter: wantFilter, maxLen: 500000 } : 200000);
     if (!r || !r.ok) { showToast(App.i18n.t('toast.io.logReadFail')); return; }
     const text = (r.content || '').trim();
     if (!text) { showToast(App.i18n.t('toast.io.logEmpty')); return; }
@@ -337,6 +344,24 @@ App.importSVGContent = function (text) {
     App._importingSvg = prevImporting;
   }
   App.log('perf', '导入SVG', { kind: __importKind, ms: Math.round(performance.now() - __t0), layers: App.state.layers.length - n0, total: App.state.layers.length, kb: Math.round(text.length / 1024) });
+  
+  if (App.diag && App.diag.enabled) {
+    const __new = App.state.layers.slice(n0);
+    const __st = { total: __new.length, flipH: 0, flipV: 0, both: 0 };
+    __new.forEach(l => {
+      if (l.flipH) __st.flipH++;
+      if (l.flipV) __st.flipV++;
+      if (l.flipH && l.flipV) __st.both++;
+    });
+    App.diag.log('import.doc', {
+      trigger: 'open', kind: __importKind,
+      rootCanvas: App.diag.str(root.getAttribute('data-sve-canvas') || root.getAttribute('viewBox') || '', 80),
+      sveVersion: root.getAttribute('data-sve-version') || null,
+      kb: Math.round(text.length / 1024),
+      stat: __st,
+      samples: App.diag.flips(__new.filter(l => l.flipH || l.flipV).slice(0, App.diag.maxItems))
+    });
+  }
   
   const news = App.state.layers.slice(n0);
   if (news.length) {

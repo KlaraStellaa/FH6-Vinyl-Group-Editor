@@ -1198,6 +1198,7 @@ App.autoStaticRelease = function () {
   App.autoStatic.baking = false;
   App.autoStatic.token++;
   (App.autoStatic.hiding || []).forEach(function (l) { try { App.restoreAutoStaticDisplay(l); } catch (e) {  } });
+
   App.autoStatic.hiding = [];
   App.autoStatic.bit = null;
   App.autoStatic.view = null;
@@ -2036,41 +2037,200 @@ App.handleSizePx = function (box) {
 };
 
 
-App.handleHitPx = function (box) {
-  const v = App.handleSizePx(box);
-  const short = (box && box.w > 0 && box.h > 0)
-    ? Math.min(box.w, box.h) * (App.state.view.scale || 1) : Infinity;
+
+App.handleArrowSpec = function (S) {
   
-  return Math.min(v * 1.5, short / 2);
+  const L = S * 1.7;
+  return {
+    S: S,
+    len: L,
+    thick: Math.max(0.8, L * 0.5),
+    shaft: Math.max(0.5, L * 0.25),
+    gap: S * 0.4,
+    
+    arm: L,
+    rthick: Math.max(0.7, L * 0.25)
+  };
+};
+
+
+App.handleArrowPath = function (len, thick, shaft) {
+  const h = len / 2, t = thick / 2, s = shaft / 2;
+  
+  const hl = len / 4;
+  const x1 = h - hl;
+  return 'M' + (-h) + ',0' +
+    ' L' + (-x1) + ',' + (-t) + ' L' + (-x1) + ',' + (-s) +
+    ' L' + x1 + ',' + (-s) + ' L' + x1 + ',' + (-t) +
+    ' L' + h + ',0' +
+    ' L' + x1 + ',' + t + ' L' + x1 + ',' + s +
+    ' L' + (-x1) + ',' + s + ' L' + (-x1) + ',' + t + ' Z';
+};
+
+
+App.handleRotPath = function (arm, thick) {
+  
+  const r = arm * 0.25;
+  const hl = arm * 0.25;
+  return 'M' + (arm - hl) + ',0 L' + r + ',0 Q0,0 0,' + r + ' L0,' + (arm - hl);
+};
+
+
+App.quickModActive = function () {
+  if (App.settings && App.settings.quickClick) return !!App.state.quickClickOn;
+  
+  return !!(App.state.quickModDown || App.state.shiftDown);
+};
+
+
+App.handleHitAt = function (clientX, clientY) {
+  const rects = App.handleHitGeom || [];
+  if (!rects.length) return null;
+  const p = App.screenToDoc(clientX, clientY);
+  for (let i = 0; i < rects.length; i++) {
+    const r = rects[i];
+    const dx = p.x - r.cx, dy = p.y - r.cy;
+    const lu = dx * r.ux + dy * r.uy;
+    const lv = dx * r.vx + dy * r.vy;
+    if (Math.abs(lu) <= r.w / 2 + 1e-9 && Math.abs(lv) <= r.h / 2 + 1e-9) return r.key;
+  }
+  return null;
+};
+
+
+App.handleHitPx = function (box) {
+  return App.handleArrowSpec(App.handleSizePx(box)).len;
 };
 
 App.drawHandles = function () {
   App.handleG.innerHTML = '';
   App.handleEls = [];
+  App.handleHitGeom = [];
   const g = App.handleGeometry();
   if (!g) return;
-  const sc = App.state.view.scale;
-  const s = App.handleSizePx(g.box) / sc;      
-  const hs = App.handleHitPx(g.box) / sc;      
-  const keys = [
-    ['nw', g.nw, 'nwse-resize'], ['n', g.n, 'ns-resize'],
-    ['ne', g.ne, 'nesw-resize'], ['e', g.e, 'ew-resize'],
-    ['se', g.se, 'nwse-resize'], ['s', g.s, 'ns-resize'],
-    ['sw', g.sw, 'nesw-resize'], ['w', g.w, 'ew-resize']
-  ];
-  keys.forEach(k => {
+  const sc = App.state.view.scale || 1;
+  const S = App.handleSizePx(g.box);
+  const a = App.handleArrowSpec(S);
+  const quick = !!App.quickModActive();
+  
+  const L = a.len / sc, T = a.thick / sc, SH = a.shaft / sc, GAP = a.gap / sc,
+    ARM = a.arm / sc, RTH = a.rthick / sc;
+
+  
+
+  
+  const norm = (x, y) => { const m = Math.hypot(x, y) || 1; return { x: x / m, y: y / m }; };
+  const mid = (p, q) => ({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 });
+  const ctr = { x: g.cx, y: g.cy };
+  const outOf = p => norm(p.x - ctr.x, p.y - ctr.y);
+  const midN = mid(g.nw, g.ne), midS = mid(g.se, g.sw), midE = mid(g.ne, g.se), midW = mid(g.nw, g.sw);
+  const D = GAP + L / 2;              
+
+  
+  const addStraight = function (key, at, dir, cursor) {
+    const n = norm(dir.x, dir.y);
+    const cx = at.x + n.x * D, cy = at.y + n.y * D;
+    const deg = Math.atan2(n.y, n.x) * 180 / Math.PI;
+    const gg = svgEl('g', { transform: 'translate(' + cx + ',' + cy + ') rotate(' + deg + ')' });
     const hit = svgEl('rect', {
-      x: k[1].x - hs / 2, y: k[1].y - hs / 2, width: hs, height: hs,
-      class: 'sve-handle-hit', 'data-h': k[0], fill: 'transparent',
-      'pointer-events': 'all', cursor: k[2]
+      x: -L / 2, y: -T / 2, width: L, height: T,
+      class: 'sve-handle-hit', 'data-h': key, fill: 'transparent',
+      
+      'pointer-events': 'fill', 'stroke-width': 0, cursor: cursor
     });
-    App.handleG.appendChild(hit);
-    App.handleG.appendChild(svgEl('rect', {
-      x: k[1].x - s / 2, y: k[1].y - s / 2, width: s, height: s,
-      class: 'sve-handle', 'pointer-events': 'none'
+    gg.appendChild(hit);
+    gg.appendChild(svgEl('path', {
+      d: App.handleArrowPath(L, T, SH), class: 'sve-harrow', 'pointer-events': 'none'
     }));
-    App.handleEls.push({ key: k[0], el: hit });
-  });
+    App.handleG.appendChild(gg);
+    App.handleEls.push({ key: key, el: hit });
+    
+    App.handleHitGeom.push({ key: key, cx: cx, cy: cy, ux: n.x, uy: n.y, vx: -n.y, vy: n.x, w: L, h: T });
+  };
+
+  
+  const addRot = function (key, corner, u, v, cursor) {
+    const G2 = GAP + RTH * 0.9;
+    const d = outOf(corner);                  
+    const k = G2 * Math.SQRT2;                
+    const px = corner.x + d.x * k;
+    const py = corner.y + d.y * k;
+    const gg = svgEl('g', {
+      transform: 'matrix(' + u.x + ',' + u.y + ',' + v.x + ',' + v.y + ',' + px + ',' + py + ')'
+    });
+    const hl = ARM * 0.25;
+    const hw = ARM * 0.25;
+    gg.appendChild(svgEl('path', {
+      d: App.handleRotPath(ARM, RTH), class: 'sve-harrow-line',
+      'stroke-width': RTH, 'stroke-linecap': 'butt', 'stroke-linejoin': 'round',
+      'pointer-events': 'none'
+    }));
+    gg.appendChild(svgEl('path', {
+      d: 'M' + ARM + ',0 L' + (ARM - hl) + ',' + (-hw) + ' L' + (ARM - hl) + ',' + hw + ' Z',
+      class: 'sve-harrow', 'pointer-events': 'none'
+    }));
+    gg.appendChild(svgEl('path', {
+      d: 'M0,' + ARM + ' L' + (-hw) + ',' + (ARM - hl) + ' L' + hw + ',' + (ARM - hl) + ' Z',
+      class: 'sve-harrow', 'pointer-events': 'none'
+    }));
+    
+    const mkHit = function (lx0, ly0, lx1, ly1) {
+      const w = Math.abs(lx1 - lx0), h = Math.abs(ly1 - ly0);
+      const x0 = Math.min(lx0, lx1), y0 = Math.min(ly0, ly1);
+      const hit = svgEl('rect', {
+        x: x0, y: y0, width: w, height: h,
+        class: 'sve-handle-hit', 'data-h': key, fill: 'transparent',
+        'pointer-events': 'fill', 'stroke-width': 0, cursor: cursor
+      });
+      gg.appendChild(hit);
+      App.handleEls.push({ key: key, el: hit });
+      const lcx = x0 + w / 2, lcy = y0 + h / 2;
+      App.handleHitGeom.push({
+        key: key,
+        cx: px + u.x * lcx + v.x * lcy,
+        cy: py + u.y * lcx + v.y * lcy,
+        ux: u.x, uy: u.y, vx: v.x, vy: v.y, w: w, h: h
+      });
+    };
+    mkHit(0, -RTH / 2, ARM - hl, RTH / 2);       
+    mkHit(ARM - hl, -hw, ARM, hw);               
+    mkHit(-RTH / 2, 0, RTH / 2, ARM - hl);       
+    mkHit(-hw, ARM - hl, hw, ARM);               
+    App.handleG.appendChild(gg);
+  };
+
+  if (!quick) {
+    
+    addStraight('nw', g.nw, outOf(g.nw), 'nwse-resize');
+    addStraight('ne', g.ne, outOf(g.ne), 'nesw-resize');
+    addStraight('se', g.se, outOf(g.se), 'nwse-resize');
+    addStraight('sw', g.sw, outOf(g.sw), 'nesw-resize');
+    addStraight('n', midN, outOf(midN), 'ns-resize');
+    addStraight('s', midS, outOf(midS), 'ns-resize');
+    addStraight('w', midW, outOf(midW), 'ew-resize');
+    addStraight('e', midE, outOf(midE), 'ew-resize');
+  } else {
+    
+    const edgeU = {
+      nw: norm(g.ne.x - g.nw.x, g.ne.y - g.nw.y),
+      ne: norm(g.nw.x - g.ne.x, g.nw.y - g.ne.y),
+      se: norm(g.sw.x - g.se.x, g.sw.y - g.se.y),
+      sw: norm(g.se.x - g.sw.x, g.se.y - g.sw.y)
+    };
+    const edgeV = {
+      nw: norm(g.sw.x - g.nw.x, g.sw.y - g.nw.y),
+      ne: norm(g.se.x - g.ne.x, g.se.y - g.ne.y),
+      se: norm(g.ne.x - g.se.x, g.ne.y - g.se.y),
+      sw: norm(g.nw.x - g.sw.x, g.nw.y - g.sw.y)
+    };
+    addRot('nw', g.nw, edgeU.nw, edgeV.nw, 'nwse-resize');
+    addRot('ne', g.ne, edgeU.ne, edgeV.ne, 'nesw-resize');
+    addRot('se', g.se, edgeU.se, edgeV.se, 'nwse-resize');
+    addRot('sw', g.sw, edgeU.sw, edgeV.sw, 'nesw-resize');
+    
+    addStraight('n', midN, outOf(midN), 'ns-resize');
+    addStraight('s', midS, outOf(midS), 'ns-resize');
+  }
 };
 
 
@@ -3469,7 +3629,25 @@ App.refreshLayerThumbs = function () {
 
 App.proxyEnabled = false;
 App.proxyThreshold = 400;
-App._proxyBake = new Map();      
+App._proxyBake = new Map();
+
+App._proxyTryHideChildren = function (merged, from) {
+  if (!merged || !merged.el) return false;
+  const rec = App._proxyBake.get(merged.id);
+  if (!rec) return false;
+  
+  const cropOk = !!rec.url;
+  const baseOk = !!rec.baseUrl;
+  
+  const fullBox = rec.full;
+  const cropCoversAll = !!(fullBox && rec.cropToken !== undefined &&
+    Math.abs(rec.minx - fullBox.minx) < 0.5 && Math.abs(rec.miny - fullBox.miny) < 0.5 &&
+    Math.abs(rec.bw - fullBox.bw) < 0.5 && Math.abs(rec.bh - fullBox.bh) < 0.5 && !!rec.url);
+  if (!((cropOk && baseOk) || cropCoversAll)) return false;
+  merged.el.querySelectorAll('[data-layer]').forEach(el => el.setAttribute('visibility', 'hidden'));
+  merged._localBB = undefined;
+  return true;
+};      
 App._proxyQueue = new Map();     
 App._proxyTimer = null;
 
@@ -3817,12 +3995,13 @@ App._installProxy = function (merged, cv, minx, miny, bw, bh, f, stat) {
       else merged.el.appendChild(fresh);
       if (current) current.remove();
       
-      merged.el.querySelectorAll('[data-layer]').forEach(el => el.setAttribute('visibility', 'hidden'));
       const prev = App._proxyBake.get(merged.id) || rec0;
       App._proxyBake.set(merged.id, Object.assign({}, prev || {}, {
         canvas: cv, minx, miny, bw, bh, f, url: url.indexOf('blob:') === 0 ? url : null,
-        needF: (stat && stat.needF) || 0, full: (stat && stat.full) || null
+        needF: (stat && stat.needF) || 0, full: (stat && stat.full) || null,
+        cropToken: (stat && stat.token !== undefined) ? stat.token : undefined
       }));
+      App._proxyTryHideChildren(merged, 'crop');
       if (prev && prev.url && prev.url !== url) { try { URL.revokeObjectURL(prev.url); } catch (e) {  } }
       merged._localBB = undefined;
       
@@ -3901,8 +4080,11 @@ App._installProxyBase = function (merged, cv, minx, miny, bw, bh, fBase, token) 
       if (cur.baseMaskUrl && cur.baseMaskUrl !== maskUrl) { try { URL.revokeObjectURL(cur.baseMaskUrl); } catch (e) {  } }
       App._proxyBake.set(merged.id, Object.assign({}, cur, {
         baseCanvas: cv, baseF: fBase, baseUrl: url, baseMaskUrl: maskUrl,
-        baseMinx: minx, baseMiny: miny, baseBw: bw, baseBh: bh
+        baseMinx: minx, baseMiny: miny, baseBw: bw, baseBh: bh,
+        baseToken: token
       }));
+      
+      App._proxyTryHideChildren(merged, 'base');
       try { App.log('perf', '底图烘焙', { merged: merged.id, w: cv.width, h: cv.height, f: fBase, encodeMs: Math.round(performance.now() - tEnc) }); } catch (e) {  }
     };
     const fail = () => {
