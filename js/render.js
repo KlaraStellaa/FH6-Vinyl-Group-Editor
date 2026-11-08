@@ -246,6 +246,8 @@ App.lodBuildQueue = function (bucket, force) {
   let offscreen = 0, capped = 0;
   const consider = (l, localRect) => {
     if (!l || l.kind !== 'symbol' || l.isMask || !l.imgEl) return;
+    
+    if (App.symbolVecPath && App.symbolVecPath(l)) return;
     const plan = App.lodTexPlan(l, bucket);
     if (plan.cappedBy === 'texture') capped++;
     if (!force && l._lodKey === plan.key) return;
@@ -2371,12 +2373,26 @@ App.buildFlashOverlayFor = function (layer) {
     });
     if (layer.dataUri) {
       
+      const vd = App.symbolVecPathOf && layer.symbolKey ? App.symbolVecPathOf(layer.symbolKey) : null;
+      if (vd && App.libVec && App.libVec.ready) {
+        const u = App.libVec.unit;
+        const sym = App.symbolMap.get(layer.symbolKey);
+        const sw = Math.max(1e-6, (sym && sym.w) || layer.w || 1);
+        const sh = Math.max(1e-6, (sym && sym.h) || layer.h || 1);
+        m.appendChild(svgEl('path', {
+          d: vd, fill: '#ffffff', 'fill-rule': 'evenodd',
+          transform: 'translate(' + (-layer.w / 2) + ' ' + (-layer.h / 2) + ') scale(' +
+            (layer.w / (sw * u)) + ' ' + (layer.h / (sh * u)) + ')'
+        }));
+      } else {
+      
       m.appendChild(svgEl('image', {
         href: layer.dataUri,
         x: -layer.w / 2, y: -layer.h / 2,
         width: layer.w, height: layer.h,
         preserveAspectRatio: 'none'
       }));
+      }
     }
     g.appendChild(m);
     g.appendChild(svgEl('rect', {
@@ -2527,6 +2543,12 @@ App.buildCompositeFlash = function (items) {
         Math.sqrt(App.lod.maxPixels / (bw * bh))));
       const srcs = leaves.map(l => {
         if (l.kind === 'symbol' && l.dataUri) {
+          
+          const vd = App.symbolVecPathOf && l.symbolKey ? App.symbolVecPathOf(l.symbolKey) : null;
+          if (vd && App.libVec && App.libVec.ready && App.symbolVecPath2D) {
+            const p2 = App.symbolVecPath2D(l.symbolKey);
+            if (p2) return Promise.resolve({ path: p2, key: l.symbolKey });
+          }
           return App.silhouetteCanvas(l.dataUri, '#ffffff', leafTexSize(l), App.symbolColorIdent(l));
         }
         if (l.kind === 'pattern') {
@@ -2564,6 +2586,20 @@ App.buildCompositeFlash = function (items) {
           cx.setTransform(T.a, T.b, T.c, T.d, T.e, T.f);
           cx.drawImage(entry.canvas, entry.rect.x, entry.rect.y, entry.rect.w, entry.rect.h,
             -(l.w || 0) / 2, -(l.h || 0) / 2, l.w || 0, l.h || 0);
+          cx.restore();
+        } else if (entry && entry.path) {
+          
+          const sym = App.symbolMap.get(entry.key);
+          const u = App.libVec.unit;
+          const sw = Math.max(1e-6, (sym && sym.w) || l.w || 1);
+          const sh = Math.max(1e-6, (sym && sym.h) || l.h || 1);
+          const T = new DOMMatrix().translate(-minx * f, -miny * f).scale(f).multiply(mats[di])
+            .translate(-(l.w || 0) / 2, -(l.h || 0) / 2)
+            .scale(((l.w || 0) / (sw * u)), ((l.h || 0) / (sh * u)));
+          cx.save();
+          cx.setTransform(T.a, T.b, T.c, T.d, T.e, T.f);
+          cx.fillStyle = '#ffffff';
+          cx.fill(entry.path, 'evenodd');
           cx.restore();
         }
         di++; n++;

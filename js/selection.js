@@ -140,6 +140,11 @@ App.layerVisibleAtSync = function (layer, clientX, clientY) {
   const pd = App.screenToDoc(clientX, clientY);
   if (!App.pointInQuad(pd, b.corners)) return false;
   if (layer.kind === 'symbol' && !layer.isMask) {
+    
+    if (App.symbolVecHit) {
+      const vh = App.symbolVecHit(layer, clientX, clientY);
+      if (vh !== null) return vh;
+    }
     const c = App.symbolColorCanvasSync(layer.dataUri, layer.color || '#ffffff', Math.max(1, Math.round(layer.w)), Math.max(1, Math.round(layer.h)), App.symbolColorIdent ? App.symbolColorIdent(layer) : null);
     if (!c) return true; 
     return App.canvasAlphaAt(c, layer, clientX, clientY) >= 32;

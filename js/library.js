@@ -66,6 +66,8 @@ App.loadLibrary = async function () {
   App.ensureMaskIndDef();
   
   await App.loadLibThumbManifest();
+  
+  App.loadLibVecManifest();
   App.buildLibraryPanel();
   App.state.loaded = true;
   $('#loadingOverlay').classList.add('hidden');
@@ -97,6 +99,30 @@ App.libThumbPreUrl = function (symbol) {
   if (!App.LIB_THUMB_PRE || !symbol || !symbol.key) return '';
   if (!App.LIB_THUMB_PRE.has(symbol.key)) return '';
   return App.LIB_THUMB_PRE_BASE + encodeURIComponent(symbol.key) + '.png';
+};
+
+
+App.libVec = { enabled: true, ready: false, unit: 1000, items: null, count: 0 };
+App.loadLibVecManifest = function () {
+  const load = fetch('assets/lib-vec.json').then(r => {
+    if (!r.ok) return null;
+    return r.json();
+  }).then(man => {
+    if (!man || !man.items) return;
+    if (Number(man.symLen) !== (App.libText || '').length) {
+      console.warn('[library] 矢量形状清单与素材不匹配（symLen ' + man.symLen + ' ≠ ' +
+        (App.libText || '').length + '），改用栅格路径');
+      return;
+    }
+    App.libVec.items = man.items;
+    App.libVec.unit = Number(man.unit) || 1000;
+    App.libVec.count = Object.keys(man.items).length;
+    App.libVec.ready = true;
+    console.log('[library] lib-vec:', App.libVec.count, 'paths');
+    
+    if (App.refreshAllSymbolTextures) App.refreshAllSymbolTextures();
+  }).catch(() => {  });
+  return Promise.race([load, new Promise(r => setTimeout(r, 400))]);
 };
 
 App.parseSymbols = function () {
