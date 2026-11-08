@@ -104,6 +104,18 @@ App.ensureSymbolImageDef = function (layer) {
   if (!layer.dataUri) return null;
   const sym = App.symbolMap.get(layer.symbolKey);
   const w = sym ? sym.w : layer.w, h = sym ? sym.h : layer.h;
+  
+  const vd = App.symbolVecPathOf && layer.symbolKey ? App.symbolVecPathOf(layer.symbolKey) : null;
+  if (vd && App.libVec && App.libVec.ready) {
+    const u = App.libVec.unit;
+    const g = svgEl('g', { id: id });
+    g.appendChild(svgEl('path', {
+      d: vd, fill: '#ffffff', 'fill-rule': 'evenodd',
+      transform: 'translate(' + (-w / 2) + ' ' + (-h / 2) + ') scale(' + (1 / u) + ')'
+    }));
+    App.defs.appendChild(g);
+    return id;
+  }
   const img = svgEl('image', {
     id, href: layer.dataUri,
     x: -w / 2, y: -h / 2, width: w, height: h,
@@ -223,7 +235,150 @@ App.symbolColorIdent = function (layer) {
   return { key: layer.symbolKey, group: App.symbolGroupOfKey(layer.symbolKey) };
 };
 
+
+App.symbolVecPath = function (layer) {
+  const L = App.libVec;
+  if (!L || !L.enabled || !L.ready || !L.items) return null;
+  if (!layer || layer.kind !== 'symbol' || layer.isMask) return null;
+  const key = layer.symbolKey;
+  if (!key) return null;
+  const d = L.items[key];
+  if (!d) return null;
+  const sym = App.symbolMap && App.symbolMap.get(key);
+  if (!sym || !(sym.w > 0) || !(sym.h > 0)) return null;
+  return { d: d, w: sym.w, h: sym.h };
+};
+App.symbolVecPathOf = function (key) {
+  const L = App.libVec;
+  if (!L || !L.ready || !L.items || !key) return null;
+  return L.items[key] || null;
+};
+
+App._symbolVecUrlCache = new Map();
+App.symbolVecUrl = function (layer) {
+  const v = App.symbolVecPath(layer);
+  if (!v) return '';
+  const color = layer.color || '#ffffff';
+  const ck = layer.symbolKey + '|' + color;
+  const hit = App._symbolVecUrlCache.get(ck);
+  if (hit) return hit;
+  const u = App.libVec.unit;
+  const vbw = Math.round(v.w * u), vbh = Math.round(v.h * u);
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + vbw + ' ' + vbh +
+    '" preserveAspectRatio="none"><path d="' + v.d + '" fill="' + color +
+    '" fill-rule="evenodd"/></svg>';
+  const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  App._symbolVecUrlCache.set(ck, url);
+  return url;
+};
+
+App._vecPoly = new Map();
+App.symbolVecPoly = function (key) {
+  const hit = App._vecPoly.get(key);
+  if (hit) return hit.polys;
+  const d = App.libVec && App.libVec.items ? App.libVec.items[key] : null;
+  if (!d) return null;
+  
+  const polys = [];
+  let cur = null;
+  let cx = 0, cy = 0;
+  let i = 0;
+  const n = d.length;
+  const num = () => {
+    while (i < n && d.charCodeAt(i) === 32) i++;
+    let s = i;
+    if (d[i] === 45) i++;
+    while (i < n && d.charCodeAt(i) >= 48 && d.charCodeAt(i) <= 57) i++;
+    return Number(d.slice(s, i));
+  };
+  while (i < n) {
+    const c = d[i];
+    if (c === 'M') {
+      i++;
+      cx = num(); cy = num();
+      cur = [cx, cy];
+      polys.push(cur);
+    } else if (c === 'C') {
+      i++;
+      const x1 = num(), y1 = num(), x2 = num(), y2 = num(), x3 = num(), y3 = num();
+      
+      const seg = Math.hypot(x1 - cx, y1 - cy) + Math.hypot(x2 - x1, y2 - y1) + Math.hypot(x3 - x2, y3 - y2);
+      const steps = Math.max(3, Math.min(24, Math.round(seg / 400)));
+      for (let k = 1; k <= steps; k++) {
+        const t = k / steps, mt = 1 - t;
+        cur.push(mt * mt * mt * cx + 3 * mt * mt * t * x1 + 3 * mt * t * t * x2 + t * t * t * x3,
+          mt * mt * mt * cy + 3 * mt * mt * t * y1 + 3 * mt * t * t * y2 + t * t * t * y3);
+      }
+      cx = x3; cy = y3;
+    } else {
+      i++;
+    }
+  }
+  App._vecPoly.set(key, { polys: polys });
+  return polys;
+};
+App.symbolVecHit = function (layer, clientX, clientY) {
+  const v = App.symbolVecPath(layer);
+  if (!v) return null;
+  const polys = App.symbolVecPoly(layer.symbolKey);
+  if (!polys || !polys.length) return null;
+  const doc = App.screenToDoc(clientX, clientY);
+  const inv = App.transformChainMat ? App.transformChainMat(layer).inverse() : null;
+  let lx, ly;
+  if (inv) {
+    const q = new DOMPoint(doc.x, doc.y).matrixTransform(inv);
+    lx = q.x; ly = q.y;
+  } else {
+    const q = new DOMPoint(clientX, clientY).matrixTransform(layer.el.getScreenCTM().inverse());
+    lx = q.x; ly = q.y;
+  }
+  const u = App.libVec.unit;
+  const sx = (lx + layer.w / 2) / Math.max(1e-9, layer.w) * (v.w * u);
+  const sy = (ly + layer.h / 2) / Math.max(1e-9, layer.h) * (v.h * u);
+  let inside = false;
+  for (let pi = 0; pi < polys.length; pi++) {
+    const p = polys[pi];
+    const m = p.length;
+    if (m < 6) continue;
+    for (let a = 0, b = m - 2; a < m; b = a, a += 2) {
+      const yi = p[a + 1], yj = p[b + 1];
+      if ((yi > sy) !== (yj > sy)) {
+        const xj = p[b], xi = p[a];
+        if (sx < (xj - xi) * (sy - yi) / (yj - yi) + xi) inside = !inside;
+      }
+    }
+  }
+  return inside;
+};
+
+App._vecPath2D = new Map();
+App.symbolVecPath2D = function (key) {
+  const hit = App._vecPath2D.get(key);
+  if (hit) return hit;
+  const d = App.libVec && App.libVec.items ? App.libVec.items[key] : null;
+  if (!d) return null;
+  let p = null;
+  try { p = new Path2D(d); } catch (e) { p = null; }
+  if (p) App._vecPath2D.set(key, p);
+  return p;
+};
+
+App.refreshAllSymbolTextures = function () {
+  const walk = l => {
+    if (!l) return;
+    if (l.kind === 'merged') { (l.children || []).forEach(walk); return; }
+    if (l.kind === 'symbol' && !l.isMask && l.imgEl) {
+      App.installSymbolColorUrl(l, l.imgEl);
+    }
+  };
+  (App.state.layers || []).forEach(walk);
+};
+
+
 App.symbolColorUrl = function (layer, opts) {
+  
+  const vurl = App.symbolVecUrl ? App.symbolVecUrl(layer) : '';
+  if (vurl) return Promise.resolve(vurl);
   
   const k = Math.max(0.02, Number(opts && opts.k) || 1);
   const w = Math.max(1, Math.round(layer.w * k));

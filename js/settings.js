@@ -332,7 +332,15 @@ App.settings = {
     }
   },
 
+  
+  async whenReady() {
+    const ready = () => !!(App.state && App.gpmap && App.fonts);
+    for (let i = 0; i < 200 && !ready(); i++) await new Promise(r => setTimeout(r, 15));
+    return ready();
+  },
+
   async load() {
+    await this.whenReady();
     try {
       const r = await window.sveApi.settingsGet();
       const s = (r && r.settings) || r || {};
@@ -370,7 +378,8 @@ App.settings = {
         if (ls.quickClick === true) this.quickClick = true;
         this.applyAutoSave(ls.autoSave);
       }
-      this.applySpeeds(ls);
+      
+      if (!window.sveApi.settingsGet) this.applySpeeds(ls);
       if (!window.sveApi.settingsGet) this.applyKeymap(ls);   
       
       if (App.Favorites && !window.sveApi.settingsGet) App.Favorites.load(ls.favorites);
