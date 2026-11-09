@@ -33,7 +33,7 @@ from multiprocessing import Pool
 
 import numpy as np
 from PIL import Image, ImageDraw
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import binary_dilation, binary_erosion, gaussian_filter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'assets', 'FH6_Vinyl_Symbols.svg')
@@ -45,6 +45,25 @@ MIN_IOU = 0.88        # 追踪结果与原掩膜的 IoU 门：低于它的符号
                       # 0.88 而不是 0.95：细长条形素材（如 35×513 的竖条）1px 边缘误差就吃掉 6% IoU，
                       # 用高门槛会把本来正确的追踪拒掉；真正的坏样本（内外翻转）IoU 只有 0.08。
 MAX_BYTES = 40000     # 单符号 path 上限：超过它不值得（多为噪点型素材），同样退回栅格
+# ★ 灰度层次门（2026-11-09，v1.4.1 撤回的直接原因）
+#   符号素材是灰度 JPEG，而染色的 alpha **就是像素亮度**（js/model.js 的 tintPixels:
+#   `d[i + 3] = lum`）⇒ 带灰度的素材本来画出来就是「渐变 / 半透明」。
+#   矢量路径只有「在 / 不在」，会把整块压成 alpha=255 的实心：渐变消失、半透明变不透。
+#   实测 1400 个符号里 96 个有明显层次（中间调占比最高 93.9%，二值素材该项 ≈ 0.00001），
+#   这批必须留在原栅格路径上 —— 它们本来就是柔边，放大后不会有台阶感，栅格放大也不违和。
+MAX_CORE_SOFT = 0.02  # 核心区（剔除边界 2px）中间调像素占比上限
+MIN_ALPHA_MAE = 0.06  # 兜底：全图 |a - 二值化(a)| 均值上限（核心区太小时用它）
+
+# ★ 多级 alpha（2026-11-09 第二轮）：层次门拦下来的符号不能就这么退回栅格 ——
+#   渐变素材放大后照样有台阶。改法是把灰度场切成 LEVELS 条等值线带，
+#   级 k 的轮廓 = {a >= k/LEVELS}，渲染时从外到内叠加，每级单独的 alpha 是
+#   b_k = 1/(N-k+1)（不是 1/N！alpha 合成是 1-(1-a)^n，等分相加到不了 1）。
+#   累积后第 k 级的 alpha 正好 = k/N，于是整块图案的 alpha 就是 floor(N·a)/N。
+LAYER_LEVELS = 32     # 级数：1/32 ≈ 3.1% alpha 台阶，1:1 下肉眼几乎不可见（实测 MAE≈1.5%）
+LAYER_ERR = 0.7       # 等值线只表达 alpha 的量化边界，允许比主干 0.35 更松
+LAYER_SIGMA = 3.0     # 等值线是平滑曲线，先重度平滑再拟合（否则像素级抖动会被当成尖角）
+MAX_LAYER_BYTES = 150000  # 单符号多级 path 总字节上限：超了降级数，最小级数仍超就退回栅格
+MAX_LAYER_MAE = 0.045     # 多级编码 vs 原灰度场的 MAE 门（0.045 ≈ 11/255，仍属「看不出」）
 SIGMA_PRE = 0.9       # 追踪前对灰度场做高斯预平滑：纯二值场里两个环常常在一个像素点相切，
                       # 「每个交点只有一出边」的前提会被破坏，环会串错（实测某符号 IoU 掉到 0.33）。
 CORNER_DEG = 42.0
@@ -479,6 +498,68 @@ def parse_d(d):
     return rings
 
 
+def gray_layering(a):
+    """量化「灰度层次」= 染色后会不会有渐变/半透明。
+    返回 (core_soft, mae)：
+      core_soft —— 剔掉 >0.5 边界外扩 2px 之后，核心区里中间调（0.06~0.94）的占比；
+      mae       —— 全图 |a - 二值化(a)| 的均值，核心区过小时当兜底。
+    边缘一圈的抗锯齿与 JPEG 振铃会被 2px 的排除带吃掉（实测二值素材 core_soft < 0.001），
+    而真正的渐变会一路漫进图形内部。"""
+    m = a > 0.5
+    mae = float(np.mean(np.abs(a - m.astype(np.float64))))
+    if not m.any():
+        return 1.0, mae
+    edge = m ^ binary_erosion(m)
+    edge = binary_dilation(edge, iterations=2)
+    core = ~edge
+    if int(core.sum()) < 16:
+        return 0.0, mae
+    v = a[core]
+    core_soft = float(np.count_nonzero((v > 0.06) & (v < 0.94))) / float(v.size)
+    return core_soft, mae
+
+
+def layered_alpha(levels, MW, MH, W, H, ss=2):
+    """把「每级的环（mask 像素坐标）」渲染成 W×H 的 alpha 场，用来校验多级编码对不对。
+    合成顺序与运行期 js/model.js 的 symbolVecUrl 必须一致：从外到内，b_k = 1/(N-k+1)。"""
+    N = len(levels)
+    acc = np.zeros((H * ss, W * ss), dtype=np.float32)
+    fx = (W * ss) / float(MW)
+    fy = (H * ss) / float(MH)
+    for k, rings in enumerate(levels, start=1):
+        if not rings:
+            continue
+        b = 1.0 / (N - k + 1)
+        m = np.zeros((H * ss, W * ss), dtype=bool)
+        for r in rings:
+            if len(r) < 3:
+                continue
+            img = Image.new('1', (W * ss, H * ss), 0)
+            ImageDraw.Draw(img).polygon([(float(x) * fx, float(y) * fy) for x, y in r], fill=1)
+            m ^= np.asarray(img, dtype=bool)
+        acc = acc + b * (1.0 - acc) * m.astype(np.float32)
+    return np.asarray(Image.fromarray((np.clip(acc, 0, 1) * 255).astype(np.uint8))
+                      .resize((W, H), Image.BOX), dtype=np.float32) / 255.0
+
+
+def build_layered(a, scale, N):
+    """灰度场 → N 级等值线路径（每级一个 d 字符串，级序 = 从外到内）。
+    返回 (list, rings_by_level)；任何一级空掉都返回 None（说明这一级没有实体）。"""
+    ds, ringlev = [], []
+    for k in range(1, N + 1):
+        rings = [r for r in trace_rings(a, level=k / float(N)) if abs(ring_area(r)) >= 2.0]
+        ringlev.append(rings)
+        parts = []
+        for r in rings:
+            d = ring_to_d(r, scale, LAYER_ERR, LAYER_SIGMA)
+            if d:
+                parts.append(d)
+        ds.append(''.join(parts))
+    if not ds[0]:
+        return None, None
+    return ds, ringlev
+
+
 def build_one(item):
     key, sw, sh, b64 = item
     try:
@@ -486,6 +567,30 @@ def build_one(item):
     except Exception as e:
         return key, '', 'decode:' + str(e)[:80]
     a = np.asarray(im, dtype=np.float64) / 255.0
+    # 层次门：这类符号的追踪结果形状是对的（IoU 常常 >0.96），但染色后没有渐变，
+    # 过了 IoU 门反而更糟。判到有层次就走多级 alpha 等值线（见 LAYER_LEVELS 注释）。
+    core_soft, la_mae = gray_layering(a)
+    if core_soft > MAX_CORE_SOFT or la_mae > MIN_ALPHA_MAE:
+        W0, H0 = im.size
+        scale = sw / float(W0) * UNIT
+        best = None
+        for N in (LAYER_LEVELS, 16, 10):
+            ds, ringlev = build_layered(a, scale, N)
+            if not ds:
+                return key, '', 'layered_empty'
+            total = sum(len(x) for x in ds)
+            if total > MAX_LAYER_BYTES:
+                best = ('big', total, N)
+                continue
+            # 校验：降到 ≤192 边长渲染，跟原灰度场比（多级编码的唯一硬指标）
+            w2 = min(W0, 192); h2 = max(1, int(round(H0 * w2 / float(W0))))
+            rec = layered_alpha(ringlev, W0, H0, w2, h2, ss=2)
+            tru = np.asarray(im.resize((w2, h2), Image.BOX), dtype=np.float32) / 255.0
+            m2 = float(np.mean(np.abs(rec - tru)))
+            if m2 > MAX_LAYER_MAE:
+                return key, '', 'layered_mae:%.3f/n%d' % (m2, N)
+            return key, ds, ''
+        return key, '', 'layered_big:%d/n%d' % (best[1], best[2]) if best else 'layered_empty'
     rings = trace_field(a)
     # 输出单位：符号单位 × 1000。掩膜像素 → 符号单位的系数 sw/maskW，再 ×1000
     scale = sw / float(im.size[0]) * UNIT
@@ -532,26 +637,32 @@ def main():
     print('symbols=%d  symLen=%d  todo=%d  err=%.2f sigma=%.2f presigma=%.2f' % (
         len(syms), symlen, len(todo), ERR, SIGMA, SIGMA_PRE), flush=True)
     t0 = time.time()
-    results, fails = {}, []
+    results, layered, fails = {}, {}, []
     workers = max(1, min(12, (os.cpu_count() or 4)))
     with Pool(workers) as pool:
         for i, (key, d, err) in enumerate(pool.imap_unordered(build_one, todo, chunksize=4)):
             if err or not d:
                 fails.append((key, err or 'empty'))
+            elif isinstance(d, list):
+                layered[key] = {'n': len(d), 'd': d}
             else:
                 results[key] = d
             if (i + 1) % 100 == 0:
                 print('  %d/%d  %.1fs' % (i + 1, len(todo), time.time() - t0), flush=True)
-    total = sum(len(v) for v in results.values())
-    print('done %.1fs  ok=%d fail=%d  bytes=%d  avg=%d  max=%d  (estimate 1400: %.2f MB)' % (
-        time.time() - t0, len(results), len(fails), total,
-        total // max(1, len(results)), max((len(v) for v in results.values()), default=0),
-        (total / max(1, len(results))) * 1400 / 1048576.0), flush=True)
+    total = sum(len(v) for v in results.values()) + \
+            sum(sum(len(x) for x in v['d']) for v in layered.values())
+    print('done %.1fs  flat=%d  layered=%d  fail=%d  bytes=%d' % (
+        time.time() - t0, len(results), len(layered), len(fails), total), flush=True)
     if fails[:8]:
         print('  fails:', fails[:8], flush=True)
     if probe:
         return
-    out = {'symLen': symlen, 'unit': UNIT, 'items': results}
+    out = {'symLen': symlen, 'unit': UNIT, 'items': results,
+           # 多级 alpha 编码（渐变/半透明素材）：每项 {'n': 级数, 'd': [从外到内的路径]}
+           'layers': layered,
+           # 没进 items/layers 的符号与原因：运行期据此解释「为什么这个图案放大后还是糊」，
+           # 也让判据能直接断言「有灰度的符号一个都没被压平」。
+           'rejected': {k: e for k, e in sorted(fails)}}
     with io.open(DST, 'w', encoding='utf-8') as f:
         json.dump(out, f, ensure_ascii=False, separators=(',', ':'))
     print('wrote %s  %.2f MB' % (DST, os.path.getsize(DST) / 1048576.0), flush=True)
