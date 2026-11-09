@@ -7,7 +7,9 @@
     ['#btnOpen', 'btnOpen'], ['#btnSave', 'btnSave'], ['#btnSaveAs', 'btnSaveAs'], ['#btnSaveWork', 'btnSaveWork'],
     ['#btnOpenWork', 'btnOpenWork'],
     ['#btnHistAnchor', 'btnHistAnchor'], ['#btnBase', 'btnBase'], ['#btnGrid', 'btnGrid'],
-    ['#btnZoomWheel', 'btnZoomWheel'], ['#btnShortcuts', 'btnShortcuts'],
+    ['#btnZoomWheel', 'btnZoomWheel'],
+    
+    ['#btnInsertBelow', 'btnInsertBelow'], ['#btnShortcuts', 'btnShortcuts'],
     ['#helpFab', 'helpFab'],
     ['#btnOpenImage', 'btnOpenImage'], ['#btnBgImage', 'btnBgImage'],
     

@@ -176,7 +176,9 @@ html[data-scheme="light"] {
 
 #wheelBox { position: absolute; left: 4px; right: 16px; top: 228px; height: 72px; border-radius: 5px; outline: 2px solid #ffffff; outline-offset: -2px; box-shadow: 0 0 6px rgba(255, 255, 255, .7); pointer-events: none; z-index: 2; }
 #wheelBox.hidden { display: none; }
-.layer-item { position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; height: 72px; padding: 4px 2px; border-radius: 5px; border: 1px solid transparent; cursor: pointer; margin-bottom: 4px; }
+
+.layer-item { position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; height: 72px; padding: 4px 2px; border-radius: 5px; border: 1px solid transparent; cursor: pointer; margin-bottom: 4px;
+  content-visibility: auto; contain-intrinsic-size: auto 76px; contain: layout style; }
 .layer-item:hover { background: var(--card-hover-bg); }
 .layer-select-bg { position: absolute; inset: 0; border-radius: 5px; background: var(--accent-sel-bg); opacity: 0; pointer-events: none; will-change: opacity; z-index: 0; }
 .tri { position: absolute; top: 0; right: 0; width: 0; height: 0; border-top: 28px solid #ff4444; border-left: 28px solid transparent; pointer-events: none; z-index: 1; }

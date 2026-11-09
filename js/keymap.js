@@ -19,6 +19,7 @@ App.KM_I18N = {
     'km.a.pan': '平移视图（按住）', 'km.a.highlight': '高亮图层 / 取消高亮（按住）',
     'km.a.undo': '撤销', 'km.a.redo': '重做', 'km.a.base': '切换画布底色',
     'km.a.hideLayers': '隐藏图层', 'km.a.hideBg': '隐藏背景', 'km.a.hideOthers': '隐藏其他图层',
+    'km.a.insertBelow': '新图层插入：选中层下 / 最上层',
     'km.a.opacityLayersDown': '图层透明度减 10%', 'km.a.opacityLayersUp': '图层透明度加 10%',
     'km.a.opacityBgDown': '背景透明度减 10%', 'km.a.opacityBgUp': '背景透明度加 10%',
     'km.a.escape': '关闭功能栏 / 退出编辑 / 清空选择',
@@ -50,6 +51,7 @@ App.KM_I18N = {
     'km.a.pan': '平移檢視（按住）', 'km.a.highlight': '反白圖層 / 取消反白（按住）',
     'km.a.undo': '復原', 'km.a.redo': '重做', 'km.a.base': '切換畫布底色',
     'km.a.hideLayers': '隱藏圖層', 'km.a.hideBg': '隱藏背景', 'km.a.hideOthers': '隱藏其他圖層',
+    'km.a.insertBelow': '新圖層插入：選取層下 / 最上層',
     'km.a.opacityLayersDown': '圖層透明度減 10%', 'km.a.opacityLayersUp': '圖層透明度加 10%',
     'km.a.opacityBgDown': '背景透明度減 10%', 'km.a.opacityBgUp': '背景透明度加 10%',
     'km.a.escape': '關閉功能列 / 退出編輯 / 清空選取',
@@ -81,6 +83,7 @@ App.KM_I18N = {
     'km.a.pan': 'Pan the view (hold)', 'km.a.highlight': 'Highlight / clear highlight (hold)',
     'km.a.undo': 'Undo', 'km.a.redo': 'Redo', 'km.a.base': 'Toggle canvas background',
     'km.a.hideLayers': 'Hide all layers', 'km.a.hideBg': 'Hide background image', 'km.a.hideOthers': 'Hide other layers',
+    'km.a.insertBelow': 'Insert new layers: below selection / on top',
     'km.a.opacityLayersDown': 'Layer opacity -10%', 'km.a.opacityLayersUp': 'Layer opacity +10%',
     'km.a.opacityBgDown': 'Background opacity -10%', 'km.a.opacityBgUp': 'Background opacity +10%',
     'km.a.escape': 'Close toolbar / exit edit / clear selection',
@@ -112,6 +115,7 @@ App.KM_I18N = {
     'km.a.pan': '表示を移動（長押し）', 'km.a.highlight': 'レイヤーを強調 / 解除（長押し）',
     'km.a.undo': '元に戻す', 'km.a.redo': 'やり直す', 'km.a.base': 'キャンバス背景を切替',
     'km.a.hideLayers': 'レイヤーを隠す', 'km.a.hideBg': '背景画像を隠す', 'km.a.hideOthers': '他のレイヤーを隠す',
+    'km.a.insertBelow': '新規レイヤーの挿入：選択の下 / 最前面',
     'km.a.opacityLayersDown': 'レイヤーの不透明度 -10%', 'km.a.opacityLayersUp': 'レイヤーの不透明度 +10%',
     'km.a.opacityBgDown': '背景の不透明度 -10%', 'km.a.opacityBgUp': '背景の不透明度 +10%',
     'km.a.escape': '機能バーを閉じる / 編集を終了 / 選択解除',
@@ -143,6 +147,7 @@ App.KM_I18N = {
     'km.a.pan': '보기 이동(길게)', 'km.a.highlight': '레이어 강조 / 해제(길게)',
     'km.a.undo': '실행 취소', 'km.a.redo': '다시 실행', 'km.a.base': '캔버스 배경 전환',
     'km.a.hideLayers': '레이어 숨기기', 'km.a.hideBg': '배경 이미지 숨기기', 'km.a.hideOthers': '다른 레이어 숨기기',
+    'km.a.insertBelow': '새 레이어 삽입: 선택 아래 / 맨 위',
     'km.a.opacityLayersDown': '레이어 불투명도 -10%', 'km.a.opacityLayersUp': '레이어 불투명도 +10%',
     'km.a.opacityBgDown': '배경 불투명도 -10%', 'km.a.opacityBgUp': '배경 불투명도 +10%',
     'km.a.escape': '기능 바 닫기 / 편집 종료 / 선택 해제',
@@ -350,6 +355,35 @@ App.keymap = {
     if (swapWith) this.map[swapWith] = old;
     this.reindex();
     return { swapped: swapWith ? [swapWith] : [] };
+  },
+
+  
+  overwriteCombos(id, combos) {
+    const KM = window.SVE_KEYMAP;
+    if (!KM || !this.map[id]) return { error: 'noaction' };
+    const list = [];
+    (combos || []).forEach(c => {
+      if (KM.isValidCombo(c) && list.indexOf(c) < 0) list.push(c);
+    });
+    if (!list.length) return { error: 'invalid' };
+    const hasMouse = list.some(c => KM.isMouseCombo(c));
+    const hasKey = list.some(c => !KM.isMouseCombo(c));
+    if (hasMouse && hasKey) return { error: 'mix' };
+    const out = list.slice(0, 4);
+    const stolen = [];
+    KM.ACTIONS.forEach(a => {
+      if (a.id === id) return;
+      const arr = this.map[a.id] || [];
+      for (let i = arr.length - 1; i >= 0; i--) {
+        if (out.some(c => KM.sameBinding(c, arr[i]))) {
+          arr.splice(i, 1);
+          if (stolen.indexOf(a.id) < 0) stolen.push(a.id);
+        }
+      }
+    });
+    this.map[id] = out;
+    this.reindex();
+    return { stolen: stolen };
   },
 
   

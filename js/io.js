@@ -320,6 +320,8 @@ App.importSvgIntoCurrent = function (text, label) {
 App.importSVGContent = function (text) {
   if (App.cancelColorPreview) App.cancelColorPreview();
   
+  const __insAnchor = (App.state.insertBelow && App.insertAnchorLayer) ? App.insertAnchorLayer() : null;
+  
   if (App.state.eyeMode && App.setEyedropper) App.setEyedropper(null);
   if (App.invalidateEditStatic) App.invalidateEditStatic();
   App.perfCtx.lastOp = App.i18n.t('name.importPrefix') + 'SVG';
@@ -381,9 +383,14 @@ App.importSVGContent = function (text) {
     }
   }
   
+  let __merged = null;
   if (news.length > 1) {
-    const merged = App.mergeLayers(news.map(l => l.id));
-    if (merged) showToast(App.i18n.tf('toast.io.importedMerged', { n: news.length }));
+    __merged = App.mergeLayers(news.map(l => l.id));
+    if (__merged) showToast(App.i18n.tf('toast.io.importedMerged', { n: news.length }));
+  }
+  
+  if (news.length && App.state.insertBelow && __insAnchor && App.reinsertLayersLikePaste) {
+    App.reinsertLayersLikePaste(__merged ? [__merged] : news, __insAnchor);
   }
   
   if (news.length && App.contentChanged) App.contentChanged();
@@ -599,7 +606,8 @@ App.placePatternAt = function (spec, x, y) {
     });
     l.symbolKey = spec.key;
     l.dataUri = App.symbolUri(sym);
-    App.addLayer(l);
+    
+    App.insertNewLayer(l);
   } else {
     const pat = App.patterns.find(p => p.key === spec.key);
     if (!pat) return;
@@ -608,7 +616,7 @@ App.placePatternAt = function (spec, x, y) {
       x, y, sx: inv, sy: inv, color: App.state.lastColor
     });
     l.patternKey = spec.key;
-    App.addLayer(l);
+    App.insertNewLayer(l);
   }
   
   if (App.state.batching) {
@@ -616,7 +624,9 @@ App.placePatternAt = function (spec, x, y) {
     App.state.selectedByTab = false;
     App.lastWheelIdx = 0;
   } else if (App.state.selected.size > 1 || (App.state.selectedByTab && App.state.selected.size >= 1)) {
-    App.lastWheelIdx = 0; 
+    
+    const _pi = App.panelLayers().findIndex(x => x.id === l.id);
+    App.lastWheelIdx = _pi >= 0 ? _pi : 0;
     App.scrollItemToTop(l);
     App.syncPanelSelectionClasses();
     App.updateSelToolbar();
@@ -624,7 +634,9 @@ App.placePatternAt = function (spec, x, y) {
   } else {
     App.state.selBarDismissed = false;
     App.state.selectedByTab = false;
-    App.lastWheelIdx = 0; 
+    
+    const _pi2 = App.panelLayers().findIndex(x => x.id === l.id);
+    App.lastWheelIdx = _pi2 >= 0 ? _pi2 : 0;
     App.setSelection([l.id], { scrollPanel: true });
     
     if (App.requestFlashRefresh) App.requestFlashRefresh();

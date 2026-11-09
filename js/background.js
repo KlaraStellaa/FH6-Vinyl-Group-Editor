@@ -9,6 +9,9 @@ App.initBackground = function () {
   $('#btnGrid').addEventListener('click', App.toggleGrid);
   $('#btnZoomWheel').addEventListener('click', App.toggleWheelZoom);
   App.updateZoomWheelButton();
+  
+  $('#btnInsertBelow').addEventListener('click', App.toggleInsertBelow);
+  App.updateInsertBelowButton();
   $('#btnBgImage').addEventListener('click', App.onBgButton);
   $('#btnRemoveBg').addEventListener('click', () => {
     App.removeBackground();
@@ -253,6 +256,22 @@ App.updateZoomWheelButton = function () {
   if (!b) return;
   b.textContent = App.i18n.t(App.state.wheelZoomEnabled ? 'toolbar.zoomOn' : 'toolbar.zoomOff');
   b.classList.toggle('active', !App.state.wheelZoomEnabled);
+};
+
+App.toggleInsertBelow = function () {
+  App.state.insertBelow = !App.state.insertBelow;
+  App.updateInsertBelowButton();
+};
+
+App.updateInsertBelowButton = function () {
+  const b = $('#btnInsertBelow');
+  if (!b) return;
+  const on = !!App.state.insertBelow;
+  const key = on ? 'toolbar.insertBelowOn' : 'toolbar.insertBelowOff';
+  
+  if (b.getAttribute('data-i18n') !== key) b.setAttribute('data-i18n', key);
+  b.textContent = App.i18n.t(key);
+  b.classList.toggle('active', on);
 };
 
 App.GRID_MIN_CELL_PX = 8;

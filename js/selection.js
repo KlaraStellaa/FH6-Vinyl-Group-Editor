@@ -449,6 +449,16 @@ App.groupEditInsertIndex = function () {
 };
 
 
+App.selectedInsertIndex = function () {
+  const layers = App.state.layers || [];
+  const sel = App.state.selected;
+  if (!sel || !sel.size) return -1;
+  for (let i = 0; i < layers.length; i++) {
+    if (layers[i] && sel.has(layers[i].id)) return i;
+  }
+  return -1;
+};
+
 App.enterGroupEdit = function (merged) {
   if (!merged || merged.kind !== 'merged') return false;
   const children = (merged.children || []).slice();
@@ -671,6 +681,45 @@ App.copySelection = function () {
   showToast(App.i18n.tf('toast.sel.copied', { n: items.length }));
 };
 
+
+App.insertLayersLikePaste = function (newLayers, anchorArg) {
+  const layers = App.state.layers;
+  if (!newLayers || !newLayers.length) return false;
+  
+  if (App.state.plusAnchorActive && layers.length) {
+    
+    const insertAt = layers.length;
+    const topEl = layers[insertAt - 1] ? layers[insertAt - 1].el : null;
+    newLayers.forEach((l) => {
+      if (!l.el) App.buildLayerElement(l);
+      if (topEl && topEl.parentNode) topEl.after(l.el); else App.layersRoot.appendChild(l.el);
+      layers.splice(insertAt, 0, l);
+      App.registerChildren(l);
+      l.thumbDirty = true;
+    });
+  } else {
+    const anchor = (anchorArg !== undefined) ? anchorArg : App.insertAnchorLayer();
+    if (!anchor || !layers.includes(anchor)) return false;
+    
+    const idx = layers.indexOf(anchor);
+    newLayers.forEach((l, k) => {
+      if (!l.el) App.buildLayerElement(l);
+      const ref = k === 0 ? anchor.el : newLayers[k - 1].el;
+      ref.before(l.el);
+      layers.splice(idx, 0, l);
+      App.registerChildren(l);
+      l.thumbDirty = true;
+    });
+  }
+  
+  if (!App.state.batching) {
+    App.refreshPanel();
+    App.refreshCount();
+  }
+  if (App.contentChanged) App.contentChanged();
+  return true;
+};
+
 App.pasteClipboard = function () {
   if (!App.state.clipboard.length) { return; }
   App.history.markDiscrete();
@@ -681,63 +730,67 @@ App.pasteClipboard = function () {
   
   const hideBatch = newLayers.length > 50 && App.layersRoot.style.display !== 'none';
   if (hideBatch) App.layersRoot.style.display = 'none';
-  const sel = App.selectedItems();
   
-  if (App.state.plusAnchorActive && App.state.layers.length) {
-    
-    const insertAt = App.state.layers.length;
-    const topEl = App.state.layers[insertAt - 1] ? App.state.layers[insertAt - 1].el : null;
-    newLayers.forEach((l) => {
-      if (!l.el) App.buildLayerElement(l);
-      if (topEl && topEl.parentNode) topEl.after(l.el); else App.layersRoot.appendChild(l.el);
-      App.state.layers.splice(insertAt, 0, l);
-      App.registerChildren(l);
-      l.thumbDirty = true;
-    });
+  const docked = !!(App.state.plusAnchorActive && App.state.layers.length);
+  const anchorBefore = docked ? null : App.insertAnchorLayer();
+  const placed = App.insertLayersLikePaste(newLayers);
+  if (!placed) {
+    newLayers.forEach(l => App.addLayer(l));
     App.refreshPanel();
     App.refreshCount();
-    if (hideBatch && !App.state.layersHidden && App.state.eyeMode !== 'bg') App.layersRoot.style.display = '';
-    App.state.selectedByTab = false;
-    App.state.selBarDismissed = false;
-    App.setSelection([]);
-    
-    try { App.log('info', '粘贴到「+」栏下方', { layers: newLayers.length, insertAt: insertAt, firstId: newLayers[0] && newLayers[0].id }); } catch (e) {  }
-    if (App.contentChanged) App.contentChanged();
-
-    return;
   }
-  let anchor = App.whiteBoxLayer();
-  try { App.log('info', '粘贴（非停靠）', { layers: newLayers.length, anchorId: anchor && anchor.id }); } catch (e) {  }
-  if (!anchor && sel.length === 1 && App.state.layers.includes(sel[0])) anchor = sel[0];
-  if (anchor && App.state.layers.includes(anchor)) {
-    
-    const idx = App.state.layers.indexOf(anchor);
-    newLayers.forEach((l, k) => {
-      if (!l.el) App.buildLayerElement(l);
-      const ref = k === 0 ? anchor.el : newLayers[k - 1].el;
-      ref.before(l.el);
-      App.state.layers.splice(idx, 0, l);
-      App.registerChildren(l);
-      l.thumbDirty = true;
-    });
-  } else {
-    newLayers.forEach(l => App.addLayer(l));
-  }
-  App.refreshPanel();
-  App.refreshCount();
   
   if (hideBatch && !App.state.layersHidden && App.state.eyeMode !== 'bg') App.layersRoot.style.display = '';
   
   App.state.selectedByTab = false;
   App.state.selBarDismissed = false;
   App.setSelection([]);
-  
-  if (newLayers.length) {
-    const topPaste = newLayers[newLayers.length - 1];
-    if (App.scrollItemToTop) App.scrollItemToTop(topPaste, true);
+  if (docked) {
+    
+    try { App.log('info', '粘贴到「+」栏下方', { layers: newLayers.length, firstId: newLayers[0] && newLayers[0].id }); } catch (e) {  }
+  } else {
+    try { App.log('info', '粘贴（非停靠）', { layers: newLayers.length, anchorId: anchorBefore && anchorBefore.id }); } catch (e) {  }
+    
+    if (newLayers.length && App.scrollItemToTop) App.scrollItemToTop(newLayers[newLayers.length - 1], true);
   }
   if (App.contentChanged) App.contentChanged();
+};
 
+
+
+
+App.insertAnchorLayer = function () {
+  if (App.state.plusAnchorActive) return null;
+  let anchor = App.whiteBoxLayer();
+  if (!anchor) {
+    const sel = App.selectedItems();
+    if (sel.length === 1) anchor = sel[0];
+  }
+  return anchor && App.state.layers.includes(anchor) ? anchor : null;
+};
+
+
+App.insertNewLayer = function (layer) {
+  if (App.state.insertBelow && App.insertLayersLikePaste([layer])) return layer;
+  return App.addLayer(layer);
+};
+
+
+App.reinsertLayersLikePaste = function (list, anchorArg) {
+  const layers = App.state.layers;
+  const block = (list || []).filter(l => l && layers.includes(l));
+  if (!block.length) return false;
+  const ordered = block.slice().sort((a, b) => layers.indexOf(a) - layers.indexOf(b));
+  ordered.forEach(l => {
+    if (l.el && l.el.parentNode) l.el.parentNode.removeChild(l.el);
+    const i = layers.indexOf(l);
+    if (i >= 0) layers.splice(i, 1);
+    App.unregisterChildren(l);
+  });
+  if (App.insertLayersLikePaste(ordered, anchorArg)) return true;
+  
+  ordered.forEach(l => App.addLayer(l));
+  return false;
 };
 
 App.deleteSelection = function () {

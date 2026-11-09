@@ -411,8 +411,8 @@ App.dispatchAction = function (A, e) {
       return;
     }
     
-    if (A === 'up') { App.stepWhiteBox(-1); e.preventDefault(); return; }
-    if (A === 'down') { App.stepWhiteBox(1); e.preventDefault(); return; }
+    if (A === 'up') { if (!e.repeat) App.startWhiteBoxStep(-1); e.preventDefault(); return; }
+    if (A === 'down') { if (!e.repeat) App.startWhiteBoxStep(1); e.preventDefault(); return; }
     if (A === 'cut') { App.cutSelection(); return; }
     if (A === 'paste') { App.pasteClipboard(); return; }
     
@@ -428,6 +428,13 @@ App.dispatchAction = function (A, e) {
       else if (A === 'hideBg') App.toggleBgHidden();
       else App.toggleHideOthers();
     }
+    return;
+  }
+  
+  if (A === 'insertBelow') {
+    if (App.Home && App.Home.shown) return;
+    if (!e.repeat) App.toggleInsertBelow();
+    e.preventDefault();
     return;
   }
   
@@ -464,6 +471,8 @@ App.releaseAction = function (A, e) {
     return;
   }
   if (A === 'pan') { App.state.spaceDown = false; return; }
+  
+  if (A === 'up' || A === 'down') { App.stopWhiteBoxStep(); return; }
   if (A === 'highlight' || A === 'editFlip') {
     App.state.tabDown = false;
     App.state.sweepMode = null;
@@ -542,7 +551,7 @@ App.wireKeyboard = function () {
     if (!cur) return;
     if (window.SVE_KEYMAP.mouseComboFromEvent(e) !== cur.combo) return;
     App._mouseAct = null;
-    ['pan', 'highlight', 'editFlip', 'quickMod', 'moveUp', 'moveDown', 'moveLeft', 'moveRight']
+    ['pan', 'highlight', 'editFlip', 'quickMod', 'up', 'down', 'moveUp', 'moveDown', 'moveLeft', 'moveRight']
       .forEach(id => { if (id === cur.id) App.releaseAction(id, { key: '' }); });
   };
   window.addEventListener('mousedown', mouseDownAction, true);
@@ -550,7 +559,7 @@ App.wireKeyboard = function () {
   
   const anyMatch = (id, e) => App.keymap.combos(id).some(c => window.SVE_KEYMAP.matchesEvent(c, e));
   window.addEventListener('keyup', e => {
-    ['pan', 'highlight', 'editFlip', 'quickMod', 'moveUp', 'moveDown', 'moveLeft', 'moveRight']
+    ['pan', 'highlight', 'editFlip', 'quickMod', 'up', 'down', 'moveUp', 'moveDown', 'moveLeft', 'moveRight']
       .forEach(id => { if (anyMatch(id, e)) App.releaseAction(id, e); });
     if (e.key === 'Shift') App.state.shiftDown = false;
     if (!App.state.keys.size && App.state.edit) App.editHist.endGesture(); 
@@ -566,6 +575,8 @@ App.wireKeyboard = function () {
     App.state.quickClickOn = false;
     App.state.quickModUsed = false;
     App.state.keys.clear();
+    
+    if (App.stopWhiteBoxStep) App.stopWhiteBoxStep();
     if (App.state.edit) App.drawOutlines();
   });
 };
@@ -647,6 +658,8 @@ document.addEventListener('DOMContentLoaded', () => App.boot());
 App.i18n.onApply(function () {
   if (App.updateBaseButtons) App.updateBaseButtons();
   if (App.updateZoomWheelButton) App.updateZoomWheelButton();
+  
+  if (App.updateInsertBelowButton) App.updateInsertBelowButton();
   if (App.refreshCount) App.refreshCount();
   if (App.updateHideBgButton) App.updateHideBgButton();
   if (App.updateEditBar) App.updateEditBar();
