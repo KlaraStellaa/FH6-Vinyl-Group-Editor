@@ -102,7 +102,7 @@ App.libThumbPreUrl = function (symbol) {
 };
 
 
-App.libVec = { enabled: true, ready: false, unit: 1000, items: null, count: 0 };
+App.libVec = { enabled: true, ready: false, unit: 1000, items: null, layers: null, count: 0 };
 App.loadLibVecManifest = function () {
   const load = fetch('assets/lib-vec.json').then(r => {
     if (!r.ok) return null;
@@ -115,10 +115,13 @@ App.loadLibVecManifest = function () {
       return;
     }
     App.libVec.items = man.items;
+    
+    App.libVec.layers = man.layers || {};
     App.libVec.unit = Number(man.unit) || 1000;
     App.libVec.count = Object.keys(man.items).length;
+    App.libVec.layered = Object.keys(App.libVec.layers).length;
     App.libVec.ready = true;
-    console.log('[library] lib-vec:', App.libVec.count, 'paths');
+    console.log('[library] lib-vec:', App.libVec.count, 'paths,', App.libVec.layered, 'layered');
     
     if (App.refreshAllSymbolTextures) App.refreshAllSymbolTextures();
   }).catch(() => {  });
