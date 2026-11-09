@@ -36,6 +36,8 @@ App.state = {
   layersDisplayOpacity: 1,   
   selBarDismissed: false,    
   plusAnchorActive: false,   
+  
+  insertBelow: false,
   batching: false,           
   wheelZoomEnabled: true,    
   
@@ -689,7 +691,9 @@ App.addLayer = function (layer) {
   
   if (App.state.batching && App.layersRoot.style.display !== 'none') App.layersRoot.style.display = 'none';
   
-  const ins = App.groupEditInsertIndex ? App.groupEditInsertIndex() : -1;
+  const insG = App.groupEditInsertIndex ? App.groupEditInsertIndex() : -1;
+  
+  const ins = insG >= 0 ? insG : (App.selectedInsertIndex ? App.selectedInsertIndex() : -1);
   const next = ins >= 0 ? App.state.layers[ins] : null;
   if (next) {
     App.state.layers.splice(ins, 0, layer);

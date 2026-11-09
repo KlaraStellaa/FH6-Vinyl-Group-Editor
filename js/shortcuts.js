@@ -13,6 +13,8 @@ App.SHORTCUTS = [
       { keys: [{ act: 'hideOthers' }], desc: 'sc.d.hideOthers' },
       { keys: [{ act: 'hideBg' }], desc: 'sc.d.hideBg' },
       
+      { keys: [{ act: 'insertBelow' }], desc: 'sc.d.insertBelow' },
+      
       { keys: [{ act: 'opacityLayersDown' }, { act: 'opacityLayersUp' }], desc: 'sc.d.opacityLayers' },
       { keys: [{ act: 'opacityBgDown' }, { act: 'opacityBgUp' }], desc: 'sc.d.opacityBg' }
     ]
@@ -82,6 +84,7 @@ App.SC_I18N = {
     'sc.d.clickSelect': '选中图层', 'sc.d.pan': '平移视图',
     'sc.d.zoom': '缩放画布（可在工具栏「滚轮缩放」开关）', 'sc.d.base': '切换画布底色：灰白 / 灰黑',
     'sc.d.hideLayers': '隐藏图层', 'sc.d.hideOthers': '只显示当前选中的图层', 'sc.d.hideBg': '隐藏背景图片',
+    'sc.d.insertBelow': '新图层插入位置：选中层下 / 最上层',
     'sc.d.opacityLayers': '图层显示透明度 −10% / +10%', 'sc.d.opacityBg': '背景显示透明度 −10% / +10%',
     'sc.d.up': '上移一个图层', 'sc.d.down': '下移一个图层',
     'sc.d.hlToggle': '高亮图层/取消高亮图层', 'sc.d.hlSweep': '扫选高亮图层/取消高亮图层',
@@ -109,6 +112,7 @@ App.SC_I18N = {
     'sc.d.clickSelect': '選取圖層', 'sc.d.pan': '平移檢視',
     'sc.d.zoom': '縮放畫布（可在工具列「滾輪縮放」開關）', 'sc.d.base': '切換畫布底色：灰白 / 灰黑',
     'sc.d.hideLayers': '隱藏圖層', 'sc.d.hideOthers': '只顯示目前選取的圖層', 'sc.d.hideBg': '隱藏背景圖片',
+    'sc.d.insertBelow': '新圖層插入位置：選取層下 / 最上層',
     'sc.d.opacityLayers': '圖層顯示透明度 −10% / +10%', 'sc.d.opacityBg': '背景顯示透明度 −10% / +10%',
     'sc.d.up': '上移一個圖層', 'sc.d.down': '下移一個圖層',
     'sc.d.hlToggle': '反白圖層/取消反白圖層', 'sc.d.hlSweep': '掃選反白圖層/取消反白圖層',
@@ -136,6 +140,7 @@ App.SC_I18N = {
     'sc.d.clickSelect': 'Select layer', 'sc.d.pan': 'Pan the view',
     'sc.d.zoom': 'Zoom canvas (toggle "Wheel zoom" in the toolbar)', 'sc.d.base': 'Toggle canvas background: light / dark gray',
     'sc.d.hideLayers': 'Hide layers', 'sc.d.hideOthers': 'Show only the selected layer(s)', 'sc.d.hideBg': 'Hide the background image',
+    'sc.d.insertBelow': 'Where new layers go: below selection / topmost',
     'sc.d.opacityLayers': 'Layer display opacity −10% / +10%', 'sc.d.opacityBg': 'Background display opacity −10% / +10%',
     'sc.d.up': 'Move up one layer', 'sc.d.down': 'Move down one layer',
     'sc.d.hlToggle': 'Highlight layer / clear highlight', 'sc.d.hlSweep': 'Sweep-highlight layers / clear highlight',
@@ -163,6 +168,7 @@ App.SC_I18N = {
     'sc.d.clickSelect': 'レイヤーを選択', 'sc.d.pan': '表示を移動',
     'sc.d.zoom': 'キャンバスを拡大縮小（ツールバー「ホイール拡大」で切替）', 'sc.d.base': 'キャンバス背景を切替：ライト / ダークグレー',
     'sc.d.hideLayers': 'レイヤーを隠す', 'sc.d.hideOthers': '選択中のレイヤーだけを表示', 'sc.d.hideBg': '背景画像を隠す',
+    'sc.d.insertBelow': '新規レイヤーの挿入位置：選択の下 / 最前面',
     'sc.d.opacityLayers': 'レイヤー表示の不透明度 −10% / +10%', 'sc.d.opacityBg': '背景表示の不透明度 −10% / +10%',
     'sc.d.up': '1 つ上のレイヤーへ', 'sc.d.down': '1 つ下のレイヤーへ',
     'sc.d.hlToggle': 'レイヤーを強調 / 強調を解除', 'sc.d.hlSweep': 'なぞって強調 / 強調を解除',
@@ -190,6 +196,7 @@ App.SC_I18N = {
     'sc.d.clickSelect': '레이어 선택', 'sc.d.pan': '보기 이동',
     'sc.d.zoom': '캔버스 확대/축소(툴바 「휠 확대」로 전환)', 'sc.d.base': '캔버스 배경 전환: 밝은 / 어두운 회색',
     'sc.d.hideLayers': '레이어 숨기기', 'sc.d.hideOthers': '선택한 레이어만 표시', 'sc.d.hideBg': '배경 이미지 숨기기',
+    'sc.d.insertBelow': '새 레이어 삽입 위치: 선택 아래 / 맨 위',
     'sc.d.opacityLayers': '레이어 표시 불투명도 −10% / +10%', 'sc.d.opacityBg': '배경 표시 불투명도 −10% / +10%',
     'sc.d.up': '한 레이어 위로', 'sc.d.down': '한 레이어 아래로',
     'sc.d.hlToggle': '레이어 강조 / 강조 해제', 'sc.d.hlSweep': '훑어서 강조 / 강조 해제',

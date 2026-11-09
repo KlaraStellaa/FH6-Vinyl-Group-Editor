@@ -325,6 +325,34 @@ App.stepWhiteBox = function (dir) {
 };
 
 
+App.WB_STEP_DELAY = 200;
+App.WB_STEP_RATE = 100;
+App._wbStep = { dir: 0, delayT: 0, rateT: 0 };
+
+App.startWhiteBoxStep = function (dir) {
+  App.stopWhiteBoxStep();
+  const d = dir < 0 ? -1 : 1;
+  App._wbStep.dir = d;
+  App.stepWhiteBox(d);                      
+  App._wbStep.delayT = setTimeout(function () {
+    App._wbStep.delayT = 0;
+    if (!App._wbStep.dir) return;
+    App._wbStep.rateT = setInterval(function () {
+      if (!App._wbStep.dir) return;
+      
+      App.stepWhiteBox(App._wbStep.dir);
+    }, App.WB_STEP_RATE);
+  }, App.WB_STEP_DELAY);
+};
+
+App.stopWhiteBoxStep = function () {
+  const s = App._wbStep;
+  s.dir = 0;
+  if (s.delayT) { clearTimeout(s.delayT); s.delayT = 0; }
+  if (s.rateT) { clearInterval(s.rateT); s.rateT = 0; }
+};
+
+
 App.requestFlashRefresh = function (animate) {
   if (App.state.batching) return;
   
@@ -469,6 +497,8 @@ App.refreshPanel = function () {
   });
   const wantedIds = new Set(list.map(l => l.id));
   existing.forEach((el, id) => { if (!wantedIds.has(id)) el.remove(); });
+  
+  let refNode = App.layerListEl.firstChild;
   list.forEach(layer => {
     let item = existing.get(layer.id);
     if (!item) {
@@ -486,36 +516,45 @@ App.refreshPanel = function () {
       thumb.appendChild(img);
       item.appendChild(thumb);
     }
-    if (!item.querySelector('.layer-select-bg')) {
-      const selectedBg = document.createElement('span');
-      selectedBg.className = 'layer-select-bg';
-      selectedBg.setAttribute('aria-hidden', 'true');
-      item.insertBefore(selectedBg, item.firstChild);
-    }
-    item.classList.toggle('selected', App.state.selected.has(layer.id));
-    let badge = item.querySelector('.layer-badge');
-    if (layer.kind === 'merged') {
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.className = 'layer-badge';
-        item.appendChild(badge);
+    
+    if (!item._selBg) {
+      let bg = item.querySelector('.layer-select-bg');
+      if (!bg) {
+        bg = document.createElement('span');
+        bg.className = 'layer-select-bg';
+        bg.setAttribute('aria-hidden', 'true');
+        item.insertBefore(bg, item.firstChild);
       }
-      badge.textContent = '×' + App.countInLayer(layer);
-    } else if (badge) {
-      badge.remove();
+      item._selBg = bg;
+    }
+    if (item.classList.contains('selected') !== App.state.selected.has(layer.id)) {
+      item.classList.toggle('selected', App.state.selected.has(layer.id));
+    }
+    if (layer.kind === 'merged') {
+      if (!item._badge) {
+        item._badge = document.createElement('span');
+        item._badge.className = 'layer-badge';
+        item.appendChild(item._badge);
+      }
+      const bt = '×' + App.countInLayer(layer);
+      if (item._badge.textContent !== bt) item._badge.textContent = bt;
+    } else if (item._badge) {
+      item._badge.remove();
+      item._badge = null;
     }
     
-    let mb = item.querySelector('.mask-badge');
     if (layer.isMask) {
-      if (!mb) {
-        mb = document.createElement('span');
-        mb.className = 'mask-badge';
-        item.appendChild(mb);
+      if (!item._mb) {
+        item._mb = document.createElement('span');
+        item._mb.className = 'mask-badge';
+        item.appendChild(item._mb);
       }
-    } else if (mb) {
-      mb.remove();
+    } else if (item._mb) {
+      item._mb.remove();
+      item._mb = null;
     }
-    App.layerListEl.appendChild(item); 
+    if (item === refNode) refNode = refNode.nextSibling;
+    else App.layerListEl.insertBefore(item, refNode);
   });
   
   if (App.dropIndicator) App.layerListEl.appendChild(App.dropIndicator);
@@ -534,17 +573,28 @@ App.fillVisibleThumbs = function () {
   
   if (!list.clientHeight) return;
   const st = list.scrollTop, vh = list.clientHeight;
-  $$('.layer-item', list).forEach(item => {
+  
+  const rows = $$('.layer-item', list);
+  const rh = (App.layerRowH && App.layerRowH()) || 0;
+  let from = 0, to = rows.length;
+  if (rh > 20) {
+    const padTop = 1 * rh;   
+    from = Math.max(0, Math.floor((st - 80 - padTop) / rh));
+    to = Math.min(rows.length, Math.ceil((st + vh + 80 - padTop) / rh) + 1);
+  }
+  for (let ri = from; ri < to; ri++) {
+    const item = rows[ri];
+    if (!item) continue;
     const top = item.offsetTop, bottom = top + item.offsetHeight;
-    if (bottom < st - 80 || top > st + vh + 80) return;
+    if (bottom < st - 80 || top > st + vh + 80) continue;
     const id = parseInt(item.getAttribute('data-id'), 10);
     const layer = App.findLayer(id);
-    if (!layer) return;
+    if (!layer) continue;
     
-    if (App.state.edit && layer.kind === 'merged') return;
+    if (App.state.edit && layer.kind === 'merged') continue;
     const img = $('img', item);
-    if (img && img.getAttribute('src') && !layer.thumbDirty) return;
-    if (item.dataset.thumbLoading === '1') return;
+    if (img && img.getAttribute('src') && !layer.thumbDirty) continue;
+    if (item.dataset.thumbLoading === '1') continue;
     item.dataset.thumbLoading = '1';
     const thumb = $('.layer-thumb', item);
     const loader = App.startThumbLoading(thumb);
@@ -557,7 +607,7 @@ App.fillVisibleThumbs = function () {
       App.finishThumbLoading(thumb, loader);
       if (item.isConnected) delete item.dataset.thumbLoading;
     });
-  });
+  }
 };
 
 App.syncPanelSelectionClasses = function () {
@@ -568,20 +618,23 @@ App.syncPanelSelectionClasses = function () {
     const showTri = inSel && (App.state.selected.size > 1 || App.state.tabDown || (App.state.selected.size === 1 && App.state.selectedByTab));
     
     if (item.classList.contains('multi-sel') !== inSel) item.classList.toggle('multi-sel', inSel);
-    const selectedBg = item.querySelector('.layer-select-bg');
+    const selectedBg = item._selBg || item.querySelector('.layer-select-bg');
     if (selectedBg) {
+      item._selBg = selectedBg;
       const opacity = inSel ? '1' : '0';
       if (selectedBg.style.opacity !== opacity) selectedBg.style.opacity = opacity;
     }
-    let tri = item.querySelector('.tri');
+    let tri = item._tri || item.querySelector('.tri');
     if (showTri) {
       if (!tri) {
         tri = document.createElement('span');
         tri.className = 'tri';
         item.appendChild(tri);
       }
+      item._tri = tri;
     } else if (tri) {
       tri.remove();
+      item._tri = null;
     }
   });
   

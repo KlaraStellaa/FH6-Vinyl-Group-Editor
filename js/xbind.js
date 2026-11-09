@@ -8,7 +8,8 @@ App.XB_I18N = {
     'xb.cannotBind': '无法绑定该按键',
     'xb.press': '按下要绑定的按键…（可同时按住多个）',
     'xb.conflict': '该键已被占用：{v}',
-    'xb.empty': '还没绑定任何按键'
+    'xb.empty': '还没绑定任何按键',
+    'xb.assigned': '已写入该按键的快捷键，旧键已替换'
   },
   'zh-TW': {
     'xb.notInCanvas': '不在畫布中無法新增',
@@ -16,7 +17,8 @@ App.XB_I18N = {
     'xb.cannotBind': '無法綁定該按鍵',
     'xb.press': '按下要綁定的按鍵…（可同時按住多個）',
     'xb.conflict': '該鍵已被佔用：{v}',
-    'xb.empty': '還沒綁定任何按鍵'
+    'xb.empty': '還沒綁定任何按鍵',
+    'xb.assigned': '已寫入該按鍵的快速鍵，舊鍵已替換'
   },
   'en': {
     'xb.notInCanvas': 'Not on the canvas — cannot add',
@@ -24,7 +26,8 @@ App.XB_I18N = {
     'xb.cannotBind': 'This key cannot be bound',
     'xb.press': 'Press the key to bind… (hold several to bind them together)',
     'xb.conflict': 'Already in use: {v}',
-    'xb.empty': 'No key bound yet'
+    'xb.empty': 'No key bound yet',
+    'xb.assigned': 'Shortcut updated — the old key was replaced'
   },
   'ja': {
     'xb.notInCanvas': 'キャンバス上ではないため追加できません',
@@ -32,7 +35,8 @@ App.XB_I18N = {
     'xb.cannotBind': 'このキーはバインドできません',
     'xb.press': 'バインドするキーを押してください…（同時押しで複数可）',
     'xb.conflict': '既に使用中：{v}',
-    'xb.empty': 'まだキーがバインドされていません'
+    'xb.empty': 'まだキーがバインドされていません',
+    'xb.assigned': 'このボタンのショートカットに書き込み、元のキーは置き換えました'
   },
   'ko': {
     'xb.notInCanvas': '캔버스가 아니어서 추가할 수 없습니다',
@@ -40,7 +44,8 @@ App.XB_I18N = {
     'xb.cannotBind': '이 키는 바인딩할 수 없습니다',
     'xb.press': '바인딩할 키를 누르세요… (동시에 여러 개 가능)',
     'xb.conflict': '이미 사용 중: {v}',
-    'xb.empty': '아직 바인딩된 키가 없습니다'
+    'xb.empty': '아직 바인딩된 키가 없습니다',
+    'xb.assigned': '이 버튼의 단축키로 기록했고 기존 키는 교체했습니다'
   }
 };
 Object.keys(App.XB_I18N).forEach(function (lang) {
@@ -48,6 +53,19 @@ Object.keys(App.XB_I18N).forEach(function (lang) {
 });
 
 App.xbind = {
+  
+  ACT: {
+    btnHideLayers: 'hideLayers',
+    btnHideBg: 'hideBg',
+    btnHideOthers: 'hideOthers',
+    btnBase: 'base',
+    btnCut: 'cut',
+    btnDelete: 'delete',
+    btnFinish: 'editFinish',
+    btnPlaceAnchor: 'anchor',
+    btnPropMode: 'sizeMode',
+    btnInsertBelow: 'insertBelow'
+  },
   map: {},          
   names: {},        
   picking: false,
@@ -63,6 +81,8 @@ App.xbind = {
     if (src && typeof src === 'object') {
       Object.keys(src).forEach(k => {
         if (!Array.isArray(src[k])) return;
+        
+        if (this.ACT[k]) return;
         const list = src[k].filter(c => typeof c === 'string' &&
           window.SVE_KEYMAP && window.SVE_KEYMAP.isValidCombo(c)).slice(0, 4);
         if (list.length) this.map[k] = list;
@@ -492,13 +512,6 @@ App.xbind = {
         if (list.some(d => KM.sameBinding(c, d))) return name(a.id);
       }
     }
-    for (const other of Object.keys(this.map)) {
-      if (other === key) continue;
-      const list = this.map[other] || [];
-      for (const c of combos) {
-        if (list.some(d => KM.sameBinding(c, d))) return this.nameOfKey(other);
-      }
-    }
     return null;
   },
   commitDlg() {
@@ -510,21 +523,48 @@ App.xbind = {
     const hasMouse = add.some(c => window.SVE_KEYMAP.isMouseCombo(c));
     const hasKey = add.some(c => !window.SVE_KEYMAP.isMouseCombo(c));
     if (hasMouse && hasKey) { showToast(App.i18n.t('km.mix')); return; }
+
     
-    const cur = (this.map[key] || []).slice();
-    const merged = cur.slice();
-    add.forEach(c => { if (merged.indexOf(c) < 0) merged.push(c); });
+    const act = this.ACT[key];
+    if (act) {
+      const r = App.keymap.overwriteCombos(act, add);
+      if (r && r.error === 'mix') { showToast(App.i18n.t('km.mix')); return; }
+      if (r && r.error) { showToast(App.i18n.tf('km.saveFail', { v: r.error })); return; }
+      
+      Object.keys(this.map).forEach(k => {
+        const left = (this.map[k] || []).filter(c => !add.some(d2 => window.SVE_KEYMAP.sameBinding(c, d2)));
+        if (left.length) this.map[k] = left; else { delete this.map[k]; delete this.names[k]; }
+      });
+      this.finishDlgApply(d);
+      showToast(App.i18n.t('xb.assigned'));
+      this.endPick(true);
+      return;
+    }
+
+    
     const clash = this.findConflict(key, add);
     if (clash) { showToast(App.i18n.tf('xb.conflict', { v: clash })); return; }
-    this.map[key] = merged.slice(0, 4);
+    const out = add.slice(0, 4);
+    Object.keys(this.map).forEach(k => {
+      if (k === key) return;
+      const left = (this.map[k] || []).filter(c => !out.some(d2 => window.SVE_KEYMAP.sameBinding(c, d2)));
+      if (left.length) this.map[k] = left; else delete this.map[k];
+    });
+    this.map[key] = out;
     this.names[key] = d.name;
-    App.hideOverlay(d.el);
-    window.removeEventListener('mousedown', this._dlgMouse, true);
-    d.pending = []; d.down = new Set();
+    this.finishDlgApply(d);
     showToast(App.i18n.t('km.extraAdded'));
     
     this.endPick(true);
-  }
+  },
+
+  
+  finishDlgApply(d) {
+    App.hideOverlay(d.el);
+    window.removeEventListener('mousedown', this._dlgMouse, true);
+    d.pending = [];
+    d.down = new Set();
+  },
 };
 
 

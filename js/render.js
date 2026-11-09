@@ -501,11 +501,52 @@ App.bakeLayerSourceKey = function (layer, size) {
     return 'mask:' + theme + ':' + layer.kind + ':' + symbol + ':' + (layer.patternKey || '') + ':' +
       (layer.w || 0) + 'x' + (layer.h || 0) + ':' + size;
   }
-  if (layer.kind === 'symbol') return 'symbol:' + symbol + ':' + (layer.color || '#ffffff');
+  
+  if (layer.kind === 'symbol') {
+    return 'symbol:' + symbol + ':' + (layer.color || '#ffffff') +
+      ':' + Math.round(layer.w || 0) + 'x' + Math.round(layer.h || 0);
+  }
   if (layer.kind === 'pattern') return 'pattern:' + (layer.patternKey || '') + ':' + (layer.color || '#ffffff') + ':' + size;
   return 'import:' + layer.id + ':' + size;
 };
 
+
+App._bakeVecRaster = new Map();
+App._bakeVecRasterSeq = 0;
+App._bakeVecRasterPx = 0;
+
+App._bakeVecRasterBudget = 1.5e8;
+
+App._bakeVecRasterMaxSide = 2048;
+
+App.BAKE_VEC_STEP = 1.5;
+App.bakeVecRasterSnap = function (needSide) {
+  const st = App.BAKE_VEC_STEP;
+  const q = Math.pow(st, Math.ceil(Math.log(Math.max(1, needSide)) / Math.log(st)));
+  return Math.max(16, Math.min(App._bakeVecRasterMaxSide, Math.round(q)));
+};
+App.bakeVecRasterDrop = function () {
+  App._bakeVecRaster.clear();
+  App._bakeVecRasterPx = 0;
+};
+App.bakeVecRasterGet = function (key) {
+  const hit = App._bakeVecRaster.get(key);
+  if (!hit) return null;
+  hit.t = ++App._bakeVecRasterSeq;
+  return hit.c;
+};
+App.bakeVecRasterPut = function (key, cv, px) {
+  if (px > App._bakeVecRasterBudget) return;
+  if (App._bakeVecRasterPx + px > App._bakeVecRasterBudget) {
+    const arr = Array.from(App._bakeVecRaster.entries()).sort(function (a, b) { return a[1].t - b[1].t; });
+    for (let i = 0; i < arr.length && App._bakeVecRasterPx + px > App._bakeVecRasterBudget; i++) {
+      App._bakeVecRaster.delete(arr[i][0]);
+      App._bakeVecRasterPx -= arr[i][1].px;
+    }
+  }
+  App._bakeVecRaster.set(key, { c: cv, px: px, t: ++App._bakeVecRasterSeq });
+  App._bakeVecRasterPx += px;
+};
 App.bakeLayerSource = function (layer, size, memo, opts) {
   size = size || 256;
   const drawable = !!(opts && opts.drawable);
@@ -520,9 +561,35 @@ App.bakeLayerSource = function (layer, size, memo, opts) {
     if (layer.isMask && layer.kind !== 'import' && App.maskBakeUrl) source = App.maskBakeUrl(layer, size);
     else if (layer.kind === 'symbol') {
       
+      const f = Number(opts && opts.f) || 0;
       const vurl = App.symbolVecUrl ? App.symbolVecUrl(layer) : '';
-      if (vurl) source = Promise.resolve(vurl);
-      else if (drawable) {
+      if (vurl && f > 0) {
+        const lw = Math.max(1, layer.w || 1);
+        const lh = Math.max(1, layer.h || 1);
+        
+        const qSide = App.bakeVecRasterSnap(Math.max(lw, lh) * f);
+        const k = qSide / Math.max(lw, lh);
+        const W = Math.max(1, Math.round(lw * k));
+        const H = Math.max(1, Math.round(lh * k));
+        const ck = 'v|' + (layer.symbolKey || '') + '|' + (layer.color || '#ffffff') + '|' + qSide;
+        const hit = App.bakeVecRasterGet(ck);
+        if (hit) source = Promise.resolve(hit);
+        else {
+          source = loadImage(vurl).then(function (img) {
+            if (!img) return '';
+            const cv = document.createElement('canvas');
+            cv.width = W; cv.height = H;
+            const cx = cv.getContext('2d');
+            cx.imageSmoothingEnabled = true;
+            cx.imageSmoothingQuality = 'high';
+            cx.drawImage(img, 0, 0, img.naturalWidth || img.width, img.naturalHeight || img.height, 0, 0, W, H);
+            App.bakeVecRasterPut(ck, cv, W * H);
+            return cv;
+          });
+        }
+      } else if (vurl) {
+        source = Promise.resolve(vurl);
+      } else if (drawable) {
         source = App.symbolColorCanvas(layer.dataUri, layer.color || '#ffffff',
           Math.max(1, Math.round(layer.w)), Math.max(1, Math.round(layer.h)),
           App.symbolColorIdent(layer), { lod: false });
@@ -1214,6 +1281,10 @@ App.removeAutoStaticFlashPair = function (pair) {
 };
 App.autoStaticRelease = function () {
   
+  if (App.autoStatic && App.autoStatic.active) {
+    try { App._asRelStack = String((new Error()).stack || '').split(String.fromCharCode(10)).slice(1, 6).join(' <- ').slice(0, 400); } catch (e) {  }
+  }
+  
   App._bakeUrgent = 0;
   
   App._autoStaticSig = null;
@@ -1256,8 +1327,8 @@ App.buildAutoStaticFlashUrls = function (source, shouldContinue) {
   const alive = typeof shouldContinue === 'function' ? shouldContinue : function () { return true; };
   if (!alive()) return Promise.resolve(null);
   
-  const tw = Math.max(1, Math.round(source.width));
-  const th = Math.max(1, Math.round(source.height));
+  const tw = Math.max(1, Math.round(source.width / 2));
+  const th = Math.max(1, Math.round(source.height / 2));
   const tinted = document.createElement('canvas');
   tinted.width = tw;
   tinted.height = th;
@@ -1379,7 +1450,7 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
         if (sd > maxLeafSide) maxLeafSide = sd;
       }
       const srcSize = Math.max(24, Math.min(256, Math.ceil(maxLeafSide * f)));
-      App.resolveBakeLayerSources(leaves, srcSize, undefined, alive, { drawable: true }).then(function (urls) {
+      App.resolveBakeLayerSources(leaves, srcSize, undefined, alive, { drawable: true, f: f }).then(function (urls) {
         if (!alive() || urls.length !== leaves.length) { finishResult(null); return; }
         
         const uniq = Array.from(new Set(urls.filter(function (u) { return typeof u === 'string' && u; })));
@@ -1560,7 +1631,12 @@ App.autoStaticKeepOld = function () {
   const v = (App.autoStatic && App.autoStatic.active) ? App.autoStatic.view : null;
   if (!v) return false;
   const want = App.autoStaticViewportRect(0);
-  return v.x <= want.x && v.y <= want.y && (v.x + v.w) >= (want.x + want.w) && (v.y + v.h) >= (want.y + want.h);
+  const covered = v.x <= want.x && v.y <= want.y &&
+    (v.x + v.w) >= (want.x + want.w) && (v.y + v.h) >= (want.y + want.h);
+  if (covered) return true;
+  
+  if (App.renderPointerActive) return true;
+  return !!(App.renderInteractionBusy && App.renderInteractionBusy());
 };
 
 App.autoStaticRectStillUseful = function (rect) {
@@ -1766,7 +1842,6 @@ App.autoStaticMaybe = function () {
   if (covered && enoughRes) return;
   if (!covered && App.autoStatic.active) {
     
-    App.autoStaticRelease();
     App.autoStaticSchedule(0);
     return;
   }
@@ -1819,7 +1894,9 @@ App.contentChanged = function (options) {
     App.autoStatic.vectorKeep = Array.from(keepVec);
     App.autoStatic.hiding = Array.from(new Set((App.autoStatic.hiding || []).concat(current)))
       .filter(function (l) { return !keepVec.has(l); });
-    if (App.autoStaticRebake) App.autoStaticRebake();
+    
+    if (App.autoStaticSchedule) App.autoStaticSchedule(110);
+    else if (App.autoStaticRebake) App.autoStaticRebake();
   } else {
     if (App.autoStaticRelease) App.autoStaticRelease();
     if (App.autoStaticMaybe) App.autoStaticMaybe();
@@ -2181,10 +2258,11 @@ App.drawHandles = function () {
   const D = GAP + L / 2;              
 
   
-  const addStraight = function (key, at, dir, cursor) {
+  const addStraight = function (key, at, dir, cursor, axisDir) {
     const n = norm(dir.x, dir.y);
+    const a = norm((axisDir || dir).x, (axisDir || dir).y);
     const cx = at.x + n.x * D, cy = at.y + n.y * D;
-    const deg = Math.atan2(n.y, n.x) * 180 / Math.PI;
+    const deg = Math.atan2(a.y, a.x) * 180 / Math.PI;
     const gg = svgEl('g', { transform: 'translate(' + cx + ',' + cy + ') rotate(' + deg + ')' });
     const hit = svgEl('rect', {
       x: -L / 2, y: -T / 2, width: L, height: T,
@@ -2199,7 +2277,7 @@ App.drawHandles = function () {
     App.handleG.appendChild(gg);
     App.handleEls.push({ key: key, el: hit });
     
-    App.handleHitGeom.push({ key: key, cx: cx, cy: cy, ux: n.x, uy: n.y, vx: -n.y, vy: n.x, w: L, h: T });
+    App.handleHitGeom.push({ key: key, cx: cx, cy: cy, ux: a.x, uy: a.y, vx: -a.y, vy: a.x, w: L, h: T });
   };
 
   
@@ -2282,8 +2360,10 @@ App.drawHandles = function () {
     addRot('se', g.se, edgeU.se, edgeV.se, 'nwse-resize');
     addRot('sw', g.sw, edgeU.sw, edgeV.sw, 'nesw-resize');
     
-    addStraight('n', midN, outOf(midN), 'ns-resize');
-    addStraight('s', midS, outOf(midS), 'ns-resize');
+    const tangN = norm(g.ne.x - g.nw.x, g.ne.y - g.nw.y);
+    const tangS = norm(g.sw.x - g.se.x, g.sw.y - g.se.y);
+    addStraight('n', midN, outOf(midN), 'ns-resize', tangN);
+    addStraight('s', midS, outOf(midS), 'ns-resize', tangS);
   }
 };
 
@@ -2777,7 +2857,8 @@ App.directAutoStaticFlashTarget = function (items) {
   const cache = App.autoStatic;
   const target = App.autoStaticBgEl;
   const pair = App.autoStaticFlashPair;
-  if (!cache || !cache.active || cache.baking || cache.contentRevision !== (App.contentRevision || 0)) return null;
+  
+  if (!cache || !cache.active) return null;
   if (!target || !target.isConnected || !target.getAttribute('href')) return null;
   if (!pair || pair.target !== target || !pair.g || !pair.g.isConnected) return null;
   if (cache.bit && cache.bit.failedTop && cache.bit.failedTop.size) return null;
@@ -3518,7 +3599,8 @@ App.mergedThumbUrl = async function (layer, size, preparedGeometry) {
     const lb = geom.lb;
     if (!(lb.w > 0) || !(lb.h > 0)) return "";
     const mats = geom.mats;
-    const urls = await App.resolveBakeLayerSources(leaves, 256, 24);
+    
+    const urls = await App.resolveBakeLayerSources(leaves, 256, 24, undefined, { drawable: true, f: 1 });
     const uniq = Array.from(new Set(urls.filter(Boolean)));
     const byUrl = await App.loadBakeImages(uniq, '[thumb] 分组图源解码失败');
     const cv = document.createElement("canvas");

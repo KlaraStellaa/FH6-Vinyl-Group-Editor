@@ -13,6 +13,8 @@ var ACTIONS = [
   
   { id: 'hideOthers', ctx: 'global', def: ['c'], label: 'km.a.hideOthers' },
   
+  { id: 'insertBelow', ctx: 'global', def: ['q'], label: 'km.a.insertBelow' },
+  
   { id: 'opacityLayersDown', ctx: 'global', def: ['-'], label: 'km.a.opacityLayersDown' },
   { id: 'opacityLayersUp', ctx: 'global', def: ['='], label: 'km.a.opacityLayersUp' },
   { id: 'opacityBgDown', ctx: 'global', def: ['['], label: 'km.a.opacityBgDown' },
