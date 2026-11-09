@@ -449,16 +449,6 @@ App.groupEditInsertIndex = function () {
 };
 
 
-App.selectedInsertIndex = function () {
-  const layers = App.state.layers || [];
-  const sel = App.state.selected;
-  if (!sel || !sel.size) return -1;
-  for (let i = 0; i < layers.length; i++) {
-    if (layers[i] && sel.has(layers[i].id)) return i;
-  }
-  return -1;
-};
-
 App.enterGroupEdit = function (merged) {
   if (!merged || merged.kind !== 'merged') return false;
   const children = (merged.children || []).slice();
