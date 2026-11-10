@@ -9,6 +9,8 @@ const { resolveAutoSaveName } = require('./auto-name');
 const { WorkcopyStore, atomicWrite } = require('./workcopy-store');
 const workcopyStore = new WorkcopyStore();
 const DLG = require('./dlg-i18n');   
+const updateApply = require('./update-apply');   
+const updateMirror = require('./update-mirror'); 
 
 
 function uiLang() {
@@ -23,10 +25,20 @@ const NAME_I18N = require('./js/name-i18n');
 function nt(key, params) { return NAME_I18N.get(uiLang(), key, params); }
 
 
+
+function isPackagedBuild() {
+  if (!app.isPackaged) return false;
+  try {
+    const exe = String(process.execPath || '').replace(/\\/g, '/').toLowerCase();
+    if (exe.indexOf('/node_modules/electron/dist/') >= 0) return false;
+  } catch (e) {  }
+  return true;
+}
+
 const _dataDirs = {};
 function appDataDir() {
   let base;
-  if (!app.isPackaged) base = __dirname;
+  if (!isPackagedBuild()) base = __dirname;
   else base = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath('exe'));
   if (!_dataDirs.__base) {
     if (!fs.existsSync(base)) { try { fs.mkdirSync(base, { recursive: true }); } catch (e) {  } }
@@ -36,83 +48,72 @@ function appDataDir() {
 }
 
 
-const DL_IDLE_MS = 45000;      
-function downloadToFile(url, dest, onPct) {
-  return new Promise((resolve, reject) => {
-    let out;
-    try { out = fs.createWriteStream(dest); } catch (e) { reject(e); return; }
-    let req = null;
-    let settled = false;
-    let idleTimer = null;
-    const report = (pct, got, total) => {
-      try { if (typeof onPct === 'function') onPct(pct, got, total); } catch (e) {  }
-    };
-    const fail = (err) => {
-      if (settled) return;
-      settled = true;
-      if (idleTimer) { try { clearTimeout(idleTimer); } catch (e) {  } idleTimer = null; }
-      try { out.destroy(); } catch (e) {  }
-      try { fs.unlinkSync(dest); } catch (e) {  }
-      reject(err);
-    };
-    
-    out.on('error', fail);
-    try { req = net.request({ method: 'GET', url: String(url), redirect: 'follow' }); }
-    catch (e) { fail(e); return; }
-    try { req.setHeader('User-Agent', 'VinylFH6-Updater'); } catch (e) {  }
-    
-    const armIdle = () => {
-      if (idleTimer) { try { clearTimeout(idleTimer); } catch (e) {  } }
-      idleTimer = setTimeout(() => {
-        try { req.abort(); } catch (e) {  }
-        fail(new Error('timeout'));
-      }, DL_IDLE_MS);
-    };
-    armIdle();
-    req.on('response', res => {
-      if (res.statusCode !== 200) { fail(new Error('HTTP ' + res.statusCode)); return; }
-      const total = Number((res.headers && res.headers['content-length']) || 0);
-      let got = 0;
-      report(0, 0, total);
-      res.on('data', chunk => {
-        armIdle();
-        got += chunk.length;
-        let ok = true;
-        try { ok = out.write(chunk); } catch (e) { fail(e); return; }
-        
-        if (ok === false) {
-          try { res.pause(); } catch (e) {  }
-          out.once('drain', () => { try { res.resume(); } catch (e) {  } });
-        }
-        if (total) report(Math.min(99, Math.round(got / total * 100)), got, total);
-        
-        else report(-1, got, total);
-      });
-      res.on('end', () => {
-        if (idleTimer) { try { clearTimeout(idleTimer); } catch (e) {  } idleTimer = null; }
-        
-        if (total && got !== total) { fail(new Error('incomplete ' + got + '/' + total)); return; }
-        out.end(() => {
-          if (settled) return;
-          settled = true;
-          report(100, got, total);
-          resolve(dest);
-        });
-      });
-      res.on('error', fail);
-      res.on('aborted', () => fail(new Error('aborted')));
-    });
-    req.on('error', fail);
-    req.end();
-  });
-}
 
 
 
 
 function portableExePath() {
-  const p = process.env.PORTABLE_EXECUTABLE_FILE || (app.isPackaged ? app.getPath('exe') : '');
+  const p = process.env.PORTABLE_EXECUTABLE_FILE || (isPackagedBuild() ? app.getPath('exe') : '');
   return p || '';
+}
+
+
+function updateStatePath() {
+  try { return path.join(app.getPath('userData'), 'update-state.json'); } catch (e) { return ''; }
+}
+function updateResultPath() {
+  try { return path.join(app.getPath('userData'), 'update-result.txt'); } catch (e) { return ''; }
+}
+
+let _pendingUpdate = null;
+function pendingUpdateInfo() { return _pendingUpdate; }
+
+function recoverUpdateState() {
+  const sf = updateStatePath();
+  if (!sf) return;
+  const st = updateApply.readState(sf);
+  if (!st || !st.at) return;
+  const cur = app.getVersion();
+  const to = String(st.to || '');
+  const result = updateApply.readResult(updateResultPath());
+
+  
+  if (!to || to === 'unknown') {
+    appendLog('info', '自动更新：上次安装结果未知，清理状态', { from: st.from, result: result || 'none' });
+    updateApply.clearState(sf);
+    try { fs.unlinkSync(updateResultPath()); } catch (e) {  }
+    if (st.pkg) { try { fs.unlinkSync(st.pkg); } catch (e) {  } }
+    return;
+  }
+
+  if (!updateApply.isNewer(to, cur)) {
+    
+    appendLog('info', '自动更新：上次替换已生效', { from: st.from, to: to, now: cur });
+    updateApply.clearState(sf);
+    try { fs.unlinkSync(updateResultPath()); } catch (e) {  }
+    if (st.pkg) { try { fs.unlinkSync(st.pkg); } catch (e) {  } }
+    return;
+  }
+
+  
+  let pkgOk = false;
+  try { pkgOk = !!(st.pkg && fs.existsSync(st.pkg) && checkExePackage(st.pkg).ok); } catch (e) { pkgOk = false; }
+  _pendingUpdate = {
+    from: String(st.from || ''),
+    to: to,
+    pkg: pkgOk ? String(st.pkg) : '',
+    at: Number(st.at || 0),
+    result: result || 'none'
+  };
+  appendLog('warn', '自动更新：上次替换没有生效（已保留安装包，可直接重试）', {
+    from: st.from, to: to, now: cur, result: result || 'none', pkgKept: pkgOk
+  });
+  if (!pkgOk) {
+    
+    updateApply.clearState(sf);
+    try { fs.unlinkSync(updateResultPath()); } catch (e) {  }
+    _pendingUpdate = null;
+  }
 }
 
 
@@ -168,50 +169,16 @@ function moveIntoPlace(src, dst) {
 }
 
 
-function scheduleExeReplace(newExe, targetExe) {
-  const bat = path.join(os.tmpdir(), 'sve-replace-' + Date.now() + '.bat');
-  const script = [
-    '@echo off',
-    'setlocal',
-    'set "TGT=%~1"',
-    'set "NEW=%~2"',
-    'set "OPID=%~3"',
-    'set /a N=0',
-    ':WAIT',
-    'tasklist /FI "PID eq %OPID%" /NH 2>nul | find "%OPID%" >nul',
-    'if errorlevel 1 goto REPLACE',
-    'set /a N+=1',
-    'if %N% GTR 120 goto REPLACE',
-    'ping -n 2 127.0.0.1 >nul',
-    'goto WAIT',
-    ':REPLACE',
-    'set /a N=0',
-    ':MV',
-    'move /y "%NEW%" "%TGT%" >nul 2>&1',
-    'if not errorlevel 1 goto STARTIT',
-    'set /a N+=1',
-    'if %N% GTR 60 goto FAILED',
-    'ping -n 1 127.0.0.1 >nul',
-    'goto MV',
-    ':STARTIT',
-    'start "" "%TGT%"',
-    'goto CLEAN',
-    ':FAILED',
-    
-    'del "%NEW%" >nul 2>&1',
-    'start "" "%TGT%"',
-    ':CLEAN',
-    'del "%~f0"',
-    'exit /b'
-  ].join('\r\n');
-  fs.writeFileSync(bat, script, 'ascii');
-  const child = require('child_process').spawn(
-    'cmd.exe',
-    ['/c', bat, targetExe, newExe, String(process.pid)],
-    { detached: true, stdio: 'ignore', windowsHide: true }
-  );
-  child.unref();
-  return bat;
+function scheduleExeReplace(newExe, targetExe, meta) {
+  const m = meta || {};
+  return updateApply.scheduleExeReplace({
+    targetExe: targetExe,
+    newExe: newExe,
+    resultFile: updateResultPath(),
+    batDir: os.tmpdir(),
+    delayPings: m.delayPings,
+    retry: m.retry
+  });
 }
 
 
@@ -900,11 +867,22 @@ app.whenReady().then(() => {
     }
     appendLog('info', '会话开始', {
       ver: app.getVersion(), platform: process.platform, pid: process.pid,
-      packaged: app.isPackaged,
+      packaged: isPackagedBuild(),
       exe: String(process.env.PORTABLE_EXECUTABLE_FILE || app.getPath('exe') || '').slice(-160),
       autoLog: autoLogEnabled()
     });
   } catch (e) {  }
+  
+  try {
+    if (process.env.SVE_PORTABLE_MODE === 'sibling') {
+      const vf = path.join(app.getPath('userData'), 'sibling-app-version.txt');
+      fs.mkdirSync(path.dirname(vf), { recursive: true });
+      fs.writeFileSync(vf, app.getVersion(), 'utf8');
+    }
+  } catch (e) {  }
+  
+  try { recoverUpdateState(); } catch (e) { appendLog('warn', '更新状态恢复失败（已忽略）', { message: String(e && e.message || e).slice(0, 160) }); }
+
   
   try {
     require('./update-check').check({
@@ -912,6 +890,13 @@ app.whenReady().then(() => {
       t: dt,
       
       onAvailable: function (info) {
+        
+        try { if (info) info.isDev = !isPackagedBuild(); } catch (e) {  }
+        
+        try {
+          const pend = pendingUpdateInfo();
+          if (pend && String(pend.to) === String(info && info.remote)) info.pendingLocal = true;
+        } catch (e) {  }
         const push = (tries) => {
           const w = BrowserWindow.getAllWindows().find(x => !x.isDestroyed());
           if (w && w.webContents && !w.webContents.isLoading()) {
@@ -932,12 +917,17 @@ app.whenReady().then(() => {
   } catch (e) {  }
   
   try {
-    const exePath = process.env.PORTABLE_EXECUTABLE_FILE || (app.isPackaged ? app.getPath('exe') : '');
+    const exePath = process.env.PORTABLE_EXECUTABLE_FILE || (isPackagedBuild() ? app.getPath('exe') : '');
     if (exePath) {
       const dir = path.dirname(exePath);
+      
+      const pend = pendingUpdateInfo();
+      const keep = (pend && pend.pkg) ? path.resolve(pend.pkg).toLowerCase() : '';
       fs.readdirSync(dir).forEach(n => {
         if (/\.old\.exe$/i.test(n) || /^update-(manual-)?\d+\.exe$/i.test(n)) {
-          try { fs.unlinkSync(path.join(dir, n)); } catch (e) {  }
+          const fp = path.join(dir, n);
+          if (keep && path.resolve(fp).toLowerCase() === keep) return;
+          try { fs.unlinkSync(fp); } catch (e) {  }
         }
       });
     }
@@ -945,13 +935,14 @@ app.whenReady().then(() => {
   try {
     const tmpDir = os.tmpdir();
     fs.readdirSync(tmpDir).forEach(n => {
-      if (/^sve-(replace|update-restart)-\d+\.bat$/i.test(n)) {
+      
+      if (/^sve-(replace|update-restart)-[\d-]+\.(bat|cmd)$/i.test(n)) {
         try { fs.unlinkSync(path.join(tmpDir, n)); } catch (e) {  }
       }
     });
   } catch (e) {  }
   
-  if (app.isPackaged) setTimeout(() => cleanStalePortableTemp(), 5000);
+  if (isPackagedBuild()) setTimeout(() => cleanStalePortableTemp(), 5000);
   protocol.handle('app', (request) => {
     const u = new URL(request.url);
     if (u.hostname === 'thumb-cache') {
@@ -1152,7 +1143,8 @@ app.whenReady().then(() => {
   ipcMain.handle('forza-groups', async (e, payload) => {
     try {
       const groups = fzaSave.listLayerGroups(String(payload && payload.containersRoot || ''));
-      return { ok: true, groups };
+      
+      return { ok: true, groups, scan: fzaSave.lastGroupScan ? fzaSave.lastGroupScan() : null };
     } catch (err) {
       return { ok: false, error: String(err && err.message || err) };
     }
@@ -1453,7 +1445,7 @@ app.whenReady().then(() => {
   ipcMain.handle('update-install', async (e, payload) => {
     const url = payload && payload.exeUrl;
     if (!url) return { ok: false, error: 'no-asset' };
-    if (!app.isPackaged) return { ok: false, error: 'dev' };
+    if (!isPackagedBuild()) return { ok: false, error: 'dev' };
     const sender = e.sender;
     const sendPct = (pct, got, total) => {
       try { if (sender && !sender.isDestroyed()) sender.send('update-progress', { pct: pct, got: got || 0, total: total || 0 }); }
@@ -1461,46 +1453,66 @@ app.whenReady().then(() => {
     };
     const exePath = portableExePath();
     if (!exePath) return { ok: false, error: 'no-exe-path' };
+    const version = String((payload && payload.version) || 'unknown');
     const tmp = path.join(path.dirname(exePath), 'update-' + Date.now() + '.exe');
+    let pkg = '';
     try {
-      appendLog('info', '自动更新：开始下载', { url: String(url).slice(0, 120), to: tmp });
       
-      let lastErr = null;
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          await downloadToFile(url, tmp, sendPct);
-          lastErr = null;
-          if (attempt > 1) appendLog('info', '自动更新：重试成功', { attempt: attempt });
-          break;
-        } catch (err) {
-          lastErr = err;
-          appendLog('warn', '自动更新：下载失败', { attempt: attempt, message: String(err && err.message || err).slice(0, 140) });
-          try { fs.unlinkSync(tmp); } catch (e2) {  }
-          if (attempt < 3) await new Promise(r => setTimeout(r, 1500 * attempt));
+      const prev = updateApply.readState(updateStatePath());
+      const prevChk = (prev && prev.pkg && String(prev.to || '') === version) ? checkExePackage(prev.pkg) : { ok: false };
+      if (prevChk.ok) {
+        pkg = String(prev.pkg);
+        appendLog('info', '自动更新：复用上次已下载的安装包', { file: path.basename(pkg), size: prevChk.size });
+      } else {
+        appendLog('info', '自动更新：开始下载', { url: String(url).slice(0, 120), to: tmp });
+        const mirrorState = path.join(app.getPath('userData'), 'update-mirrors.json');
+        const preferred = updateMirror.readPreferred(mirrorState);
+        const r = await updateMirror.downloadAsset({
+          url: url, dest: tmp, onPct: sendPct, net: net, preferred: preferred
+        });
+        if (!r.ok) {
+          const tried = (r.tried || []).map(t => t.error).join(' | ').slice(0, 300);
+          const err = new Error('all-mirrors-failed: ' + tried);
+          err._tried = r.tried;
+          throw err;
         }
+        const prefix = updateMirror.PROXIES.find(p => r.via === p + url) || '';
+        updateMirror.writePreferred(mirrorState, prefix);
+        appendLog('info', '自动更新：下载完成', { via: String(r.via).slice(0, 160), switched: (r.tried || []).length });
+        
+        const chk = checkExePackage(tmp);
+        if (!chk.ok) {
+          try { fs.unlinkSync(tmp); } catch (e2) {  }
+          appendLog('warn', '自动更新：安装包校验未通过', chk);
+          return { ok: false, error: 'bad-package', detail: chk.error };
+        }
+        pkg = tmp;
       }
-      if (lastErr) throw lastErr;
+      const size = fs.statSync(pkg).size;
       
-      const chk = checkExePackage(tmp);
-      if (!chk.ok) {
-        try { fs.unlinkSync(tmp); } catch (e2) {  }
-        appendLog('warn', '自动更新：安装包校验未通过', chk);
-        return { ok: false, error: 'bad-package', detail: chk.error };
-      }
-      appendLog('info', '自动更新：安装包校验通过，安排退出后替换', { size: chk.size, byContent: chk.byContent });
-      scheduleExeReplace(tmp, exePath);
-      setTimeout(() => { try { app.exit(0); } catch (e2) {  } }, 400);
-      return { ok: true, size: chk.size };
+      try { fs.unlinkSync(updateResultPath()); } catch (e2) {  }
+      updateApply.writeState(updateStatePath(), {
+        from: app.getVersion(), to: version, target: exePath, pkg: pkg, at: Date.now()
+      });
+      scheduleExeReplace(pkg, exePath);
+      appendLog('info', '自动更新：安装包就绪，退出后替换', { size: size, pkg: path.basename(pkg) });
+      setTimeout(() => { try { app.exit(0); } catch (e2) {  } }, 800);
+      return { ok: true, size: size, reused: pkg !== tmp };
     } catch (err) {
-      try { fs.unlinkSync(tmp); } catch (e2) {  }
-      appendLog('warn', '自动更新失败', { message: String(err && err.message || err).slice(0, 200) });
-      return { ok: false, error: String(err && err.message || err) };
+      try { if (pkg !== tmp) fs.unlinkSync(tmp); } catch (e2) {  }
+      if (pkg) { try { fs.unlinkSync(pkg); } catch (e2) {  } }
+      updateApply.clearState(updateStatePath());
+      appendLog('warn', '自动更新失败', {
+        message: String(err && err.message || err).slice(0, 300),
+        tried: (err && err._tried) ? err._tried.map(t => ({ url: String(t.url).slice(0, 100), error: t.error })) : undefined
+      });
+      return { ok: false, error: String(err && err.message || err).slice(0, 300) };
     }
   });
 
   
   ipcMain.handle('update-pick-exe', async (e, payload) => {
-    if (!app.isPackaged) return { ok: false, error: 'dev' };
+    if (!isPackagedBuild()) return { ok: false, error: 'dev' };
     const exePath = portableExePath();
     if (!exePath) return { ok: false, error: 'no-exe-path' };
     let src = '';
@@ -1543,12 +1555,19 @@ app.whenReady().then(() => {
     appendLog('info', '手动安装：已搬入本地安装包（源文件已移除），安排退出后替换',
       { file: path.basename(src), size: chk.size });
     try {
+      try { fs.unlinkSync(updateResultPath()); } catch (e2) {  }
+      updateApply.writeState(updateStatePath(), {
+        from: app.getVersion(),
+        to: String((payload && payload.version) || 'unknown'),
+        target: exePath, pkg: tmp, at: Date.now()
+      });
       scheduleExeReplace(tmp, exePath);
     } catch (err) {
       try { fs.unlinkSync(tmp); } catch (e2) {  }
+      updateApply.clearState(updateStatePath());
       return { ok: false, error: String(err && err.message || err).slice(0, 160) };
     }
-    setTimeout(() => { try { app.exit(0); } catch (e2) {  } }, 400);
+    setTimeout(() => { try { app.exit(0); } catch (e2) {  } }, 800);
     return { ok: true, size: chk.size };
   });
 

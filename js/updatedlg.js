@@ -20,7 +20,8 @@ App.UPD_I18N = {
     'upd.pickDone': '已选择，正在重启…',
     'upd.pickBad': '这个文件不是本软件的安装包',
     'upd.pickSame': '选中的就是当前正在运行的这个 exe',
-    'upd.pickFail': '安装失败：{v}'
+    'upd.pickFail': '安装失败：{v}',
+    'upd.pendingFail': '上次更新未完成（安装包已保留），点「更新」可直接重试，无需重新下载'
   },
   'zh-TW': {
     'upd.title': '偵測到更新 🎆🎆',
@@ -41,7 +42,8 @@ App.UPD_I18N = {
     'upd.pickDone': '已選擇，正在重新啟動…',
     'upd.pickBad': '這個檔案不是本軟體的安裝包',
     'upd.pickSame': '選中的就是目前正在執行的這個 exe',
-    'upd.pickFail': '安裝失敗：{v}'
+    'upd.pickFail': '安裝失敗：{v}',
+    'upd.pendingFail': '上次更新未完成（安裝包已保留），點「更新」可直接重試，無需重新下載'
   },
   'en': {
     'upd.title': 'Update available 🎆🎆',
@@ -62,7 +64,8 @@ App.UPD_I18N = {
     'upd.pickDone': 'Selected, restarting…',
     'upd.pickBad': 'That file is not this app’s installer',
     'upd.pickSame': 'That is the exe that is currently running',
-    'upd.pickFail': 'Install failed: {v}'
+    'upd.pickFail': 'Install failed: {v}',
+    'upd.pendingFail': 'The last update did not finish (installer kept). Click Update to retry — no re-download needed'
   },
   'ja': {
     'upd.title': 'アップデートがあります 🎆🎆',
@@ -83,7 +86,8 @@ App.UPD_I18N = {
     'upd.pickDone': '選択しました。再起動します…',
     'upd.pickBad': 'このファイルは本アプリのインストーラーではありません',
     'upd.pickSame': '選択したのは現在実行中の exe です',
-    'upd.pickFail': 'インストールに失敗しました：{v}'
+    'upd.pickFail': 'インストールに失敗しました：{v}',
+    'upd.pendingFail': '前回の更新が完了しませんでした（インストーラーは保持済み）。「更新」で再試行できます（再ダウンロード不要）'
   },
   'ko': {
     'upd.title': '업데이트가 있습니다 🎆🎆',
@@ -104,7 +108,8 @@ App.UPD_I18N = {
     'upd.pickDone': '선택 완료, 재시작합니다…',
     'upd.pickBad': '이 파일은 이 앱의 설치 파일이 아닙니다',
     'upd.pickSame': '지금 실행 중인 exe를 선택했습니다',
-    'upd.pickFail': '설치 실패: {v}'
+    'upd.pickFail': '설치 실패: {v}',
+    'upd.pendingFail': '지난 업데이트가 완료되지 않았습니다(설치 파일 보관됨). "업데이트"를 누르면 다시 시도할 수 있습니다 — 재다운로드 불필요'
   }
 };
 Object.keys(App.UPD_I18N).forEach(function (lang) {
@@ -174,6 +179,11 @@ App.updateDlg = {
       go.classList.add('disabled');
     }
     if (pick && info.isDev) { pick.disabled = true; pick.classList.add('disabled'); }
+    
+    if (info.pendingLocal && hint && hint.classList.contains('hidden')) {
+      hint.textContent = App.i18n.t('upd.pendingFail');
+      hint.classList.remove('hidden');
+    }
 
     cancel.addEventListener('click', () => this.close());
     go.addEventListener('click', () => this.start());
@@ -296,13 +306,14 @@ App.updateDlg = {
     const btn = this.el && this.el.querySelector('#updPick');
     const hint = this.el && this.el.querySelector('.upd-hint');
     const go = this.el && this.el.querySelector('#updGo');
-    const call = this._picker || function () {
-      return (window.sveApi && window.sveApi.updatePickExe) ? window.sveApi.updatePickExe() : null;
+    const call = this._picker || function (arg) {
+      return (window.sveApi && window.sveApi.updatePickExe) ? window.sveApi.updatePickExe(arg) : null;
     };
     this.busy = true;
     if (btn) { btn.disabled = true; btn.textContent = App.i18n.t('upd.pickBusy'); }
     let r = null;
-    try { r = await call(); }
+    
+    try { r = await call({ version: (this.info && this.info.remote) || '' }); }
     catch (e) { r = { ok: false, error: String(e && e.message || e) }; }
     if (r && r.ok) {
       

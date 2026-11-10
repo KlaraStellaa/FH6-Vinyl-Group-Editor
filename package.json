@@ -1,11 +1,11 @@
 {
   "name": "fh6-vinyl-group-editor",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "SVG vinyl pattern editor (Electron)",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win",
+    "dist": "electron-builder --win && node tools/build-portable.js",
     "dist:dir": "electron-builder --win --dir"
   },
   "build": {
@@ -17,6 +17,8 @@
     "files": [
       "main.js",
       "update-check.js",
+      "update-apply.js",
+      "update-mirror.js",
       "auto-name.js",
       "workcopy-store.js",
       "keymap.js",
@@ -37,12 +39,6 @@
     "win": {
       "target": [
         {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
           "target": "zip",
           "arch": [
             "x64"
@@ -50,9 +46,6 @@
         }
       ],
       "icon": "icons/app-icon.ico"
-    },
-    "portable": {
-      "artifactName": "FH6-Vinyl-Group-Editor.exe"
     },
     "artifactName": "FH6-Vinyl-Group-Editor-${version}-${arch}.${ext}"
   },
