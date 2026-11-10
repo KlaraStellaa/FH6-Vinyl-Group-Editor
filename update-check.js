@@ -3,6 +3,7 @@
 const { app, dialog, net, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const mirror = require('./update-mirror');
 
 const CHECK_DELAY_MS = 8000;    
 const TIMEOUT_MS = 10000;       
@@ -35,43 +36,24 @@ function isNewer(a, b) {
 }
 
 
+function mirrorStatePath() {
+  try { return path.join(app.getPath('userData'), 'update-mirrors.json'); }
+  catch (e) { return ''; }
+}
+
+
 function fetchLatestRelease(owner, repo) {
-  return new Promise((resolve, reject) => {
-    let req;
-    try {
-      req = net.request({
-        method: 'GET',
-        url: API_ROOT + '/' + owner + '/' + repo + '/releases/latest',
-        redirect: 'follow'
-      });
-    } catch (e) { reject(e); return; }
-    try {
-      req.setHeader('User-Agent', 'VinylFH6-UpdateCheck');
-      req.setHeader('Accept', 'application/vnd.github+json');
-    } catch (e) {  }
-
-    const timer = setTimeout(() => {
-      try { req.abort(); } catch (e) {  }
-      reject(new Error('request timeout'));
-    }, TIMEOUT_MS);
-
-    let body = '';
-    req.on('response', res => {
-      if (res.statusCode !== 200) {
-        clearTimeout(timer);
-        resolve(null);   
-        return;
+  const url = API_ROOT + '/' + owner + '/' + repo + '/releases/latest';
+  const sf = mirrorStatePath();
+  const preferred = sf ? mirror.readPreferred(sf) : '';
+  return mirror.fetchReleaseJson(url, { net: net, timeoutMs: TIMEOUT_MS, preferred: preferred })
+    .then(r => {
+      if (sf) {
+        const prefix = mirror.PROXIES.find(p => r.url === p + url) || '';
+        mirror.writePreferred(sf, prefix);
       }
-      res.on('data', chunk => { body += chunk; });
-      res.on('end', () => {
-        clearTimeout(timer);
-        try { resolve(JSON.parse(body)); } catch (e) { reject(e); }
-      });
-      res.on('error', e => { clearTimeout(timer); reject(e); });
+      return { json: r.json, via: r.url };
     });
-    req.on('error', e => { clearTimeout(timer); reject(e); });
-    req.end();
-  });
 }
 
 
@@ -110,18 +92,20 @@ function check(opts) {
       log('info', '更新检查已跳过：package.json 未配置 repository');
       return;
     }
-    let rel;
+    let got;
     try {
-      rel = await fetchLatestRelease(target.owner, target.repo);
+      got = await fetchLatestRelease(target.owner, target.repo);
     } catch (e) {
       
       log('warn', '更新检查失败（已忽略）', { message: String(e && e.message || e).slice(0, 160) });
       return;
     }
+    const rel = got && got.json;
     if (!rel || !rel.tag_name) {
       log('info', '更新检查：远端暂无 release', { repo: target.owner + '/' + target.repo });
       return;
     }
+    log('info', '更新检查：命中通道', { via: String(got.via || '').slice(0, 160) });
 
     const remote = String(rel.tag_name).replace(/^v/i, '');
     const local = app.getVersion();
