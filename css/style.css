@@ -300,8 +300,17 @@ html[data-scheme="light"] {
 
 
 
-.lib-filter-bar { position: sticky; top: 0; z-index: 5; padding: 6px 8px; background: var(--acrylic-bg); backdrop-filter: var(--acrylic-blur); -webkit-backdrop-filter: var(--acrylic-blur); }
-.lib-filter-btn { width: 100%; box-sizing: border-box; padding: 6px 12px; border-radius: 8px; background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text); font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: border-color .15s ease-out; }
+
+.lib-filter-bar { position: sticky; top: 0; z-index: 5; padding: 6px 8px; background: var(--acrylic-bg); backdrop-filter: var(--acrylic-blur); -webkit-backdrop-filter: var(--acrylic-blur); display: flex; align-items: stretch; gap: 6px; }
+.lib-filter-btn { flex: 1 1 auto; min-width: 0; box-sizing: border-box; padding: 6px 12px; border-radius: 8px; background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text); font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: border-color .15s ease-out; }
+
+.lib-fav-btn { flex: 0 0 auto; box-sizing: border-box; padding: 6px 12px; border-radius: 8px; background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text); font-size: 12px; cursor: pointer; white-space: nowrap; transition: border-color .15s ease-out, background-color .15s ease-out; }
+.lib-fav-btn:hover { border-color: var(--accent); }
+.lib-fav-btn.active { border-color: var(--accent); background: var(--accent-sel-bg); }
+
+.lib-fav-grid { position: relative; }
+#libFavDrop { position: absolute; width: 2px; background: #ffffff; box-shadow: 0 0 4px rgba(255, 255, 255, .9); pointer-events: none; display: none; z-index: 6; }
+#libFavDrop.visible { display: block; }
 .lib-filter-btn:hover { border-color: var(--accent); }
 .lib-filter-panel { position: absolute; left: 8px; right: 8px; z-index: 10; background: var(--overlay-bg); border: 1px solid var(--btn-border); border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.3); max-height: 300px; overflow-y: auto; display: none; }
 .lib-filter-panel.open { display: block; animation: evDdIn .18s cubic-bezier(.25,.9,.35,1); }   

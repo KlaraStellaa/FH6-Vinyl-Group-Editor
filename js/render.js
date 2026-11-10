@@ -3601,8 +3601,10 @@ App.mergedThumbUrl = async function (layer, size, preparedGeometry) {
     const mats = geom.mats;
     
     const urls = await App.resolveBakeLayerSources(leaves, 256, 24, undefined, { drawable: true, f: 1 });
-    const uniq = Array.from(new Set(urls.filter(Boolean)));
-    const byUrl = await App.loadBakeImages(uniq, '[thumb] 分组图源解码失败');
+    
+    const urlOnly = Array.from(new Set(urls.filter(s => typeof s === 'string' && s)));
+    const byUrl = await App.loadBakeImages(urlOnly, '[thumb] 分组图源解码失败');
+    const sourceOf = s => (typeof s === 'string' ? (byUrl.get(s) || null) : (s || null));
     const cv = document.createElement("canvas");
     cv.width = size; cv.height = size;
     const cx = cv.getContext("2d");
@@ -3614,17 +3616,21 @@ App.mergedThumbUrl = async function (layer, size, preparedGeometry) {
     let sliceStart = performance.now();
     for (let i = 0; i < leaves.length; i++) {
       const u = urls[i];
-      const img = u ? byUrl.get(u) : null;
+      const img = u ? sourceOf(u) : null;
       const M = mats[i];
       if (!img || !M) continue;
       const l = leaves[i];
+      
+      const sw = img.naturalWidth || img.width;
+      const sh = img.naturalHeight || img.height;
+      if (!(sw > 0) || !(sh > 0)) continue;
       cx.save();
       const T = new DOMMatrix().translate(offx, offy).scale(f).multiply(M);
       cx.setTransform(T.a, T.b, T.c, T.d, T.e, T.f);
       cx.globalAlpha = (l && l.opacity >= 0 && l.opacity <= 1) ? l.opacity : 1;
       
       cx.globalCompositeOperation = l.isMask ? 'destination-out' : 'source-over';
-      cx.drawImage(img, 0, 0, img.width, img.height, -(l.w || 0) / 2, -(l.h || 0) / 2, l.w || 0, l.h || 0);
+      cx.drawImage(img, 0, 0, sw, sh, -(l.w || 0) / 2, -(l.h || 0) / 2, l.w || 0, l.h || 0);
       cx.restore();
       if (i + 1 < leaves.length && performance.now() - sliceStart >= 6) {
         await new Promise(resolve => setTimeout(resolve, 0));

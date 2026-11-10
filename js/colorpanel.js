@@ -131,6 +131,11 @@ App.setPanelHSV = function (h, s, v, apply, preview) {
   h = clamp(h, 0, 360);
   s = clamp(s, 0, 100);
   v = clamp(v, 0, 100);
+  
+  if (App.cp.syncing &&
+      Math.abs((App.cp.h === undefined ? -1 : App.cp.h) - h) < 0.5 &&
+      Math.abs((App.cp.s === undefined ? -1 : App.cp.s) - s) < 0.5 &&
+      Math.abs((App.cp.v === undefined ? -1 : App.cp.v) - v) < 0.5) return;
   App.cp.h = h; App.cp.s = s; App.cp.v = v;
   const hex = App.hsvHex(h, s, v);
   App.cp.hex = hex;

@@ -358,6 +358,8 @@ App.settings = {
       this.applyKeymap(s);
       
       if (App.Favorites) App.Favorites.load(s.favorites);
+      
+      if (App.LibFav) App.LibFav.load(s.libFav);
       if (App.gpmap) App.gpmap.load(s.gpmap);
       
       if (App.xbind) App.xbind.load(s.xbind);
@@ -383,6 +385,7 @@ App.settings = {
       if (!window.sveApi.settingsGet) this.applyKeymap(ls);   
       
       if (App.Favorites && !window.sveApi.settingsGet) App.Favorites.load(ls.favorites);
+      if (App.LibFav && !window.sveApi.settingsGet) App.LibFav.load(ls.libFav);
       if (App.gpmap && !window.sveApi.settingsGet) App.gpmap.load(ls.gpmap);
       if (App.xbind && !window.sveApi.settingsGet) App.xbind.load(ls.xbind);
     } catch (e) {  }
@@ -459,6 +462,8 @@ App.settings = {
       xbind: App.xbind ? App.xbind.payload() : undefined,
       
       favorites: App.Favorites ? App.Favorites.payload() : [],
+      
+      libFav: App.LibFav ? App.LibFav.payload() : [],
       
       helpHintAck: this.helpHintAck === true,
       

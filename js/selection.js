@@ -651,12 +651,13 @@ App.cutSelection = function () {
     items = App.activeTargetItems();
   }
   if (!items.length) { showToast(App.i18n.t('toast.sel.noCut')); return; }
+  const anchor = App.removeAnchorLayer(items);   
   App.history.markDiscrete();
   try { App.log('info', '剪切', { layers: items.length }); } catch (e) {  }
   App.state.clipboard = items.map(l => App.serializeLayer(l, true));
   items.forEach(l => App.removeTopLayer(l));
   if (hadSel) App.setSelection([]);
-  else App.syncPanelSelectionClasses(); 
+  App.selectAfterRemove(anchor);
   App.refreshClipboardPanel();
   showToast(App.i18n.tf('toast.sel.cut', { n: App.state.clipboard.length }));
 };
@@ -706,7 +707,6 @@ App.insertLayersLikePaste = function (newLayers, anchorArg) {
     App.refreshPanel();
     App.refreshCount();
   }
-  if (App.contentChanged) App.contentChanged();
   return true;
 };
 
@@ -761,7 +761,11 @@ App.insertAnchorLayer = function () {
 
 
 App.insertNewLayer = function (layer) {
-  if (App.state.insertBelow && App.insertLayersLikePaste([layer])) return layer;
+  if (App.state.insertBelow && App.insertLayersLikePaste([layer])) {
+    
+    if (App.contentChanged) App.contentChanged();
+    return layer;
+  }
   return App.addLayer(layer);
 };
 
@@ -783,6 +787,34 @@ App.reinsertLayersLikePaste = function (list, anchorArg) {
   return false;
 };
 
+
+App.removeAnchorLayer = function (items) {
+  const panel = App.panelLayers();
+  const gone = new Set(items);
+  let top = -1;
+  panel.forEach((l, i) => { if (gone.has(l) && (top < 0 || i < top)) top = i; });
+  if (top < 0) return null;
+  for (let i = top - 1; i >= 0; i--) if (!gone.has(panel[i])) return panel[i];
+  return null;
+};
+App.selectAfterRemove = function (anchor) {
+  if (anchor && App.state.layers.includes(anchor)) {
+    const i = App.panelLayers().findIndex(l => l === anchor);
+    if (i >= 0) {
+      if (App.state.plusAnchorActive) App.setPlusAnchor(false);
+      App.lastWheelIdx = i;
+      App.alignWheelScroll();
+      App.syncPanelSelectionClasses();
+      if (App.requestFlashRefresh) App.requestFlashRefresh();
+      return;
+    }
+  }
+  
+  App.state.selectedByTab = false;
+  App.setSelection([]);
+  App.setPlusAnchor(true);
+};
+
 App.deleteSelection = function () {
   const hadSel = App.state.selected.size > 0;
   
@@ -794,10 +826,11 @@ App.deleteSelection = function () {
     items = App.activeTargetItems();
   }
   if (!items.length) return;
+  const anchor = App.removeAnchorLayer(items);   
   App.history.markDiscrete();
   items.forEach(l => App.removeTopLayer(l));
   if (hadSel) App.setSelection([]);
-  else App.syncPanelSelectionClasses();
+  App.selectAfterRemove(anchor);
   showToast(App.i18n.tf('toast.sel.deleted', { n: items.length }));
 };
 
