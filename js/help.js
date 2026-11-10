@@ -43,6 +43,8 @@
     
     
     ['.lib-item', 'libItem'],
+    
+    ['#btnLibFav', 'btnLibFav'],
     ['#panelMinBtn', 'panelMinBtn'], ['label[data-tab="lib"]', 'ptabLib'], ['label[data-tab="color"]', 'ptabColor'],
     ['#btnEyeLayer', 'btnEyeLayer'], ['#btnEyeBg', 'btnEyeBg'],
     ['#btnApplyColor', 'btnApplyColor'], ['#btnFav', 'btnFav'],

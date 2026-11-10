@@ -37,7 +37,19 @@ App.initPanels = function () {
     App.openPlusPicker();
   });
   
-  App.layerListEl.addEventListener('scroll', () => App.fillVisibleThumbs(), { passive: true });
+  let thumbRaf = 0;
+  App.layerListEl.addEventListener('scroll', () => {
+    if (App._thumbSettleTimer) { clearTimeout(App._thumbSettleTimer); App._thumbSettleTimer = null; }
+    App._thumbSettleTimer = setTimeout(() => {
+      App._thumbSettleTimer = null;
+      App.fillVisibleThumbs();
+    }, 90);
+    if (thumbRaf) return;
+    thumbRaf = requestAnimationFrame(() => {
+      thumbRaf = 0;
+      App.fillVisibleThumbs({ budget: 4 });
+    });
+  }, { passive: true });
 };
 
 
@@ -130,16 +142,29 @@ App.onLayerItemClick = function (id) {
 App.lastWheelIdx = undefined;
 App._progScrollTop = null;   
 
+App._layerRowsCache = null;
+App._layerRowHCache = 0;
+App.layerRows = function () {
+  if (!App._layerRowsCache) App._layerRowsCache = $$('.layer-item', App.layerListEl);
+  return App._layerRowsCache;
+};
+App.invalidateLayerRows = function () {
+  App._layerRowsCache = null;
+  App._layerRowHCache = 0;
+};
+
 App.layerRowH = function () {
-  const items = $$('.layer-item', App.layerListEl);
+  if (App._layerRowHCache > 0) return App._layerRowHCache;
+  const items = App.layerRows();
   if (items.length >= 2) {
     const h = items[1].offsetTop - items[0].offsetTop;
-    if (h > 0) return h;
+    if (h > 0) { App._layerRowHCache = h; return h; }
   }
   const it = items[0];
   if (it) {
     const cs = getComputedStyle(it);
-    return it.offsetHeight + (parseFloat(cs.marginBottom) || 0);
+    const h = it.offsetHeight + (parseFloat(cs.marginBottom) || 0);
+    if (h > 0) { App._layerRowHCache = h; return h; }
   }
   return 76;
 };
@@ -154,11 +179,16 @@ App.alignWheelScroll = function () {
   const plusH = App.plusRowH();   
   const n = App.panelLayers().length;
   
-  list.style.paddingTop = (1 * rh) + 'px';
-  list.style.paddingBottom = Math.max(0, list.clientHeight - 2 * rh) + 'px';
   
-  wb.style.top = (1 * rh + plusH) + 'px';
-  wb.style.height = Math.max(40, rh - 4) + 'px';
+  const padTop = (1 * rh) + 'px';
+  if (list.style.paddingTop !== padTop) list.style.paddingTop = padTop;
+  const padBottom = Math.max(0, list.clientHeight - 2 * rh) + 'px';
+  if (list.style.paddingBottom !== padBottom) list.style.paddingBottom = padBottom;
+  
+  const wbTop = (1 * rh + plusH) + 'px';
+  if (wb.style.top !== wbTop) wb.style.top = wbTop;
+  const wbH = Math.max(40, rh - 4) + 'px';
+  if (wb.style.height !== wbH) wb.style.height = wbH;
   wb.classList.remove('hidden');   
   if (!n) {
     
@@ -431,9 +461,9 @@ App.hideDragGhost = function () {
   if (App.dragGhostEl) { App.dragGhostEl.remove(); App.dragGhostEl = null; }
 };
 App.dropIndexAt = function (clientY) {
-  const ids = App.panelLayers().map(l => l.id);
-  const items = $$('.layer-item', App.layerListEl);
-  let q = ids.length; 
+  
+  const items = App.layerRows();
+  let q = items.length; 
   for (let p = 0; p < items.length; p++) {
     const r = items[p].getBoundingClientRect();
     if (clientY < r.top + r.height / 2) { q = p; break; }
@@ -442,7 +472,8 @@ App.dropIndexAt = function (clientY) {
 };
 App.updateDropIndicator = function (clientY) {
   if (!App.dropIndicator) return;
-  const items = $$('.layer-item', App.layerListEl);
+  const items = App.layerRows();
+  
   const q = App.dropIndexAt(clientY);
   let top;
   if (q >= items.length) {
@@ -471,7 +502,10 @@ App.reorderLayer = function (id, q) {
   const after = App.state.layers.length;
   const arrIdx = clamp(after - q, 0, after);
   App.state.layers.splice(arrIdx, 0, l);
-  App.state.layers.forEach(x => App.layersRoot.appendChild(x.el));
+  
+  const ref = App.state.layers[arrIdx + 1];
+  if (ref && ref.el && ref.el.parentNode === App.layersRoot) App.layersRoot.insertBefore(l.el, ref.el);
+  else App.layersRoot.appendChild(l.el);
   
   if (App.invalidateEditStatic && App.editStatic && App.editStatic.active) App.invalidateEditStatic();
   App.refreshPanel();
@@ -553,9 +587,13 @@ App.refreshPanel = function () {
       item._mb.remove();
       item._mb = null;
     }
+    
+    layer._panelItem = item;
     if (item === refNode) refNode = refNode.nextSibling;
     else App.layerListEl.insertBefore(item, refNode);
   });
+  
+  App.invalidateLayerRows();
   
   if (App.dropIndicator) App.layerListEl.appendChild(App.dropIndicator);
   App.refreshPlusRow();
@@ -567,26 +605,27 @@ App.refreshPanel = function () {
 };
 
 
-App.fillVisibleThumbs = function () {
+App.fillVisibleThumbs = function (opts) {
   const list = App.layerListEl;
   if (!list) return;
   
   if (!list.clientHeight) return;
   const st = list.scrollTop, vh = list.clientHeight;
   
-  const rows = $$('.layer-item', list);
+  const rows = App.layerRows();
+  if (!rows.length) return;
   const rh = (App.layerRowH && App.layerRowH()) || 0;
+  const first = 1 * rh + (App.plusRowH ? App.plusRowH() : 0);   
   let from = 0, to = rows.length;
   if (rh > 20) {
-    const padTop = 1 * rh;   
-    from = Math.max(0, Math.floor((st - 80 - padTop) / rh));
-    to = Math.min(rows.length, Math.ceil((st + vh + 80 - padTop) / rh) + 1);
+    from = Math.max(0, Math.floor((st - 80 - first) / rh));
+    to = Math.min(rows.length, Math.ceil((st + vh + 80 - first) / rh) + 1);
   }
+  const budget = (opts && opts.budget > 0) ? opts.budget : Infinity;
+  let started = 0;
   for (let ri = from; ri < to; ri++) {
     const item = rows[ri];
     if (!item) continue;
-    const top = item.offsetTop, bottom = top + item.offsetHeight;
-    if (bottom < st - 80 || top > st + vh + 80) continue;
     const id = parseInt(item.getAttribute('data-id'), 10);
     const layer = App.findLayer(id);
     if (!layer) continue;
@@ -596,6 +635,7 @@ App.fillVisibleThumbs = function () {
     if (img && img.getAttribute('src') && !layer.thumbDirty) continue;
     if (item.dataset.thumbLoading === '1') continue;
     item.dataset.thumbLoading = '1';
+    started++;
     const thumb = $('.layer-thumb', item);
     const loader = App.startThumbLoading(thumb);
     App.getLayerThumb(layer).then(async url => {
@@ -607,36 +647,56 @@ App.fillVisibleThumbs = function () {
       App.finishThumbLoading(thumb, loader);
       if (item.isConnected) delete item.dataset.thumbLoading;
     });
+    if (started >= budget) break;
+  }
+};
+
+
+App.applyRowSelection = function (item, inSel, showTri) {
+  
+  if (item.classList.contains('multi-sel') !== inSel) item.classList.toggle('multi-sel', inSel);
+  const selectedBg = item._selBg || item.querySelector('.layer-select-bg');
+  if (selectedBg) {
+    item._selBg = selectedBg;
+    const opacity = inSel ? '1' : '0';
+    if (selectedBg.style.opacity !== opacity) selectedBg.style.opacity = opacity;
+  }
+  let tri = item._tri || item.querySelector('.tri');
+  if (showTri) {
+    if (!tri) {
+      tri = document.createElement('span');
+      tri.className = 'tri';
+      item.appendChild(tri);
+    }
+    item._tri = tri;
+  } else if (tri) {
+    tri.remove();
+    item._tri = null;
   }
 };
 
 App.syncPanelSelectionClasses = function () {
-  $$('.layer-item', App.layerListEl).forEach((item) => {
-    const id = parseInt(item.getAttribute('data-id'), 10);
-    const inSel = App.state.selected.has(id);
-    
-    const showTri = inSel && (App.state.selected.size > 1 || App.state.tabDown || (App.state.selected.size === 1 && App.state.selectedByTab));
-    
-    if (item.classList.contains('multi-sel') !== inSel) item.classList.toggle('multi-sel', inSel);
-    const selectedBg = item._selBg || item.querySelector('.layer-select-bg');
-    if (selectedBg) {
-      item._selBg = selectedBg;
-      const opacity = inSel ? '1' : '0';
-      if (selectedBg.style.opacity !== opacity) selectedBg.style.opacity = opacity;
-    }
-    let tri = item._tri || item.querySelector('.tri');
-    if (showTri) {
-      if (!tri) {
-        tri = document.createElement('span');
-        tri.className = 'tri';
-        item.appendChild(tri);
-      }
-      item._tri = tri;
-    } else if (tri) {
-      tri.remove();
-      item._tri = null;
-    }
+  
+  const sel = App.state.selected || new Set();
+  const size = sel.size;
+  
+  const showTri = (size > 1) || !!App.state.tabDown || (size === 1 && !!App.state.selectedByTab);
+  const prev = App._selRows || (App._selRows = new Set());
+  const next = new Set();
+  sel.forEach(id => {
+    const l = App.findLayer(id);
+    const item = l && l._panelItem;
+    if (item && item.isConnected) next.add(item);
   });
+  let touched = 0;
+  prev.forEach(item => {
+    if (next.has(item)) return;
+    touched++;
+    if (item.isConnected) App.applyRowSelection(item, false, false);
+  });
+  next.forEach(item => { touched++; App.applyRowSelection(item, true, showTri); });
+  App._selRows = next;
+  
   
   if (App.state.hideOthers && App.syncHideOthersSelection) App.syncHideOthersSelection();
 };

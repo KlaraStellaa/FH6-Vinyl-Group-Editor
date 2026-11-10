@@ -19,7 +19,11 @@ App.LIB_CAT_I18N = {
     'lib.cat.font4': '字体4', 'lib.cat.font5': '字体5', 'lib.cat.font6': '字体6',
     'lib.cat.font7': '字体7', 'lib.cat.font8': '字体8', 'lib.cat.font9': '字体9',
     'lib.cat.font10': '字体10', 'lib.cat.font11': '字体11',
-    'lib.cat.pattern': '填充图案'
+    'lib.cat.pattern': '填充图案',
+    
+    'lib.fav': '收藏',
+    'lib.favAskAdd': '是否收藏该图案？',
+    'lib.favAskRemove': '是否取消收藏该图案？'
   },
   'zh-TW': {
     'lib.cat.all': '全部分組',
@@ -40,7 +44,10 @@ App.LIB_CAT_I18N = {
     'lib.cat.font4': '字型4', 'lib.cat.font5': '字型5', 'lib.cat.font6': '字型6',
     'lib.cat.font7': '字型7', 'lib.cat.font8': '字型8', 'lib.cat.font9': '字型9',
     'lib.cat.font10': '字型10', 'lib.cat.font11': '字型11',
-    'lib.cat.pattern': '填充圖案'
+    'lib.cat.pattern': '填充圖案',
+    'lib.fav': '收藏',
+    'lib.favAskAdd': '是否收藏該圖案？',
+    'lib.favAskRemove': '是否取消收藏該圖案？'
   },
   'en': {
     'lib.cat.all': 'All Groups',
@@ -61,7 +68,10 @@ App.LIB_CAT_I18N = {
     'lib.cat.font4': 'Font 4', 'lib.cat.font5': 'Font 5', 'lib.cat.font6': 'Font 6',
     'lib.cat.font7': 'Font 7', 'lib.cat.font8': 'Font 8', 'lib.cat.font9': 'Font 9',
     'lib.cat.font10': 'Font 10', 'lib.cat.font11': 'Font 11',
-    'lib.cat.pattern': 'Fill Patterns'
+    'lib.cat.pattern': 'Fill Patterns',
+    'lib.fav': 'Favourites',
+    'lib.favAskAdd': 'Add this shape to favourites?',
+    'lib.favAskRemove': 'Remove this shape from favourites?'
   },
   'ja': {
     'lib.cat.all': 'すべてのグループ',
@@ -82,7 +92,10 @@ App.LIB_CAT_I18N = {
     'lib.cat.font4': 'フォント4', 'lib.cat.font5': 'フォント5', 'lib.cat.font6': 'フォント6',
     'lib.cat.font7': 'フォント7', 'lib.cat.font8': 'フォント8', 'lib.cat.font9': 'フォント9',
     'lib.cat.font10': 'フォント10', 'lib.cat.font11': 'フォント11',
-    'lib.cat.pattern': '塗りつぶしパターン'
+    'lib.cat.pattern': '塗りつぶしパターン',
+    'lib.fav': 'お気に入り',
+    'lib.favAskAdd': 'この図形をお気に入りに追加しますか？',
+    'lib.favAskRemove': 'この図形をお気に入りから外しますか？'
   },
   'ko': {
     'lib.cat.all': '전체 그룹',
@@ -103,7 +116,10 @@ App.LIB_CAT_I18N = {
     'lib.cat.font4': '폰트 4', 'lib.cat.font5': '폰트 5', 'lib.cat.font6': '폰트 6',
     'lib.cat.font7': '폰트 7', 'lib.cat.font8': '폰트 8', 'lib.cat.font9': '폰트 9',
     'lib.cat.font10': '폰트 10', 'lib.cat.font11': '폰트 11',
-    'lib.cat.pattern': '채우기 패턴'
+    'lib.cat.pattern': '채우기 패턴',
+    'lib.fav': '즐겨찾기',
+    'lib.favAskAdd': '이 도형을 즐겨찾기에 추가할까요?',
+    'lib.favAskRemove': '이 도형을 즐겨찾기에서 뺄까요?'
   }
 };
 
