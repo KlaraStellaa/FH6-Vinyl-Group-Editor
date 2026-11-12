@@ -1,4 +1,3 @@
-
 App.TOAST_I18N = {
   'zh-CN': {
     'toast.bg.removed': '背景图片已移除',
@@ -676,7 +675,6 @@ App.TOAST_I18N = {
     'toast.tab.docCreated': '새 문서를 만들었습니다'
   }
 };
-
 Object.keys(App.TOAST_I18N).forEach(function (lang) {
   if (App.i18n.dicts[lang]) Object.assign(App.i18n.dicts[lang], App.TOAST_I18N[lang]);
 });

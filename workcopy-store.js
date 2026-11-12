@@ -5,8 +5,6 @@ const crypto = require('crypto');
 const { resolveAutoSaveName } = require('./auto-name');
 const hash = text => crypto.createHash('sha256').update(text, 'utf8').digest('hex');
 
-
-
 function atomicWrite(fp, text, replace, io = fs) {
   const tmp = fp + '.' + crypto.randomUUID() + '.tmp';
   let fd;
@@ -49,7 +47,6 @@ class WorkcopyStore {
     if (st.size > 200 * 1024 * 1024) throw new Error('文件过大');
     const content = this.fs.readFileSync(fp, 'utf8');
     this.validate(content);
-    
     return { ok: true, content, name: path.basename(fp), mtimeMs: st.mtimeMs, source: this.source(fp, content) };
   }
   renamed(oldPath, newPath) {
@@ -61,15 +58,12 @@ class WorkcopyStore {
     const io = this.fs;
     let fp;
     if (source) {
-      
-      
       fp = this.sources.get(source.id);
       if (!fp || typeof source.revision !== 'string') throw new Error('源文件关联已失效，请重新打开文件');
       if (!io.existsSync(fp)) throw new Error('源文件已移动或删除，请重新打开；未重建旧文件');
       const oldText = io.readFileSync(fp, 'utf8');
       if (hash(oldText) !== source.revision)
         throw new Error('源文件已被其他标签或程序修改。为避免覆盖较新的内容，保存已停止；请先另存当前内容再重新打开');
-      
       if (hash(io.readFileSync(fp, 'utf8')) !== source.revision)
         throw new Error('保存期间源文件发生变化，已停止覆盖');
       atomicWrite(fp, content, true, io);

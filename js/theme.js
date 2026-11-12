@@ -1,7 +1,5 @@
 'use strict';
-
 App.theme = {
-  
   THEMES: [
     { id: 'dark',     scheme: 'dark',  key: 'settings.dark',  zh: '深色' },
     { id: 'midnight', scheme: 'dark',  key: 'settings.theme.midnight', zh: '午夜蓝' },
@@ -14,16 +12,13 @@ App.theme = {
   ],
   CUSTOM_ID: 'custom',
   DEFAULT: 'light',
-  
   SEED_KEYS: ['bg', 'panel', 'accent', 'text'],
-  
   VAR_KEYS: ['--bg', '--panel', '--panel2', '--border', '--switch-off', '--text', '--dim', '--accent',
     '--btn-bg', '--btn-border', '--btn-hover-bg', '--btn-active-bg', '--input-bg', '--tabbar-bg',
     '--tab-pill-bg', '--tab-pill-hover-bg', '--tab-pill-active-bg', '--card-bg', '--card-hover-bg',
     '--overlay-bg', '--accent-sel-bg', '--thumb-bg', '--swatch-bg', '--scrollbar-thumb',
     '--btn-shadow', '--acrylic-bg', '--acrylic-border'],
 
-  
   _hex(h) {
     const s = String(h || '').replace('#', '').trim();
     const v = s.length === 3 ? s.split('').map(c => c + c).join('') : s;
@@ -34,13 +29,11 @@ App.theme = {
     const c = this._hex(h);
     return c ? '#' + c.map(v => v.toString(16).padStart(2, '0')).join('') : null;
   },
-  
   mix(a, b, t) {
     const x = this._hex(a), y = this._hex(b);
     if (!x || !y) return this._hex6(a) || '#000000';
     return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('');
   },
-  
   _lum(c) {
     const v = this._hex(c) || [0, 0, 0];
     const f = x => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); };
@@ -50,12 +43,10 @@ App.theme = {
     const L1 = this._lum(a), L2 = this._lum(b);
     return (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
   },
-  
   schemeOf(bg) {
     return this._lum(bg) > 0.42 ? 'light' : 'dark';
   },
 
-  
   STEPS: {
     panel2: { dark: 0.035, light: 0.22 },
     btnBg: { dark: 0.04, light: 0 },
@@ -75,9 +66,8 @@ App.theme = {
     tabbar: { dark: null, light: 0.09 },
     thumbFromBg: { dark: 0.15, light: null },
     thumb: { dark: null, light: 0.06 },
-    dim: { dark: 0.61, light: 0.60 }      
+    dim: { dark: 0.61, light: 0.60 }       
   },
-  
   derive(seeds) {
     const s = seeds || {};
     const bg = this._hex6(s.bg) || '#1b1d21';
@@ -121,13 +111,11 @@ App.theme = {
     return { vars: v, scheme: scheme, seeds: { bg: bg, panel: panel, accent: accent, text: text, dim: dim, border: border } };
   },
 
-  
   presetOf(id) { return this.THEMES.find(t => t.id === id) || null; },
   clearVars() {
     const de = document.documentElement;
     this.VAR_KEYS.forEach(k => de.style.removeProperty(k));
   },
-  
   applyPreset(id) {
     const t = this.presetOf(id) || this.presetOf(this.DEFAULT);
     this.clearVars();
@@ -136,7 +124,6 @@ App.theme = {
     de.dataset.scheme = t.scheme;
     return { kind: 'preset', id: t.id, scheme: t.scheme };
   },
-  
   applyCustom(seeds) {
     const r = this.derive(seeds);
     const de = document.documentElement;
@@ -146,7 +133,6 @@ App.theme = {
     de.dataset.scheme = r.scheme;
     return { kind: 'custom', id: this.CUSTOM_ID, scheme: r.scheme, seeds: r.seeds, vars: r.vars };
   },
-  
   customWarnings(seeds) {
     const r = this.derive(seeds);
     const out = [];
@@ -154,7 +140,6 @@ App.theme = {
     if (this.contrast(r.vars['--panel'], r.vars['--dim']) < 2) out.push({ key: 'dim', value: +this.contrast(r.vars['--panel'], r.vars['--dim']).toFixed(2) });
     return out;
   },
-  
   defaultSeeds() {
     return { bg: '#F8FAFD', panel: '#FFFFFF', accent: '#00A89A', text: '#000000' };
   }

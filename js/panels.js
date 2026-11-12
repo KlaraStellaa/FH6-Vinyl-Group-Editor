@@ -1,16 +1,13 @@
 'use strict';
-
 App.initPanels = function () {
   App.layerListEl = $('#layerList');
   App.layerListEl.addEventListener('click', e => {
-    
     if (App.lastPanelDragEnd && Date.now() - App.lastPanelDragEnd < 200) return;
     const item = e.target.closest('.layer-item');
     if (!item) return;
     const id = parseInt(item.getAttribute('data-id'), 10);
     App.onLayerItemClick(id);
   });
-  
   App.layerListEl.addEventListener('dblclick', e => {
     const item = e.target.closest('.layer-item');
     if (!item || App.state.tabDown) return;
@@ -25,7 +22,7 @@ App.initPanels = function () {
   App.initLayerDragReorder();
   App.initPlusRow();          
   App.initRightPanel();
-  
+  App.initClipboardPanel();
   document.addEventListener('keydown', e => {
     if (e.key !== 'Enter' || !App.state.plusAnchorActive || App.state.edit) return;
     const t = e.target;
@@ -36,7 +33,6 @@ App.initPanels = function () {
     e.stopPropagation();
     App.openPlusPicker();
   });
-  
   let thumbRaf = 0;
   App.layerListEl.addEventListener('scroll', () => {
     if (App._thumbSettleTimer) { clearTimeout(App._thumbSettleTimer); App._thumbSettleTimer = null; }
@@ -52,7 +48,6 @@ App.initPanels = function () {
   }, { passive: true });
 };
 
-
 App.initPlusRow = function () {
   const list = App.layerListEl;
   const wrap = list ? list.parentElement : null;
@@ -60,7 +55,6 @@ App.initPlusRow = function () {
   const row = document.createElement('div');
   row.className = 'layer-plus';           
   row.id = 'layerPlusRow';
-  
   row.setAttribute('data-i18n', 'panel.plusTip');
   row.setAttribute('data-i18n-attr', 'title');
   row.title = App.i18n.t('panel.plusTip');
@@ -68,7 +62,6 @@ App.initPlusRow = function () {
   row.addEventListener('click', e => {
     e.preventDefault();
     e.stopPropagation();
-    
     if (App.state.plusAnchorActive) App.openPlusPicker();
     else App.setPlusAnchor(true);
   });
@@ -87,7 +80,6 @@ App.refreshPlusRow = function () {
   if (!list || !App.plusRowEl) return;
   if (list.firstChild !== App.plusRowEl) list.insertBefore(App.plusRowEl, list.firstChild);
 };
-
 App.setPlusAnchor = function (on) {
   on = !!on;
   if (!!App.state.plusAnchorActive === on) return;
@@ -95,7 +87,6 @@ App.setPlusAnchor = function (on) {
   if (on) {
     App.lastWheelIdx = undefined;   
     App.state.selBarDismissed = true;
-    
   }
   if (App.plusRowEl) App.plusRowEl.classList.toggle('anchor', on);
   App.syncPanelSelectionClasses();
@@ -103,8 +94,6 @@ App.setPlusAnchor = function (on) {
   App.requestFlashRefresh();
   App.alignWheelScroll();
 };
-
-
 App.openPlusPicker = async function () {
   const text = await App.fzaPickSvgLibrary();
   if (text === null) return;
@@ -115,20 +104,17 @@ App.onLayerItemClick = function (id) {
   const layer = App.findLayer(id);
   if (!layer) return;
   if (App.state.tabDown) {
-    
     App.rollbackTabAutoSel();
     App.state.tabGestureUsed = true;
     App.toggleLayerSelection(layer);
     App.scrollItemToTop(layer);
   } else if (App.state.selected.size > 1 || (App.state.selectedByTab && App.state.selected.size >= 1)) {
-    
     App.state.selBarDismissed = false;
     App.scrollItemToTop(layer);
     App.syncPanelSelectionClasses();
     App.updateSelToolbar();
     App.requestFlashRefresh();
   } else {
-    
     if (App.setPlusAnchor) App.setPlusAnchor(false);   
     App.state.selectedByTab = false;
     App.lastWheelIdx = undefined;
@@ -138,10 +124,8 @@ App.onLayerItemClick = function (id) {
   }
 };
 
-
 App.lastWheelIdx = undefined;
-App._progScrollTop = null;   
-
+App._progScrollTop = null;    
 App._layerRowsCache = null;
 App._layerRowHCache = 0;
 App.layerRows = function () {
@@ -152,7 +136,6 @@ App.invalidateLayerRows = function () {
   App._layerRowsCache = null;
   App._layerRowHCache = 0;
 };
-
 App.layerRowH = function () {
   if (App._layerRowHCache > 0) return App._layerRowHCache;
   const items = App.layerRows();
@@ -168,32 +151,25 @@ App.layerRowH = function () {
   }
   return 76;
 };
-
 App.alignWheelScroll = function () {
   const list = App.layerListEl;
   const wb = $('#wheelBox');
   if (!list || !wb) return;
-  
   if (!list.clientHeight) return;
   const rh = App.layerRowH();
   const plusH = App.plusRowH();   
   const n = App.panelLayers().length;
-  
-  
   const padTop = (1 * rh) + 'px';
   if (list.style.paddingTop !== padTop) list.style.paddingTop = padTop;
   const padBottom = Math.max(0, list.clientHeight - 2 * rh) + 'px';
   if (list.style.paddingBottom !== padBottom) list.style.paddingBottom = padBottom;
-  
   const wbTop = (1 * rh + plusH) + 'px';
   if (wb.style.top !== wbTop) wb.style.top = wbTop;
   const wbH = Math.max(40, rh - 4) + 'px';
   if (wb.style.height !== wbH) wb.style.height = wbH;
-  wb.classList.remove('hidden');   
+  wb.classList.remove('hidden');    
   if (!n) {
-    
     list.style.paddingBottom = '0px';
-    
     if (!App.state.plusAnchorActive && App.setPlusAnchor) {
       App.state.plusAnchorEmptyForce = true;
       App.setPlusAnchor(true);
@@ -204,16 +180,14 @@ App.alignWheelScroll = function () {
   }
   if (App.state.plusAnchorEmptyForce && App.state.plusAnchorActive) {
     App.state.plusAnchorEmptyForce = false;
-    if (App.setPlusAnchor) App.setPlusAnchor(false);   
+    if (App.setPlusAnchor) App.setPlusAnchor(false);    
   }
-  
   if (App.state.plusAnchorActive) {
     if (App.plusRowEl) App.plusRowEl.style.marginTop = plusH + 'px';
     list.scrollTop = 0;
     return;
   }
   if (App.plusRowEl) App.plusRowEl.style.marginTop = '';
-  
   let idx;
   if (App.lastWheelIdx !== undefined) idx = clamp(App.lastWheelIdx, 0, n - 1);
   else if (App.state.selected.size === 1) {
@@ -225,9 +199,7 @@ App.alignWheelScroll = function () {
   }
   App.lastWheelIdx = idx;
   const max = Math.max(0, list.scrollHeight - list.clientHeight);
-  
-  const target = clamp(idx * rh, 0, max);   
-  
+  const target = clamp(idx * rh, 0, max);    
   if (Math.abs(list.scrollTop - target) > 0.5) { App._progScrollTop = target; list.scrollTop = target; }
 };
 App.initLayerWheelNav = function () {
@@ -237,12 +209,10 @@ App.initLayerWheelNav = function () {
     e.stopPropagation();
     App.stepWhiteBox(e.deltaY > 0 ? 1 : -1);
   }, { passive: false });
-  
   App.layerListEl.addEventListener('scrollend', () => {
     const list = App.layerListEl;
     const n = App.panelLayers().length;
     if (!n) return;
-    
     if (App._progScrollTop !== null && Math.abs(list.scrollTop - App._progScrollTop) < 0.5) {
       App._progScrollTop = null;
       return;
@@ -250,7 +220,6 @@ App.initLayerWheelNav = function () {
     App._progScrollTop = null;
     const rh = App.layerRowH();
     if (App.state.plusAnchorActive) {
-      
       if (list.scrollTop > 0) {
         App.lastWheelIdx = clamp(Math.round(list.scrollTop / rh), 0, n - 1);
         App.setPlusAnchor(false);
@@ -264,29 +233,23 @@ App.initLayerWheelNav = function () {
       App.requestFlashRefresh();
       App.updateSelToolbar();
     }
-    
     if (list.scrollTop <= 0) { App.setPlusAnchor(true); return; }
     App.alignWheelScroll();
   });
 };
-
 App.stepWhiteBox = function (dir) {
   const n = App.panelLayers().length;
   if (!n) return;
   const ids = App.panelLayers().map(l => l.id); 
   let ni;
-  
   if (App.state.plusAnchorActive) {
     if (dir !== 1) return;
-    
     ni = 0;
     App.lastWheelIdx = ni;
     App.setPlusAnchor(false);
-    
   } else {
     let i;
     if (App.lastWheelIdx !== undefined) {
-      
       i = App.lastWheelIdx;
     } else if (App.state.tabDown) {
       const selIdx = Array.from(App.state.selected).map(id => ids.indexOf(id)).filter(j => j >= 0);
@@ -299,18 +262,14 @@ App.stepWhiteBox = function (dir) {
     }
     ni = clamp(i + dir, 0, n - 1);
     if (ni === i) {
-      
       if (dir === -1 && i === 0) App.setPlusAnchor(true);
       return; 
     }
     App.lastWheelIdx = ni;
   }
   if (App.state.tabDown) {
-    
     App.state.tabGestureUsed = true;
-    
     App.state.tabAutoSel = null;
-    
     if (!App.state.sweepMode) {
       App.state.sweepMode = App.state.selected.has(ids[ni]) ? 'remove' : 'add';
     }
@@ -340,20 +299,15 @@ App.stepWhiteBox = function (dir) {
       }
     }
   } else {
-    
     App.syncPanelSelectionClasses();
   }
-  
   App.alignWheelScroll();
-  
   App.requestFlashRefresh();
-  
   if (!App.state.tabDown) {
     App.state.selBarDismissed = true;
     App.updateSelToolbar();
   }
 };
-
 
 App.WB_STEP_DELAY = 200;
 App.WB_STEP_RATE = 100;
@@ -363,13 +317,12 @@ App.startWhiteBoxStep = function (dir) {
   App.stopWhiteBoxStep();
   const d = dir < 0 ? -1 : 1;
   App._wbStep.dir = d;
-  App.stepWhiteBox(d);                      
+  App.stepWhiteBox(d);                       
   App._wbStep.delayT = setTimeout(function () {
     App._wbStep.delayT = 0;
     if (!App._wbStep.dir) return;
     App._wbStep.rateT = setInterval(function () {
       if (!App._wbStep.dir) return;
-      
       App.stepWhiteBox(App._wbStep.dir);
     }, App.WB_STEP_RATE);
   }, App.WB_STEP_DELAY);
@@ -382,14 +335,11 @@ App.stopWhiteBoxStep = function () {
   if (s.rateT) { clearInterval(s.rateT); s.rateT = 0; }
 };
 
-
 App.requestFlashRefresh = function (animate) {
   if (App.state.batching) return;
-  
   App.ensureFlashRunning(animate !== false);
   App.updateFlashOverlays(animate);
 };
-
 
 App.initLayerDragReorder = function () {
   const list = App.layerListEl;
@@ -399,7 +349,6 @@ App.initLayerDragReorder = function () {
   list.appendChild(App.dropIndicator);
 
   list.addEventListener('pointerdown', e => {
-    
     if (e.button !== 0 || App.state.edit || App.state.tabDown) return;
     const item = e.target.closest('.layer-item');
     if (!item) return;
@@ -431,7 +380,6 @@ App.initLayerDragReorder = function () {
     if (!wasActive) return;
     const q = App.dropIndexAt(e.clientY);
     if (q !== null && q !== undefined) App.reorderLayer(id, q);
-    
     App.lastPanelDragEnd = Date.now();
   });
   window.addEventListener('pointercancel', () => {
@@ -442,7 +390,6 @@ App.initLayerDragReorder = function () {
     App.clearDropMark();
   });
 };
-
 App.showDragGhost = function (item, x, y) {
   App.hideDragGhost();
   const src = item.querySelector('img');
@@ -461,7 +408,6 @@ App.hideDragGhost = function () {
   if (App.dragGhostEl) { App.dragGhostEl.remove(); App.dragGhostEl = null; }
 };
 App.dropIndexAt = function (clientY) {
-  
   const items = App.layerRows();
   let q = items.length; 
   for (let p = 0; p < items.length; p++) {
@@ -473,7 +419,6 @@ App.dropIndexAt = function (clientY) {
 App.updateDropIndicator = function (clientY) {
   if (!App.dropIndicator) return;
   const items = App.layerRows();
-  
   const q = App.dropIndexAt(clientY);
   let top;
   if (q >= items.length) {
@@ -493,7 +438,6 @@ App.clearDropMark = function () {
     it.classList.remove('drop-before', 'drop-after', 'drag-ghost'));
 };
 
-
 App.reorderLayer = function (id, q) {
   const i = App.state.layers.findIndex(l => l.id === id);
   if (i < 0) return;
@@ -502,18 +446,14 @@ App.reorderLayer = function (id, q) {
   const after = App.state.layers.length;
   const arrIdx = clamp(after - q, 0, after);
   App.state.layers.splice(arrIdx, 0, l);
-  
   const ref = App.state.layers[arrIdx + 1];
   if (ref && ref.el && ref.el.parentNode === App.layersRoot) App.layersRoot.insertBefore(l.el, ref.el);
   else App.layersRoot.appendChild(l.el);
-  
   if (App.invalidateEditStatic && App.editStatic && App.editStatic.active) App.invalidateEditStatic();
   App.refreshPanel();
   App.clearDropMark();
-  
   if (App.contentChanged) App.contentChanged();
 };
-
 
 App.panelLayers = function () {
   const ex = App.currentExcluded ? App.currentExcluded() : null;
@@ -524,14 +464,12 @@ App.panelLayers = function () {
 App.refreshPanel = function () {
   if (!App.layerListEl) return;
   const list = App.panelLayers(); 
-  
   const existing = new Map();
   $$('.layer-item', App.layerListEl).forEach(el => {
     existing.set(parseInt(el.getAttribute('data-id'), 10), el);
   });
   const wantedIds = new Set(list.map(l => l.id));
   existing.forEach((el, id) => { if (!wantedIds.has(id)) el.remove(); });
-  
   let refNode = App.layerListEl.firstChild;
   list.forEach(layer => {
     let item = existing.get(layer.id);
@@ -550,7 +488,6 @@ App.refreshPanel = function () {
       thumb.appendChild(img);
       item.appendChild(thumb);
     }
-    
     if (!item._selBg) {
       let bg = item.querySelector('.layer-select-bg');
       if (!bg) {
@@ -576,7 +513,6 @@ App.refreshPanel = function () {
       item._badge.remove();
       item._badge = null;
     }
-    
     if (layer.isMask) {
       if (!item._mb) {
         item._mb = document.createElement('span');
@@ -587,35 +523,28 @@ App.refreshPanel = function () {
       item._mb.remove();
       item._mb = null;
     }
-    
     layer._panelItem = item;
     if (item === refNode) refNode = refNode.nextSibling;
     else App.layerListEl.insertBefore(item, refNode);
   });
-  
   App.invalidateLayerRows();
-  
   if (App.dropIndicator) App.layerListEl.appendChild(App.dropIndicator);
   App.refreshPlusRow();
   App.syncPanelSelectionClasses();
   App.fillVisibleThumbs(); 
   App.alignWheelScroll(); 
-  
   if (App.syncGroupBackBtn) App.syncGroupBackBtn();
 };
-
 
 App.fillVisibleThumbs = function (opts) {
   const list = App.layerListEl;
   if (!list) return;
-  
   if (!list.clientHeight) return;
   const st = list.scrollTop, vh = list.clientHeight;
-  
   const rows = App.layerRows();
   if (!rows.length) return;
   const rh = (App.layerRowH && App.layerRowH()) || 0;
-  const first = 1 * rh + (App.plusRowH ? App.plusRowH() : 0);   
+  const first = 1 * rh + (App.plusRowH ? App.plusRowH() : 0);    
   let from = 0, to = rows.length;
   if (rh > 20) {
     from = Math.max(0, Math.floor((st - 80 - first) / rh));
@@ -629,7 +558,6 @@ App.fillVisibleThumbs = function (opts) {
     const id = parseInt(item.getAttribute('data-id'), 10);
     const layer = App.findLayer(id);
     if (!layer) continue;
-    
     if (App.state.edit && layer.kind === 'merged') continue;
     const img = $('img', item);
     if (img && img.getAttribute('src') && !layer.thumbDirty) continue;
@@ -651,9 +579,7 @@ App.fillVisibleThumbs = function (opts) {
   }
 };
 
-
 App.applyRowSelection = function (item, inSel, showTri) {
-  
   if (item.classList.contains('multi-sel') !== inSel) item.classList.toggle('multi-sel', inSel);
   const selectedBg = item._selBg || item.querySelector('.layer-select-bg');
   if (selectedBg) {
@@ -676,10 +602,8 @@ App.applyRowSelection = function (item, inSel, showTri) {
 };
 
 App.syncPanelSelectionClasses = function () {
-  
   const sel = App.state.selected || new Set();
   const size = sel.size;
-  
   const showTri = (size > 1) || !!App.state.tabDown || (size === 1 && !!App.state.selectedByTab);
   const prev = App._selRows || (App._selRows = new Set());
   const next = new Set();
@@ -696,13 +620,10 @@ App.syncPanelSelectionClasses = function () {
   });
   next.forEach(item => { touched++; App.applyRowSelection(item, true, showTri); });
   App._selRows = next;
-  
-  
   if (App.state.hideOthers && App.syncHideOthersSelection) App.syncHideOthersSelection();
 };
 
 App.refreshCount = function () {
-  
   const all = App.countPatterns();
   const ex = App.currentExcluded ? App.currentExcluded() : null;
   let text;
@@ -716,7 +637,6 @@ App.refreshCount = function () {
   if (App.updateHideLayersButton) App.updateHideLayersButton();
   if (App.updateLayersDisplaySlider) App.updateLayersDisplaySlider();
 };
-
 
 App.scrollItemToTop = function (layer, instant) {
   if (!App.layerListEl || !layer) return;
@@ -732,7 +652,6 @@ App.updateBaseButtons = function () {
   $('#btnBase').textContent = App.i18n.t(App.state.bg.base === 'light' ? 'toolbar.baseLight' : 'toolbar.baseDark');
   $('#btnGrid').textContent = App.i18n.t(App.state.bg.grid ? 'toolbar.gridOn' : 'toolbar.gridOff');
   $('#btnBgImage').textContent = App.i18n.t(App.state.bg.image ? 'toolbar.bgSet' : 'toolbar.bgNone');
-  
   if (App.refreshToolbarIcons) App.refreshToolbarIcons();
 };
 
@@ -740,14 +659,12 @@ App.switchTab = function (name) {
   const radio = document.querySelector('#panelTabs input[value="' + name + '"]');
   if (radio) radio.checked = true;
   const libEl = $('#libTab'), colorEl = $('#colorTab');
-  
   const target = name === 'lib' ? libEl : (name === 'color' ? colorEl : null);
   const willShow = !!(target && target.classList.contains('hidden'));
   [libEl, colorEl].forEach(el => { if (el) el.classList.remove('sve-tab-from-left', 'sve-tab-from-right'); });
   if (willShow) target.classList.add(name === 'lib' ? 'sve-tab-from-left' : 'sve-tab-from-right');
   if (libEl) libEl.classList.toggle('hidden', name !== 'lib');
   if (colorEl) colorEl.classList.toggle('hidden', name !== 'color');
-  
   const track = document.querySelector('#panelTabs .ev-tabs-track');
   if (track) {
     const checked = track.querySelector('input:checked');
@@ -758,10 +675,8 @@ App.switchTab = function (name) {
       glider.style.transform = 'translateX(' + label.offsetLeft + 'px)';
     }
   }
-  
   if (App.cancelColorPreview) App.cancelColorPreview();
 };
-
 
 
 App.initRightPanel = function () {
@@ -783,7 +698,6 @@ App.initRightPanel = function () {
     window.addEventListener('pointerup', up);
   });
   btn.addEventListener('click', () => App.toggleRightPanel());
-  
   let _autoT = null;
   window.addEventListener('mousemove', e => {
     if (!rp.classList.contains('minimized')) { clearTimeout(_autoT); _autoT = null; return; }
@@ -797,7 +711,6 @@ App.initRightPanel = function () {
     clearTimeout(_autoT); _autoT = null;
     if (rp.dataset.autoOpen === '1') App.toggleRightPanel(false, true);
   });
-  
   const track = document.querySelector('#panelTabs .ev-tabs-track');
   if (track) {
     track.querySelectorAll('input[type="radio"]').forEach(r => {
@@ -807,12 +720,11 @@ App.initRightPanel = function () {
   }
 };
 
-
 App.toggleRightPanel = function (open, auto) {
   const rp = $('#rightPanel'), btn = $('#panelMinBtn');
   if (!rp || !btn) return;
   const min = rp.classList.contains('minimized');
-  const wantMin = (open === undefined) ? !min : !open;   
+  const wantMin = (open === undefined) ? !min : !open;    
   if (wantMin === min) { if (auto !== undefined) rp.dataset.autoOpen = auto ? '1' : ''; return; }
   rp.classList.add('sve-panel-anim');
   setTimeout(() => rp.classList.remove('sve-panel-anim'), 280);
@@ -822,7 +734,6 @@ App.toggleRightPanel = function (open, auto) {
     btn.textContent = '▶';
     if (auto !== undefined) rp.dataset.autoOpen = auto ? '1' : ''; else delete rp.dataset.autoOpen;
   } else {
-    
     const cur = parseInt(rp.style.width, 10) || parseInt(rp.dataset.lastWidth, 10) || 312;
     if (cur > 60) rp.dataset.lastWidth = String(cur);
     rp.classList.add('minimized');
@@ -831,43 +742,199 @@ App.toggleRightPanel = function (open, auto) {
   }
 };
 
+App._clipboardHistoryOpen = false;
+App._cpHistoryCloseTimer = null;
+
+App.initClipboardPanel = function () {
+  const panel = $('#clipboardPanel');
+  if (!panel || panel.dataset.cpInit === '1') return;
+  panel.dataset.cpInit = '1';
+  panel.addEventListener('dragstart', e => {
+    e.preventDefault();
+    if (e.stopPropagation) e.stopPropagation();
+  });
+  panel.addEventListener('click', e => {
+    if (e.target.closest && e.target.closest('#cpHistoryRail')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    App.toggleClipboardHistory();
+  });
+  document.addEventListener('pointerdown', e => {
+    if (!App._clipboardHistoryOpen) return;
+    if (panel.contains(e.target)) return;
+    App.closeClipboardHistory();
+  }, true);
+};
+
+App.clipboardHistoryRailWidth = function (count) {
+  const n = Math.max(0, count | 0);
+  if (!n) return 0;
+  return n * 104 + (n - 1) * 8 + 16;
+};
+
+App.sizeClipboardThumb = function (box, img, entry) {
+  const w = entry && entry.bw, h = entry && entry.bh;
+  if (!w || !h) { img.style.width = ''; img.style.height = ''; return; }
+  const boxW = box.clientWidth || 104;
+  const boxH = box.clientHeight || 104;
+  const s = Math.min(boxW / w, boxH / h);
+  img.style.width = Math.max(1, Math.round(w * s)) + 'px';
+  img.style.height = Math.max(1, Math.round(h * s)) + 'px';
+};
+
+App.ensureClipboardEntryThumb = function (entry) {
+  if (!entry) return Promise.resolve(null);
+  if (entry.thumbUrl) return Promise.resolve(entry);
+  if (entry._thumbPromise) return entry._thumbPromise;
+  entry._thumbPromise = App.renderClipboardComposite(entry.items).then(res => {
+    if (res && res.url) {
+      entry.thumbUrl = res.url;
+      entry.bw = res.bw || 0;
+      entry.bh = res.bh || 0;
+    }
+    return entry;
+  }).catch(e => {
+    console.warn('[thumb] 剪贴板历史缩略图生成失败', String(e && e.message || e).slice(0, 160));
+    return entry;
+  }).finally(() => { entry._thumbPromise = null; });
+  return entry._thumbPromise;
+};
+
+App.showClipboardEntryThumb = function (entry, box, img) {
+  if (!entry || !box || !img) return Promise.resolve(false);
+  box.dataset.cpEntryId = entry.id;
+  const loader = App.startThumbLoading(box);
+  return App.ensureClipboardEntryThumb(entry).then(entryNow => {
+    if (!box.isConnected || box.dataset.cpEntryId !== entry.id) return false;
+    if (!entryNow || !entryNow.thumbUrl) return false;
+    return App.showThumbImage(box, img, entryNow.thumbUrl, loader).then(ok => {
+      if (ok && box.isConnected && box.dataset.cpEntryId === entry.id) {
+        App.sizeClipboardThumb(box, img, entryNow);
+      }
+      return !!ok;
+    });
+  }).catch(e => {
+    console.warn('[thumb] 剪贴板缩略图显示失败', String(e && e.message || e).slice(0, 160));
+    return false;
+  }).finally(() => App.finishThumbLoading(box, loader));
+};
+
+App.renderClipboardHistoryRail = function () {
+  const rail = $('#cpHistoryRail');
+  if (!rail) return 0;
+  const hist = App.ensureClipboardState();
+  rail.replaceChildren();
+  for (let i = hist.length - 1; i >= 0; i--) {
+    const entry = hist[i];
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cp-hist-item';
+    btn.dataset.cpId = entry.id;
+    btn.setAttribute('aria-label', '剪贴板历史 ' + (hist.length - i));
+    const img = document.createElement('img');
+    img.alt = '';
+    img.draggable = false;
+    btn.appendChild(img);
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      App.selectClipboardEntry(entry.id);
+    });
+    rail.appendChild(btn);
+    App.showClipboardEntryThumb(entry, btn, img);
+  }
+  return hist.length;
+};
+
+App.openClipboardHistory = function () {
+  const panel = $('#clipboardPanel');
+  const rail = $('#cpHistoryRail');
+  const btn = $('#cpExpandBtn');
+  if (!panel || !rail) return false;
+  const hist = App.ensureClipboardState();
+  if (!hist.length || !App.state.clipboardCurrent) return false;
+  if (App._cpHistoryCloseTimer) {
+    clearTimeout(App._cpHistoryCloseTimer);
+    App._cpHistoryCloseTimer = null;
+  }
+  App.renderClipboardHistoryRail();
+  const width = App.clipboardHistoryRailWidth(hist.length);
+  const wasClosing = !rail.hidden && rail.classList.contains('cp-closing');
+  rail.hidden = false;
+  rail.classList.remove('cp-closing');
+  if (!wasClosing) {
+    rail.classList.remove('cp-open');
+    rail.style.width = '0px';
+    void rail.offsetWidth;   
+  }
+  rail.classList.add('cp-open');
+  rail.style.width = width + 'px';
+  panel.classList.add('cp-open');
+  App._clipboardHistoryOpen = true;
+  if (btn) btn.setAttribute('aria-expanded', 'true');
+  return true;
+};
+
+App.closeClipboardHistory = function (immediate) {
+  const panel = $('#clipboardPanel');
+  const rail = $('#cpHistoryRail');
+  const btn = $('#cpExpandBtn');
+  if (App._cpHistoryCloseTimer) {
+    clearTimeout(App._cpHistoryCloseTimer);
+    App._cpHistoryCloseTimer = null;
+  }
+  App._clipboardHistoryOpen = false;
+  if (panel) panel.classList.remove('cp-open');
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+  if (!rail) return;
+  const finish = () => {
+    if (App._clipboardHistoryOpen) return;
+    rail.hidden = true;
+    rail.classList.remove('cp-closing');
+    rail.replaceChildren();
+  };
+  if (immediate || rail.hidden) { finish(); return; }
+  rail.classList.remove('cp-open');
+  rail.classList.add('cp-closing');
+  rail.style.width = '0px';
+  App._cpHistoryCloseTimer = setTimeout(() => {
+    App._cpHistoryCloseTimer = null;
+    finish();
+  }, 160);
+};
+
+App.toggleClipboardHistory = function () {
+  if (App._clipboardHistoryOpen) App.closeClipboardHistory();
+  else App.openClipboardHistory();
+};
 
 App.refreshClipboardPanel = function () {
   const panel = $('#clipboardPanel');
   const box = $('#cpThumbBox');
-  App._clipboardPanelSeq = (App._clipboardPanelSeq || 0) + 1;
-  const seq = App._clipboardPanelSeq;
+  const img = $('#cpThumbImg');
+  if (!panel || !box || !img) return;
+  App.ensureClipboardState();
   const slims = App.state.clipboard;
-  if (!slims || !slims.length) {
+  const entry = App.state.clipboardCurrent;
+  if (!entry || !slims || !slims.length) {
     panel.classList.add('hidden');
+    panel.classList.remove('cp-has-history');
+    App.closeClipboardHistory(true);
     App.finishThumbLoading(box);
-    const img = $('#cpThumbImg');
-    img.src = '';
+    img.removeAttribute('src');
     img.style.cssText = '';
+    box.dataset.cpEntryId = '';
     box.style.cssText = '';
-    panel.style.width = '';
     return;
   }
   panel.classList.remove('hidden');
+  panel.classList.toggle('cp-has-history', !!App.state.clipboardHistory.length);
   $('#cpCount').textContent = '×' + slims.length;
-  const loader = App.startThumbLoading(box);
-  App.renderClipboardComposite(slims).then(async res => {
-    if (seq !== App._clipboardPanelSeq || !res || !res.url) return;
-    const img = $('#cpThumbImg');
-    
-    const loaded = await App.showThumbImage(box, img, res.url, loader);
-    if (!loaded || seq !== App._clipboardPanelSeq) return;
-    const w = res.bw, h = res.bh;
-    if (!w || !h) { img.style.cssText = ''; return; }
-    const boxW = 182, boxH = 102; 
-    const s = Math.min(boxW / w, boxH / h);
-    img.style.width = Math.round(w * s) + 'px';
-    img.style.height = Math.round(h * s) + 'px';
-  }).catch(e => {
-    console.warn('[thumb] 粘贴板缩略图生成失败', String(e && e.message || e).slice(0, 160));
-  }).finally(() => App.finishThumbLoading(box, loader));
+  img.removeAttribute('src');
+  img.style.cssText = '';
+  App.finishThumbLoading(box);
+  App.showClipboardEntryThumb(entry, box, img);
 };
-
 
 App.renderClipboardComposite = async function (slims) {
   let g = null;
@@ -887,14 +954,11 @@ App.renderClipboardComposite = async function (slims) {
     });
     const fake = { kind: 'merged', children, el: g, sx: 1, sy: 1, rot: 0, skew: 0, x: 0, y: 0 };
     (App.hiddenThumbHost || App.svg).appendChild(g);
-    
     const lb = App.mergedThumbGeometry(fake).lb;
     const bw = lb.w || 1, bh = lb.h || 1;
-    
     const size = Math.min(1024, Math.max(160, Math.round(Math.max(bw, bh) * 0.5)));
-    
     await Promise.all(symLayers.map(l => App.symbolColorUrl(l)));
-    const url = await App.mergedThumbUrl(fake, size);             
+    const url = await App.mergedThumbUrl(fake, size);              
     return { url, bw, bh };
   } catch (e) {
     console.warn('[thumb] renderClipboardComposite 失败', String(e && e.message || e).slice(0, 160));

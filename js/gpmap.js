@@ -1,17 +1,13 @@
 'use strict';
-
 App.gpmap = {
-  
   BUTTONS: [
     { id: 'A', idx: 0 }, { id: 'B', idx: 1 }, { id: 'X', idx: 2 }, { id: 'Y', idx: 3 },
     { id: 'DUp', idx: 12 }, { id: 'DDown', idx: 13 }, { id: 'DLeft', idx: 14 }, { id: 'DRight', idx: 15 },
     { id: 'LB', idx: 4 }, { id: 'RB', idx: 5 }, { id: 'LT', idx: 6 }, { id: 'RT', idx: 7 },
     { id: 'L3', idx: 10 }, { id: 'R3', idx: 11 }
   ],
-  
   GLYPH: { DUp: '↑', DDown: '↓', DLeft: '←', DRight: '→' },
 
-  
   DEFAULTS: {
     toolbar: ['A'], editFinish: ['A'], escape: ['B'],
     cut: ['X'], paste: ['Y'], editDup: ['Y'],
@@ -21,9 +17,9 @@ App.gpmap = {
     highlight: ['LT', 'RT'], editFlip: ['LT', 'RT']
   },
 
-  map: null,        
-  index: null,      
-  capturing: null,  
+  map: null,         
+  index: null,       
+  capturing: null,   
 
   actions() { return (window.SVE_KEYMAP && window.SVE_KEYMAP.ACTIONS) || []; },
   isButton(id) { return this.BUTTONS.some(b => b.id === id); },
@@ -32,7 +28,6 @@ App.gpmap = {
 
   init() { this.map = this.resolve(null); this.reindex(); return this.map; },
 
-  
   resolve(saved) {
     const out = {};
     this.actions().forEach(a => {
@@ -60,7 +55,6 @@ App.gpmap = {
 
   combos(id) { return (this.map[id] || []).slice(); },
 
-  
   actionFor(btn, ctx) {
     if (!this.index) this.reindex();
     const local = this.index[ctx];
@@ -68,7 +62,6 @@ App.gpmap = {
     return this.index.global[btn] || null;
   },
 
-  
   payload() {
     const out = {};
     this.actions().forEach(a => {
@@ -83,7 +76,6 @@ App.gpmap = {
   restore(snap) { this.map = JSON.parse(JSON.stringify(snap)); this.reindex(); },
   resetToDefaults() { this.map = this.resolve(null); this.reindex(); },
 
-  
   setButton(id, slot, btn) {
     const KM = window.SVE_KEYMAP;
     const mine = this.map[id];
@@ -102,7 +94,6 @@ App.gpmap = {
     return swapped;
   },
 
-  
   addButton(id, btn) {
     const KM = window.SVE_KEYMAP;
     if (!KM || !this.map[id] || !this.isButton(btn)) return null;
@@ -119,7 +110,6 @@ App.gpmap = {
     return '';
   },
 
-  
   removeButton(id, slot) {
     const arr = this.map[id];
     if (!arr || slot < 0 || slot >= arr.length) return false;
@@ -128,7 +118,6 @@ App.gpmap = {
     return true;
   },
 
-  
   conflicts() {
     const KM = window.SVE_KEYMAP;
     if (!KM) return [];
@@ -147,7 +136,6 @@ App.gpmap = {
     return list;
   },
 
-  
   startCapture(id, slot, isNew) { this.capturing = { id, slot, isNew: !!isNew }; },
   stopCapture() { this.capturing = null; },
   finishCapture(btn) {

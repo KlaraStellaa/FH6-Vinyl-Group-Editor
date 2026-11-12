@@ -1,16 +1,12 @@
 'use strict';
 
-
-
 App.LIB_THUMB_NS = 'lib-thumb-v1';
-
 
 (function () {
   const K = [
     0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, 0xca62c1d6
   ];
   function rotl(n, s) { return ((n << s) | (n >>> (32 - s))) >>> 0; }
-  
   function utf8Bytes(str) {
     const out = [];
     for (let i = 0; i < str.length; i++) {
@@ -63,7 +59,6 @@ App.thumbCacheKey = function (identity) {
   return (/^[a-f0-9]{40}$/.test(String(identity || ''))) ? String(identity) : App.sha1Hex(identity);
 };
 
-
 App.thumbCacheLookup = async function (ns, identities) {
   const out = new Map();
   const list = (identities || []).filter(Boolean);
@@ -85,7 +80,6 @@ App.thumbCacheLookup = async function (ns, identities) {
   return out;
 };
 
-
 App.thumbCacheStore = async function (ns, identity, dataUrl) {
   if (!dataUrl || !window.sveApi || typeof window.sveApi.thumbCachePut !== 'function') return '';
   try {
@@ -96,7 +90,6 @@ App.thumbCacheStore = async function (ns, identity, dataUrl) {
     return '';
   }
 };
-
 
 App.thumbCacheDrop = async function (ns, identities) {
   try {

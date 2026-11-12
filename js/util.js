@@ -1,18 +1,16 @@
 'use strict';
-
 function appLog(level, msg, data) {
   try {
     if (window.sveApi && window.sveApi.log) window.sveApi.log(level, msg, data);
-  } catch (e) {  }
+  } catch (e) {   }
 }
 window.App = window.App || {}; 
 App.log = appLog; 
 
-
 App.diag = {
   enabled: true,
   seq: 0,
-  maxItems: 12   
+  maxItems: 12    
 };
 App.diag.num = function (n) {
   return (typeof n === 'number' && isFinite(n)) ? Math.round(n * 1000) / 1000 : n;
@@ -22,7 +20,6 @@ App.diag.str = function (s, n) {
   n = n || 120;
   return s.length > n ? s.slice(0, n) + '…' : s;
 };
-
 App.diag.context = function () {
   const s = (window.App && App.state) || {};
   let doc = null, tab = null;
@@ -32,9 +29,9 @@ App.diag.context = function () {
       doc = T.current.svgSource || T.current.label || null;
       tab = { i: T.docs ? T.docs.indexOf(T.current) : -1, n: T.docs ? T.docs.length : 0 };
     }
-  } catch (e) {  }
+  } catch (e) {   }
   let selIds = [];
-  try { if (s.selected) selIds = Array.from(s.selected).slice(0, 8); } catch (e) {  }
+  try { if (s.selected) selIds = Array.from(s.selected).slice(0, 8); } catch (e) {   }
   return {
     doc: doc ? App.diag.str(doc, 120) : null,
     tab: tab,
@@ -49,7 +46,6 @@ App.diag.context = function () {
     view: s.view ? { scale: App.diag.num(s.view.scale) } : null
   };
 };
-
 App.diag.geom = function (it) {
   if (!it) return null;
   const g = {
@@ -66,16 +62,15 @@ App.diag.geom = function (it) {
       const a = App.anchorFixedLocal(it);
       if (a) g.anchor = { x: App.diag.num(a.x), y: App.diag.num(a.y) };
     }
-  } catch (e) {  }
+  } catch (e) {   }
   try {
     if (App.FZA && App.FZA.layerMatrix) {
       const M = App.FZA.layerMatrix(it);
       if (M) g.hand = Math.sign(M.a * M.d - M.b * M.c);
     }
-  } catch (e) {  }
+  } catch (e) {   }
   return g;
 };
-
 App.diag.flips = function (items) {
   const arr = Array.isArray(items) ? items : [];
   return arr.slice(0, App.diag.maxItems).map(it => ({
@@ -92,7 +87,6 @@ App.diag.geoms = function (items, limit) {
     items: arr.slice(0, n).map(App.diag.geom)
   };
 };
-
 App.diag.diff = function (before, after) {
   const a = (before && before.items) || [], b = (after && after.items) || [];
   const f = x => (x.flipH ? 'H' : '') + (x.flipV ? 'V' : '') || 'none';
@@ -107,7 +101,6 @@ App.diag.diff = function (before, after) {
   }
   return out;
 };
-
 App.diag.log = function (op, data) {
   if (!App.diag.enabled) return;
   try {
@@ -116,9 +109,8 @@ App.diag.log = function (op, data) {
       ms: Math.round(performance.now())
     }, App.diag.context(), data || {});
     App.log('info', 'FLIP ' + op, payload);
-  } catch (e) {  }
+  } catch (e) {   }
 };
-
 
 App.startThumbLoading = function (host) {
   if (!host) return null;
@@ -126,7 +118,6 @@ App.startThumbLoading = function (host) {
   const loader = document.createElement('span');
   loader.className = 'sve-thumb-loader loader';
   loader.setAttribute('aria-hidden', 'true');
-  
   const primary = document.createElement('span');
   primary.className = 'jimu-primary-loading dot-spinner';
   primary.textContent = '加载中';
@@ -154,7 +145,6 @@ App.finishThumbLoading = function (host, loader) {
     ch.classList && ch.classList.contains('sve-thumb-loader'));
   if (!remains) host.classList.remove('sve-thumb-loading');
 };
-
 App.showThumbImage = function (host, img, url, loader) {
   return new Promise(resolve => {
     if (!host || !img || !url) {
@@ -178,7 +168,6 @@ App.showThumbImage = function (host, img, url, loader) {
       if (typeof img.decode !== 'function') { done(true); return; }
       decoding = true;
       img.decode().then(() => done(true)).catch(e => {
-        
         if (img.naturalWidth > 0) done(true);
         else {
           console.warn('[thumb-loader] 缩略图解码失败', String(e && e.message || e).slice(0, 160));
@@ -198,7 +187,6 @@ App.showThumbImage = function (host, img, url, loader) {
     }
   });
 };
-
 App.initClickLog = function () {
   if (!App.svg) return;
   const clickAt = (e, where) => {
@@ -217,7 +205,6 @@ App.initClickLog = function () {
         selBefore: App.state ? App.state.selected.size : 0,
         whiteBox: App.whiteBoxLayer ? (App.whiteBoxLayer() ? App.whiteBoxLayer().id : null) : null
       });
-      
       setTimeout(() => {
         try {
           if (!App.state) return;
@@ -228,17 +215,15 @@ App.initClickLog = function () {
             whiteBox: App.whiteBoxLayer ? (App.whiteBoxLayer() ? App.whiteBoxLayer().id : null) : null,
             edit: App.state.edit ? App.state.edit.type : null
           });
-        } catch (err) {  }
+        } catch (err) {   }
       }, 0);
-    } catch (err) {  }
+    } catch (err) {   }
   };
   App.svg.addEventListener('pointerdown', e => clickAt(e, '画布'));
   if (App.layerListEl) App.layerListEl.addEventListener('pointerdown', e => clickAt(e, '图层栏'));
 };
 
-
 App.perfCtx = { lastOp: '' };
-
 App._gpuInfoCache = null;
 App.gpuInfo = function () {
   if (App._gpuInfoCache) return App._gpuInfoCache;
@@ -253,11 +238,10 @@ App.gpuInfo = function () {
       const lose = gl.getExtension('WEBGL_lose_context');
       if (lose) lose.loseContext();
     }
-  } catch (e) {  }
+  } catch (e) {   }
   App._gpuInfoCache = { renderer, vendor };
   return App._gpuInfoCache;
 };
-
 App.stateSnapshot = function () {
   try {
     const s = App.state || {};
@@ -289,7 +273,6 @@ App.stateSnapshot = function () {
       lastOp: App.perfCtx.lastOp,
       memory: mem,
       gpu: g.renderer ? g.renderer.slice(0, 120) : null,
-      
       doc: (function () {
         try { const d = App.Tabs && App.Tabs.current; return d ? App.diag.str(d.svgSource || d.label || null, 120) : null; }
         catch (e) { return null; }
@@ -303,31 +286,28 @@ App.stateSnapshot = function () {
             const l = (s.layerMap && s.layerMap.get) ? s.layerMap.get(id) : null;
             if (l) out.push({ id: id, h: !!l.flipH, v: !!l.flipV });
           });
-        } catch (e) {  }
+        } catch (e) {   }
         return out;
       })()
     };
   } catch (e) { return { error: String(e) }; }
 };
 App.initPerfMonitor = function () {
-  
   try {
     appLog('info', '应用启动', App.stateSnapshot());
-  } catch (e) {  }
-  
+  } catch (e) {   }
   try {
     if (typeof PerformanceObserver === 'function') {
       const po = new PerformanceObserver(list => {
         for (const e of list.getEntries()) {
           try {
             appLog('perf', '主线程长任务', Object.assign({ ms: Math.round(e.duration) }, App.stateSnapshot()));
-          } catch (err) {  }
+          } catch (err) {   }
         }
       });
       po.observe({ entryTypes: ['longtask'] });
     }
-  } catch (e) {  }
-  
+  } catch (e) {   }
   let frames = 0, t0 = performance.now(), worst = 0, last = performance.now();
   const loop = () => {
     const now = performance.now();
@@ -341,7 +321,7 @@ App.initPerfMonitor = function () {
         if (fps < 16) {
           try {
             appLog('perf', '低帧率', Object.assign({ fps, worstMs: Math.round(worst) }, App.stateSnapshot()));
-          } catch (e) {  }
+          } catch (e) {   }
         }
       }
       frames = 0; t0 = now; worst = 0;
@@ -350,7 +330,6 @@ App.initPerfMonitor = function () {
   };
   requestAnimationFrame(loop);
 };
-
 window.addEventListener('error', e => {
   appLog('error', '渲染进程未捕获异常', Object.assign(
     { message: String(e.message || e.error).slice(0, 300), file: e.filename, line: e.lineno },
@@ -372,7 +351,6 @@ function svgEl(tag, attrs) {
   const e = document.createElementNS(SVGNS, tag);
   if (attrs) for (const k in attrs) {
     const v = attrs[k];
-    
     if (v !== null && v !== undefined) e.setAttribute(k, v);
   }
   return e;
@@ -440,12 +418,10 @@ function normalizeDeg(d) {
   if (d < -180) d += 360;
   return d;
 }
-
-const _sveCloseQueue = new WeakMap();   
+const _sveCloseQueue = new WeakMap();    
 App.hideOverlay = function (el, done) {
   if (!el) { if (done) done(); return; }
   if (el.classList.contains('hidden')) { if (done) done(); return; }
-  
   if (el.classList.contains('sve-closing')) {
     if (done) {
       const q = _sveCloseQueue.get(el);
@@ -459,27 +435,24 @@ App.hideOverlay = function (el, done) {
   el._sveHideToken = token;
   el.classList.add('sve-closing');
   setTimeout(function () {
-    
     if (el._sveHideToken !== token) {
       _sveCloseQueue.delete(el);
-      queue.forEach(fn => { try { fn(); } catch (e) {  } });
+      queue.forEach(fn => { try { fn(); } catch (e) {   } });
       return;
     }
     el._sveHideToken = null;
     el.classList.remove('sve-closing');
     el.classList.add('hidden');
     _sveCloseQueue.delete(el);
-    queue.forEach(fn => { try { fn(); } catch (e) {  } });
+    queue.forEach(fn => { try { fn(); } catch (e) {   } });
   }, 130);
 };
 App.showOverlay = function (el) {
   if (!el) return;
-  
   el._sveHideToken = null;
   el.classList.remove('sve-closing');
   el.classList.remove('hidden');
 };
-
 
 App.attachDlgClose = function (box, onClose) {
   if (!box || typeof onClose !== 'function') return null;
@@ -491,19 +464,16 @@ App.attachDlgClose = function (box, onClose) {
   btn.type = 'button';
   btn.className = 'dlg-close';
   btn.textContent = '×';
-  
   btn.setAttribute('aria-label', App.i18n.t('lp.close'));
   btn.addEventListener('click', function (e) {
     e.preventDefault();
     e.stopPropagation();
     if (onClose() === false) return;
   });
-  
   title.insertAdjacentElement('afterend', btn);
   box._dlgCloseBtn = btn;
   return btn;
 };
-
 if (App.i18n && App.i18n.onApply) {
   App.i18n.onApply(function () {
     const label = App.i18n.t('lp.close');
@@ -513,22 +483,18 @@ if (App.i18n && App.i18n.onApply) {
 }
 let toastTimer = null;
 function showToast(msg, ms) {
-  
   if (window.App && App.Tabs && App.Tabs._silentRender) return;
   const t = $('#toast');
   if (!t) return;
   t.textContent = msg;
-  
   if (App.showOverlay) App.showOverlay(t);
   else { t.classList.remove('sve-closing'); t.classList.remove('hidden'); }
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
-    
     if (App.hideOverlay) App.hideOverlay(t);
     else t.classList.add('hidden');
   }, ms || 2400);
 }
-
 
 App.siScrollTo = function (el, top) {
   if (!el) return;
@@ -540,7 +506,7 @@ App.siScrollTo = function (el, top) {
   st.last = performance.now();
   const step = now => {
     const s2 = el.__siScroll; if (!s2) { el.__siGliding = false; return; }
-    if (Math.abs(el.scrollTop - s2.expected) > 1.5) { s2.raf = 0; s2.gliding = false; return; }   
+    if (Math.abs(el.scrollTop - s2.expected) > 1.5) { s2.raf = 0; s2.gliding = false; return; }    
     const dis = s2.target - el.scrollTop;
     if (Math.abs(dis) <= 2) { el.scrollTop = s2.target; s2.raf = 0; s2.gliding = false; return; }
     const dt = Math.min(50, now - s2.last); s2.last = now;
@@ -551,7 +517,6 @@ App.siScrollTo = function (el, top) {
   st.raf = requestAnimationFrame(step);
   el.__siGliding = true;
 };
-
 App.attachSiWheel = function (el) {
   if (!el || el.__siWheelAttached) return;
   el.__siWheelAttached = true;
@@ -563,7 +528,6 @@ App.attachSiWheel = function (el) {
     App.siScrollTo(el, Math.max(0, Math.min(max(), st.target + (e.deltaY > 0 ? 100 : -100))));
   }, { passive: false });
 };
-
 
 (function () {
   const el = document.createElement('div');
@@ -584,16 +548,15 @@ App.attachSiWheel = function (el) {
       App.siTip.move(x, y);
     },
     hide() { st.shown = false; el.classList.remove('si-tip-show'); },
-    
     move(x, y) {
       const w = el.offsetWidth, h = el.offsetHeight;
       const vw = window.innerWidth, vh = window.innerHeight;
       let left = x + 4;
-      if (left + w > vw) left = x - w - 4;          
-      if (left < 0) left = Math.max(0, vw - w);     
-      let top = y - h;                              
-      if (top < 0) top = y + 4;                     
-      if (top + h > vh) top = Math.max(0, vh - h);  
+      if (left + w > vw) left = x - w - 4;           
+      if (left < 0) left = Math.max(0, vw - w);      
+      let top = y - h;                               
+      if (top < 0) top = y + 4;                      
+      if (top + h > vh) top = Math.max(0, vh - h);   
       el.style.left = Math.round(left) + 'px';
       el.style.top = Math.round(top) + 'px';
     },
@@ -601,14 +564,12 @@ App.attachSiWheel = function (el) {
   };
   window.addEventListener('mousemove', e => { if (st.shown) App.siTip.move(e.clientX, e.clientY); });
 })();
-
 App.siTipBind = function (el, textOrFn) {
   if (!el) return;
   el.addEventListener('mouseenter', e => App.siTip.show(typeof textOrFn === 'function' ? textOrFn() : textOrFn, e.clientX, e.clientY));
   el.addEventListener('mousemove', e => App.siTip.move(e.clientX, e.clientY));
   el.addEventListener('mouseleave', () => App.siTip.hide());
 };
-
 
 App.evDropdown = function (sel) {
   if (!sel || sel.__evDd) return;
@@ -638,7 +599,6 @@ App.evDropdown = function (sel) {
     syncBtn();
   };
   build();
-  
   new MutationObserver(build).observe(sel, { childList: true, subtree: true, characterData: true });
   function open() { panel.classList.add('ev-dd-open'); btn.classList.add('ev-dd-active'); }
   function close() { panel.classList.remove('ev-dd-open'); btn.classList.remove('ev-dd-active'); }
@@ -646,10 +606,8 @@ App.evDropdown = function (sel) {
   document.addEventListener('click', e => { if (!wrap.contains(e.target)) close(); });
   wrap.appendChild(btn); wrap.appendChild(panel);
   sel.parentNode.insertBefore(wrap, sel);
-  
   sel.__evDdApi = { refresh: build };
 };
-
 App.evDropdownSync = function (sel) { if (sel && sel.__evDdApi) sel.__evDdApi.refresh(); };
 App.evDropdownSyncAll = function () {
   document.querySelectorAll('select').forEach(function (s) { App.evDropdownSync(s); });

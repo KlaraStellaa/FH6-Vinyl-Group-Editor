@@ -1,10 +1,8 @@
 'use strict';
-
 (function () {
   var LS_KEY = 'sve-favorites';
   var listeners = [];
 
-  
   function sanitize(v) {
     if (!Array.isArray(v)) return [];
     var out = [];
@@ -22,9 +20,8 @@
 
     load: function (saved) {
       var next = sanitize(saved);
-      
       if (!next.length && !Array.isArray(saved)) {
-        try { next = sanitize(JSON.parse(localStorage.getItem(LS_KEY) || '[]')); } catch (e) {  }
+        try { next = sanitize(JSON.parse(localStorage.getItem(LS_KEY) || '[]')); } catch (e) {   }
       }
       this.list = next;
       this.emit();
@@ -35,7 +32,6 @@
 
     count: function () { return this.list.length; },
 
-    
     toggle: function (name) {
       var s = String(name || '').trim();
       if (!s) return false;
@@ -59,9 +55,8 @@
 
     payload: function () { return this.list.slice(); },
 
-    
     persist: function () {
-      try { localStorage.setItem(LS_KEY, JSON.stringify(this.list)); } catch (e) {  }
+      try { localStorage.setItem(LS_KEY, JSON.stringify(this.list)); } catch (e) {   }
       if (App.settings && App.settings.save) {
         var p = App.settings.save();
         if (p && p.then) p.then(function (r) {
@@ -72,7 +67,6 @@
 
     onChange: function (fn) { if (typeof fn === 'function') listeners.push(fn); },
 
-    
     emit: function () {
       var list = this.list.slice();
       listeners.forEach(function (fn) {

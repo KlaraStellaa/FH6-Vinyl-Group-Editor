@@ -1,11 +1,9 @@
 'use strict';
 
-
 App.FZA = {
   useRe: /fh6_t(\d+)_i(\d+)_w(\d+)/,
   symbolDefCache: null
 };
-
 
 App.FZA.symbolDefMap = function () {
   if (App.FZA.symbolDefCache) return App.FZA.symbolDefCache;
@@ -28,7 +26,6 @@ App.FZA.symbolDefMap = function () {
   return map;
 };
 
-
 App.FZA.SKEW_LIMIT = 89.99;              
 App.FZA.SKEW_SINGULAR = 1e15;            
 App.FZA.normalizeSkew = function (deg) {
@@ -37,7 +34,6 @@ App.FZA.normalizeSkew = function (deg) {
   const L = App.FZA.SKEW_LIMIT;
   return d > L ? L : (d < -L ? -L : d);
 };
-
 App.FZA.skewTan = function (deg) {
   const d = Number(deg) || 0;
   const t = Math.tan(d * D2R);
@@ -45,9 +41,7 @@ App.FZA.skewTan = function (deg) {
   return Math.tan(App.FZA.normalizeSkew(d) * D2R);
 };
 
-
 App.FZA.isLegacySkew = function () { return App.skewMode === '132'; };
-
 
 App.FZA.layerMatrix = function (l) {
   const sxf = (l.flipH ? -1 : 1) * (l.sx || 1);
@@ -55,7 +49,6 @@ App.FZA.layerMatrix = function (l) {
   const t = App.FZA.skewTan(l.skew);
   const a0 = Math.cos((l.rot || 0) * D2R), b0 = Math.sin((l.rot || 0) * D2R);
   if (App.skewMode === '132') {
-    
     return {
       a: a0 * sxf,
       b: b0 * sxf,
@@ -71,7 +64,6 @@ App.FZA.layerMatrix = function (l) {
   };
 };
 
-
 App.FZA.mul = function (m1, m2) {
   return {
     a: m1.a * m2.a + m1.c * m2.b,
@@ -82,7 +74,6 @@ App.FZA.mul = function (m1, m2) {
     f: m1.b * m2.e + m1.d * m2.f + m1.f
   };
 };
-
 
 App.FZA.matFromString = function (str) {
   let M = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
@@ -117,7 +108,6 @@ App.FZA.matFromString = function (str) {
   return M;
 };
 
-
 App.FZA.decomposeToModel = function (M) {
   const a = M.a, b = M.b, c = M.c, d = M.d;
   const rot = Math.atan2(b, a) * 180 / Math.PI;
@@ -125,21 +115,16 @@ App.FZA.decomposeToModel = function (M) {
   const rr = rot * D2R;
   const ca = Math.cos(rr), sa = Math.sin(rr);
   const sy = -c * sa + d * ca;
-  
   const den = App.skewMode === '132' ? (a * ca + b * sa) : sy;
   const t = Math.abs(den) > 1e-9 ? (c * ca + d * sa) / den : 0;
-  
   const skew = App.FZA.normalizeSkew(Math.atan(t) * 180 / Math.PI);
   return { rot, sx, sy, skew };
 };
 
-
 App.FZA.modelToFzaMatrix = function (l) {
   const sx = (l.flipH ? -1 : 1) * (l.sx || 1); 
   const sy = (l.flipV ? -1 : 1) * (l.sy || 1); 
-  
   const t = App.FZA.skewTan(l.skew);
-  
   const a0 = Math.cos((l.rot || 0) * D2R), b0 = Math.sin((l.rot || 0) * D2R);
   let a, b, c, d;
   if (App.skewMode === '132') {
@@ -151,7 +136,6 @@ App.FZA.modelToFzaMatrix = function (l) {
     c = sy * (a0 * t - b0);
     d = sy * (b0 * t + a0);
   }
-  
   const sxF = Math.hypot(a, b);
   const rotF = Math.atan2(-b, a);
   const syF = c * Math.sin(rotF) + d * Math.cos(rotF);
@@ -164,7 +148,6 @@ App.FZA.modelToFzaMatrix = function (l) {
   };
 };
 
-
 App.FZA.exportSlim = function (l) {
   if (l.kind !== 'symbol' && l.kind !== 'merged') return null;
   if (l.kind === 'symbol' && !(l.symbolKey && App.symbolMap.has(l.symbolKey))) return null;
@@ -175,13 +158,10 @@ App.FZA.exportSlim = function (l) {
   return slim;
 };
 
-
-
 App.exportLayersView = function () {
   const ex = App.currentExcluded ? App.currentExcluded() : null;
   if (!ex) return App.state.layers;
   const scope = App.state.layers.filter(l => !ex.has(l));
-  
   if (scope.length < 2) return App.state.layers;
   const wrapper = App.newLayer({ kind: 'merged', name: App.i18n.t('name.mergedLayer'), color: '', opacity: 1 });
   wrapper.children = scope.slice();
@@ -195,7 +175,6 @@ App.exportLayersView = function () {
 };
 
 App.buildForzaExportString = function (quiet, layers) {
-  
   const src = Array.isArray(layers) ? layers : App.exportLayersView();
   if (!src.length) { if (!quiet) showToast(App.i18n.t('toast.forza.noLayers')); return null; }
   const defMap = App.FZA.symbolDefMap();
@@ -229,10 +208,8 @@ App.buildForzaExportString = function (quiet, layers) {
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const f6 = n => Math.round(n * 1e6) / 1e6;
   const hex2 = n => clamp(Math.round(n), 0, 255).toString(16).padStart(2, '0');
-  
   const maskFillRef = 'url(#' + App.maskThemeKey() + ')';
 
-  
   let nid = 0;
   const writeUse = (l) => {
     const def = defMap[l.symbolKey];
@@ -263,7 +240,6 @@ App.buildForzaExportString = function (quiet, layers) {
     return pad + '<g' + attrs + '>\n' + inner + '\n' + pad + '</g>';
   };
 
-  
   const usedKeys = Array.from(new Set(useLayers.map(l => l.symbolKey))).sort();
   const defsParts = [];
   usedKeys.forEach(k => defsParts.push(App.libText.slice(defMap[k].start, defMap[k].end)));
@@ -284,7 +260,6 @@ App.buildForzaExportString = function (quiet, layers) {
     '  <sodipodi:namedview id="namedview1" pagecolor="#ffffff" showgrid="false" />\n' +
     '  <defs>\n' + defsParts.join('\n') + '\n  </defs>\n' +
     body + '\n</svg>\n';
-  
   const CANVAS_RECT = [-960, -540, 1920, 1080];
   if (App.thumbFrameToContent) {
     try {
@@ -311,8 +286,6 @@ App.buildForzaExportString = function (quiet, layers) {
     String(d.getDate()).padStart(2, '0') + '-' + String(d.getHours()).padStart(2, '0') +
     String(d.getMinutes()).padStart(2, '0') + '.svg';
 
-  
-  
   if (App.diag && App.diag.enabled && nodes && nodes.length) {
     const all = [];
     (function walk(ns) {
@@ -348,9 +321,7 @@ App.buildForzaExportString = function (quiet, layers) {
   return { str, name, layers: useLayers.length };
 };
 
-
 App.importForza = function (root) {
-  
   let cx = 960, cy = 540;
   const cvM = ((root.getAttribute('data-sve-canvas') || '').trim().split(/[\s,]+/).map(Number));
   if (cvM.length === 4 && cvM.every(isFinite)) { cx = cvM[0] + cvM[2] / 2; cy = cvM[1] + cvM[3] / 2; }
@@ -396,19 +367,16 @@ App.importForza = function (root) {
       el.getAttribute('data-forza-mask-group') === '1';
   };
 
-  
   const flipStat = {
     total: 0, flipH: 0, flipV: 0, ancFlip: 0, slimOverride: 0,
     rot180: 0, negSy: 0, samples: []
   };
-  
   const slimOf = el => {
     const raw = el.getAttribute('data-sve');
     if (!raw) return null;
     try { return JSON.parse(raw); } catch (e) { return null; }
   };
 
-  
   const buildUse = (useEl, M, mask, opacity, ancFlip) => {
     const href = useEl.getAttribute('href') || useEl.getAttributeNS(XLINK, 'href') || '';
     const id = href.replace(/^#/, '');
@@ -426,10 +394,8 @@ App.importForza = function (root) {
     const slim = slimOf(useEl);
     if (slim && slim.kind === 'symbol' && !ancFlip) {
       flipH = !!slim.flipH; flipV = !!slim.flipV;
-      
       if (flipH) rot = normalizeDeg(p.rot - 180);
     }
-    
     if (App.diag && App.diag.enabled) {
       flipStat.total++;
       if (flipH) flipStat.flipH++;
@@ -464,7 +430,6 @@ App.importForza = function (root) {
       l.dataUri = App.symbolUri(sym);
       return l;
     }
-    
     adoptSymbolDef(id);
     return App.newLayer({
       kind: 'import', name: App.i18n.t('name.importPrefix') + '·' + id, x: 0, y: 0, w: 0, h: 0,
@@ -501,7 +466,6 @@ App.importForza = function (root) {
 
   App.history.markDiscrete();
   let count = 0;
-  
   App.state.batching = true;
   try {
     Array.from(root.children).forEach(ch => {
@@ -512,7 +476,6 @@ App.importForza = function (root) {
         if (l) { App.addLayer(l); count++; }
       } else if (tag === 'g') {
         const M = App.FZA.matFromString(ch.getAttribute('transform'));
-        
         const sub = buildG(ch, M, isMaskEl(ch), 1);
         if (sub) { App.addLayer(sub); count++; }
       }
@@ -525,7 +488,6 @@ App.importForza = function (root) {
   if (count && App.contentChanged && !App._importingSvg) App.contentChanged();
   if (!count) showToast(App.i18n.t('toast.forza.noRecognized'));
   else showToast(App.i18n.tf('toast.imported', { n: count }));
-  
   if (App.diag && flipStat.total) {
     App.diag.log('import.parse', {
       trigger: 'open',
@@ -536,8 +498,6 @@ App.importForza = function (root) {
     });
   }
 };
-
-
 
 
 App.FZA.decomposeFza = function (a, b, c, d, e, f, minX, minY, canvasX, canvasY, canvasW, canvasH) {
@@ -557,13 +517,11 @@ App.FZA.decomposeFza = function (a, b, c, d, e, f, minX, minY, canvasX, canvasY,
   return { tx, ty, sx: sx * scale, sy: sy * scale, rot: rotDeg, skew };
 };
 
-
 App.FZA.modelFromForzaSvg = function (svgStr) {
   const doc = new DOMParser().parseFromString(svgStr, 'image/svg+xml');
   const rootEl = doc.documentElement;
   const vb = ((rootEl.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number));
   let canvasX = 0, canvasY = 0, canvasW = 1920, canvasH = 1080;
-  
   const hint = ((rootEl.getAttribute('data-sve-canvas') || '').trim().split(/[\s,]+/).map(Number));
   if (hint.length === 4 && hint.every(isFinite)) { canvasX = hint[0]; canvasY = hint[1]; canvasW = hint[2]; canvasH = hint[3]; }
   else if (vb.length === 4 && vb.every(isFinite)) { canvasX = vb[0]; canvasY = vb[1]; canvasW = vb[2]; canvasH = vb[3]; }
@@ -651,11 +609,9 @@ App.FZA.modelFromForzaSvg = function (svgStr) {
   return { root, count };
 };
 
-
 App.FZA.svgStringFromModel = function (root, opts) {
   opts = opts || {};
   const embed = opts.embedSvg || App.libText || '';
-  
   const wordToId = {};
   const collect = n => { if (n.kind === 'group') n.children.forEach(collect); else if (!wordToId[n.word]) wordToId[n.word] = null; };
   collect(root);
@@ -724,7 +680,6 @@ App.FZA.svgStringFromModel = function (root, opts) {
     if (out) body.push(out);
   });
 
-  
   const patternDefs = [];
   (App.patterns || []).forEach(p => {
     if (p.key === maskKey || p.key === maskPattern) {

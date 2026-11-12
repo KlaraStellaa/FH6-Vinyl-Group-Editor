@@ -1,6 +1,5 @@
 'use strict';
 
-
 App.RefWindow = {
   el: null,
   img: null,
@@ -10,7 +9,6 @@ App.RefWindow = {
   MIN_W: 160,
   MIN_H: 120,
 
-  
   async pick() {
     let r = null;
     try { r = await window.sveApi.openImageDialog(); }
@@ -48,18 +46,16 @@ App.RefWindow = {
       this.hide();
     });
 
-    
     win.addEventListener('pointerdown', e => {
       if (e.button !== 0) return;
       if (e.target.closest('.rw-x') || e.target.closest('.rw-h')) return;
       const b = win.getBoundingClientRect();
       this._drag = { mode: 'move', px: e.clientX, py: e.clientY, l: b.left, t: b.top, w: b.width, h: b.height };
       win.classList.add('rw-dragging');
-      try { win.setPointerCapture(e.pointerId); } catch (err) {  }
+      try { win.setPointerCapture(e.pointerId); } catch (err) {   }
       e.preventDefault();
     });
 
-    
     win.querySelectorAll('.rw-h').forEach(h => {
       h.addEventListener('pointerdown', e => {
         if (e.button !== 0) return;
@@ -70,7 +66,7 @@ App.RefWindow = {
           px: e.clientX, py: e.clientY, l: b.left, t: b.top, w: b.width, h: b.height
         };
         win.classList.add('rw-dragging');
-        try { win.setPointerCapture(e.pointerId); } catch (err) {  }
+        try { win.setPointerCapture(e.pointerId); } catch (err) {   }
         e.preventDefault();
       });
     });
@@ -78,14 +74,12 @@ App.RefWindow = {
     document.addEventListener('pointermove', e => this.onMove(e));
     document.addEventListener('pointerup', () => this.endDrag());
     document.addEventListener('pointercancel', () => this.endDrag());
-    
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && this.el && !this.el.classList.contains('hidden')) {
         this.hide();
       }
     });
 
-    
     if (App.i18n && App.i18n.onApply) App.i18n.onApply(() => this.syncText());
     this.syncText();
     return win;
@@ -103,9 +97,8 @@ App.RefWindow = {
     this.img.src = dataUrl;
     win.classList.remove('hidden');
     this.syncText();
-    
     const sizeToImage = () => {
-      if (this._rect) return;                 
+      if (this._rect) return;                  
       const iw = this.img.naturalWidth || 4, ih = this.img.naturalHeight || 3;
       const maxW = Math.min(560, Math.max(220, Math.round(window.innerWidth * 0.44)));
       const maxH = Math.min(460, Math.max(180, Math.round(window.innerHeight * 0.52)));
@@ -127,7 +120,6 @@ App.RefWindow = {
     this._drag = null;
   },
 
-  
   applyRect(l, t, w, h) {
     const win = this.el;
     if (!win) return;
@@ -154,7 +146,6 @@ App.RefWindow = {
       if (dir.indexOf('s') >= 0) h = d.h + dy;
       if (dir.indexOf('w') >= 0) { w = d.w - dx; l = d.l + dx; }
       if (dir.indexOf('n') >= 0) { h = d.h - dy; t = d.t + dy; }
-      
       if (w < this.MIN_W) {
         if (dir.indexOf('w') >= 0) l = d.l + d.w - this.MIN_W;
         w = this.MIN_W;
@@ -163,14 +154,12 @@ App.RefWindow = {
         if (dir.indexOf('n') >= 0) t = d.t + d.h - this.MIN_H;
         h = this.MIN_H;
       }
-      
       l = Math.min(Math.max(0, l), Math.max(0, window.innerWidth - w));
       t = Math.min(Math.max(0, t), Math.max(0, window.innerHeight - h));
       w = Math.min(w, window.innerWidth);
       h = Math.min(h, window.innerHeight);
     }
 
-    
     const next = { l, t, w, h };
     this._pending = next;
     if (this._raf) return;
@@ -187,7 +176,6 @@ App.RefWindow = {
     if (this.el) this.el.classList.remove('rw-dragging');
   }
 };
-
 
 (function () {
   const bind = () => {

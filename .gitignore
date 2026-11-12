@@ -16,6 +16,9 @@ _bak-*/
 js/fza.js
 forza-cgroup.js
 forza-save.js
+forza-livery.js
+livery2svg.js
+livery-ipc.js
 
 # Secrets and credentials
 .env

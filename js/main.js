@@ -1,6 +1,4 @@
 'use strict';
-
-
 App._frameUpdate = App._frameUpdate || { raf: 0, view: false, wheel: false, edit: false };
 App.scheduleFrameUpdate = function (kind) {
   const q = App._frameUpdate;
@@ -20,7 +18,6 @@ App.flushFrameUpdates = function () {
     const p = App._wheelPending;
     App._wheelPending = null;
     const f = Math.exp(-p.deltaY * 0.0015);
-    
     const ns = clamp(App.state.view.scale * f, App.MIN_VIEW_SCALE, App.MAX_VIEW_SCALE);
     App.state.view.x = p.anchorX - p.mx / ns;
     App.state.view.y = p.anchorY - p.my / ns;
@@ -52,12 +49,11 @@ App.boot = function () {
   App.wirePointer();
   App.wireKeyboard();
   App.wireWheel();
-  if (App.wireLayerPicker) App.wireLayerPicker();   
+  if (App.wireLayerPicker) App.wireLayerPicker();    
   App.wireDragDrop();
   App.wireResize();
   if (App.Tabs) App.Tabs.start(); 
 
-  
   const cw = App.wrap.clientWidth || 1200, ch = App.wrap.clientHeight || 800;
   const vs = App.DEFAULT_VIEW_SCALE || 1;
   App.state.view.scale = vs;
@@ -78,7 +74,6 @@ App.boot = function () {
   const loop = now => {
     const dt = clamp((now - last) / 1000, 0, 0.1);
     last = now;
-    
     if (App.layersRoot && App.layersRoot.style.display === 'none' && !App.state.batching &&
         !App.state.layersHidden && App.state.eyeMode !== 'bg') {
       App.layersRoot.style.display = '';
@@ -99,10 +94,8 @@ App.wireTabs = function () {
 };
 
 App.wirePointer = function () {
-  
   window.addEventListener('pointerdown', () => {
     if (App.noteRenderInteraction) App.noteRenderInteraction(true);
-    
     if (App.state.quickModDown) App.state.quickModUsed = true;
   }, true);
   window.addEventListener('pointerup', () => {
@@ -120,25 +113,23 @@ App.wirePointer = function () {
         kind: 'pan', startX: e.clientX, startY: e.clientY,
         vx: App.state.view.x, vy: App.state.view.y
       };
-      try { App.svg.setPointerCapture(e.pointerId); } catch (err) {  }
+      try { App.svg.setPointerCapture(e.pointerId); } catch (err) {   }
       e.preventDefault();
       return;
     }
     if (e.button !== 0) return;
-    
     if (App.settings && App.settings.panNeedsSpace === false &&
         !App.state.edit && !App.state.tabDown) {
       App.panPending = {
         x: e.clientX, y: e.clientY, pointerId: e.pointerId,
         vx: App.state.view.x, vy: App.state.view.y
       };
-      try { App.svg.setPointerCapture(e.pointerId); } catch (err) {  }
+      try { App.svg.setPointerCapture(e.pointerId); } catch (err) {   }
       e.preventDefault();
       return;
     }
     if (App.state.edit) App.onEditPointerDown(e);
     else if (App.state.tabDown) {
-      
       const rolledId = App.rollbackTabAutoSel();
       App.tabPending = { x: e.clientX, y: e.clientY, ctrl: !!e.ctrlKey, active: false, pointerId: e.pointerId, rolledId };
     } else {
@@ -147,7 +138,6 @@ App.wirePointer = function () {
   });
   App.svg.addEventListener('pointermove', e => {
     if (App.state.eyeMode) { App.onEyeMove(e); return; }
-    
     if (App.panPending && !App.drag) {
       if (Math.hypot(e.clientX - App.panPending.x, e.clientY - App.panPending.y) <= 4) return;
       App.drag = {
@@ -156,11 +146,9 @@ App.wirePointer = function () {
       };
       App.panPending = null;
     }
-    
     if (!App.drag && App.state.edit && App.state.anchorPlacing) { App.onAnchorHover(e.clientX, e.clientY); return; }
     if (App.tabPending && !App.tabPending.active &&
         Math.hypot(e.clientX - App.tabPending.x, e.clientY - App.tabPending.y) > 4) {
-      
       App.tabPending.active = true;
       App.startBoxSelect({
         clientX: App.tabPending.x, clientY: App.tabPending.y,
@@ -183,40 +171,36 @@ App.wirePointer = function () {
     if (App.panPending) {
       const p = App.panPending;
       App.panPending = null;
-      
       if (!App.drag) {
         App.onCanvasPointerDown(Object.assign({}, e, { clientX: p.x, clientY: p.y }));
       }
       App.drag = null;
-      try { App.svg.releasePointerCapture(e.pointerId); } catch (err) {  }
+      try { App.svg.releasePointerCapture(e.pointerId); } catch (err) {   }
       return;
     }
     if (App.tabPending) {
       const p = App.tabPending;
       App.tabPending = null;
       if (!p.active) {
-        
         App.onCanvasPointerDown(Object.assign({}, e, { clientX: p.x, clientY: p.y, _rolledId: p.rolledId }));
         App.drag = null;
-        try { App.svg.releasePointerCapture(e.pointerId); } catch (err) {  }
+        try { App.svg.releasePointerCapture(e.pointerId); } catch (err) {   }
         return;
       }
     }
     if (App.boxSelect) App.endBoxSelect(e);
     if (App.drag && App.state.edit) App.onEditPointerUp(); 
     App.drag = null;
-    try { App.svg.releasePointerCapture(e.pointerId); } catch (err) {  }
+    try { App.svg.releasePointerCapture(e.pointerId); } catch (err) {   }
   };
   App.svg.addEventListener('pointerup', up);
   App.svg.addEventListener('pointercancel', e => {
-    App.panPending = null;   
+    App.panPending = null;    
     App.cancelBoxSelect();
     up(e);
   });
-  
   App.svg.addEventListener('dblclick', e => {
     if (App.state.edit || App.state.tabDown || App.state.spaceDown || App.state.eyeMode) return;
-    
     const layer = (e.clientX === 0 && e.clientY === 0 && e.target)
       ? App.hitLayer(e)
       : App.hitLayerPaintedSync(e.clientX, e.clientY);
@@ -230,32 +214,25 @@ App.wirePointer = function () {
   });
 };
 
-
 App.dispatchAction = function (A, e) {
-  
   const inSpeedWin = !!(e && e.target && e.target.closest && e.target.closest('#speedPanel'));
-  
   if (A === 'quickMod') {
     if (inSpeedWin) return;
     if (!e.repeat) {
       App.state.quickModDown = true;
       App.state.quickModUsed = false;
     }
-    
     if (!App.settings || !App.settings.quickClick) {
       if (App.state.edit && App.state.editMode === 'size' && App.drawOutlines) App.drawOutlines();
     }
     e.preventDefault();
     return;
   }
-  
   if (A && App.state.quickModDown) App.state.quickModUsed = true;
-  
   if (A === 'pan') {
     if (inSpeedWin) return;
     App.state.spaceDown = true; e.preventDefault(); return;
   }
-  
   if (A === 'highlight' || A === 'editFlip') {
     if (inSpeedWin) return;   
     if (A === 'editFlip') {
@@ -267,7 +244,6 @@ App.dispatchAction = function (A, e) {
       App.state.tabGestureUsed = false;
       App.state.sweepMode = null;
       App.state.sweepDir = 0;
-      
       App.actOnWhiteBoxLayer();
     }
     App.state.tabDown = true;
@@ -275,19 +251,15 @@ App.dispatchAction = function (A, e) {
     e.preventDefault();
     return;
   }
-  
   if (A === 'escape') {
     if (inSpeedWin) return;   
-    
     if (App.state.eyeMode) { App.setEyedropper(null); }
     else if (App.state.edit) { App.exitEdit(true); }
     else if (App.state.replacing) { App.setReplacing(false); }
     else if (App.groupEditActive && App.groupEditActive()) {
-      
       App.exitGroupEdit();
     }
     else {
-      
       const box = App.whiteBoxLayer();
       if (box) {
         const ids = App.panelLayers().map(l => l.id);
@@ -295,28 +267,23 @@ App.dispatchAction = function (A, e) {
         if (i >= 0) App.lastWheelIdx = i;
       }
       if (App.state.selected.size > 1) {
-        
         App.state.selBarDismissed = true;
         App.updateSelToolbar();
       } else {
-        
         App.state.selBarDismissed = true;
         App.setSelection([]);
       }
     }
     return;
   }
-  
   if (A === 'editFinish' && !e.repeat) {
     App.exitEdit(false);
     return;
   }
 
-  
   if (A === 'undo') {
     e.preventDefault();
     if (App.state.edit) {
-      
       showToast(App.editHist.undo() ? App.i18n.t('toast.main.undone') : App.i18n.t('toast.main.nothingToUndo'));
     } else {
       showToast(App.history.undo() ? App.i18n.t('toast.main.undone') : App.i18n.t('toast.main.nothingToUndo'));
@@ -332,7 +299,6 @@ App.dispatchAction = function (A, e) {
     }
     return;
   }
-  
   if (A === 'tabPrev' || A === 'tabNext') {
     if (App.Tabs && App.Tabs.stepTab) App.Tabs.stepTab(A === 'tabPrev' ? -1 : 1);
     e.preventDefault();
@@ -340,9 +306,7 @@ App.dispatchAction = function (A, e) {
   }
 
   if (App.state.edit) {
-    
     if (App.cancelColorPreview) App.cancelColorPreview();
-    
     if (A === 'sizeMode') {
       if (!e.repeat && App.state.editMode === 'size') {
         App.state.sizeMode = App.state.sizeMode === 'prop' ? 'free' : 'prop';
@@ -351,7 +315,6 @@ App.dispatchAction = function (A, e) {
       }
       return;
     }
-    
     if (A === 'editDelete' && !e.repeat) {
       const items = App.editTargets().filter(it => it.kind !== 'bg');
       App.exitEdit(false);
@@ -366,13 +329,11 @@ App.dispatchAction = function (A, e) {
       return;
     }
     if (A === 'editDup') { if (!e.repeat) App.duplicateEditing(); return; }
-    
     if (A === 'anchor') { if (!e.repeat) App.toggleAnchor(); return; }
     if (A === 'mode1' || A === 'mode2' || A === 'mode3' || A === 'mode4' || A === 'mode5') {
       App.setEditMode(['move', 'size', 'rotate', 'skew', 'opacity'][parseInt(A.slice(4), 10) - 1]);
       return;
     }
-    
     if (A === 'modePrev' || A === 'modeNext') {
       if (!e.repeat) App.stepEditMode(A === 'modePrev' ? -1 : 1);
       return;
@@ -383,13 +344,11 @@ App.dispatchAction = function (A, e) {
       return;
     }
     if (A === 'moveUp' || A === 'moveDown' || A === 'moveLeft' || A === 'moveRight') {
-      
       if (!e.repeat && !App.state.keys.size) App.editHist.checkpoint();
       App.state.keys.add(A.slice(4).toLowerCase());
       return;
     }
   } else {
-    
     if (A === 'toolbar' && !e.repeat) {
       const box = App.whiteBoxLayer();
       if (!box) return;
@@ -398,7 +357,6 @@ App.dispatchAction = function (A, e) {
         App.lastEnterTime = 0;
         App.enterEdit({ type: 'layer', id: box.id });
       } else if (App.state.selected.size > 1 || (App.state.selectedByTab && App.state.selected.size >= 1)) {
-        
         App.lastEnterTime = now;
         App.state.selBarDismissed = false;
         App.updateSelToolbar();
@@ -410,17 +368,13 @@ App.dispatchAction = function (A, e) {
       }
       return;
     }
-    
     if (A === 'up') { if (!e.repeat) App.startWhiteBoxStep(-1); e.preventDefault(); return; }
     if (A === 'down') { if (!e.repeat) App.startWhiteBoxStep(1); e.preventDefault(); return; }
     if (A === 'cut') { App.cutSelection(); return; }
     if (A === 'paste') { App.pasteClipboard(); return; }
-    
     if (A === 'delete') { App.deleteSelection(); return; }
   }
-  
   if (A === 'base') { App.toggleBase(); e.preventDefault(); return; }
-  
   if (A === 'hideLayers' || A === 'hideBg' || A === 'hideOthers') {
     if (App.Home && App.Home.shown) return;
     if (!e.repeat) {
@@ -430,14 +384,12 @@ App.dispatchAction = function (A, e) {
     }
     return;
   }
-  
   if (A === 'insertBelow') {
     if (App.Home && App.Home.shown) return;
     if (!e.repeat) App.toggleInsertBelow();
     e.preventDefault();
     return;
   }
-  
   if (A === 'opacityLayersDown' || A === 'opacityLayersUp' || A === 'opacityBgDown' || A === 'opacityBgUp') {
     if (App.Home && App.Home.shown) return;
     if (!e.repeat) {
@@ -450,28 +402,23 @@ App.dispatchAction = function (A, e) {
   }
 };
 
-
 App.releaseAction = function (A, e) {
   if (A === 'quickMod') {
-    
     const wasDown = !!App.state.quickModDown;
     App.state.quickModDown = false;
     const tap = wasDown && !App.state.quickModUsed;
     App.state.quickModUsed = false;
     if (!wasDown) return;
-    
     if (tap && App.settings && App.settings.quickClick &&
         App.state.edit && App.state.editMode === 'size') {
       App.state.quickClickOn = !App.state.quickClickOn;
       if (App.drawOutlines) App.drawOutlines();
     } else if (!App.settings || !App.settings.quickClick) {
-      
       if (App.state.edit && App.state.editMode === 'size' && App.drawOutlines) App.drawOutlines();
     }
     return;
   }
   if (A === 'pan') { App.state.spaceDown = false; return; }
-  
   if (A === 'up' || A === 'down') { App.stopWhiteBoxStep(); return; }
   if (A === 'highlight' || A === 'editFlip') {
     App.state.tabDown = false;
@@ -490,32 +437,26 @@ App.releaseAction = function (A, e) {
 };
 
 App.wireKeyboard = function () {
-  
   document.addEventListener('click', e => {
     const t = e.target;
     const b = t && t.closest ? t.closest('button, input[type="range"]') : null;
     if (b) b.blur();
   }, true);
-  
   window.addEventListener('keydown', e => {
     const t = e.target;
     const inInput = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-    
     const inSpeedWin = !!(t && t.closest && t.closest('#speedPanel'));
-    
     if (App.keymapUI && App.keymapUI.isOpen()) return;
 
-    
     if (inInput) {
       if (e.key === 'Enter') {
         e.stopPropagation();
-        try { e.target.blur(); } catch (err) {  }
+        try { e.target.blur(); } catch (err) {   }
       }
       return;
     }
 
     let A = App.keymap.actionFor(e, App.state.edit ? 'edit' : 'canvas');
-    
     if (!A && App.state.quickModDown) {
       const qm = App.keymap.combos('quickMod');
       const bareMod = qm.some(c => c === 'Control' || c === 'Alt');
@@ -531,7 +472,6 @@ App.wireKeyboard = function () {
     }
     App.dispatchAction(A, e);
   });
-  
   const mouseDownAction = e => {
     const combo = window.SVE_KEYMAP.mouseComboFromEvent(e);
     if (!combo) return;
@@ -556,7 +496,6 @@ App.wireKeyboard = function () {
   };
   window.addEventListener('mousedown', mouseDownAction, true);
   window.addEventListener('mouseup', mouseUpAction, true);
-  
   const anyMatch = (id, e) => App.keymap.combos(id).some(c => window.SVE_KEYMAP.matchesEvent(c, e));
   window.addEventListener('keyup', e => {
     ['pan', 'highlight', 'editFlip', 'quickMod', 'up', 'down', 'moveUp', 'moveDown', 'moveLeft', 'moveRight']
@@ -570,12 +509,10 @@ App.wireKeyboard = function () {
     App.state.spaceDown = false;
     App.state.tabDown = false;
     App.state.shiftDown = false;
-    
     App.state.quickModDown = false;
     App.state.quickClickOn = false;
     App.state.quickModUsed = false;
     App.state.keys.clear();
-    
     if (App.stopWhiteBoxStep) App.stopWhiteBoxStep();
     if (App.state.edit) App.drawOutlines();
   });
@@ -588,7 +525,6 @@ App.wireWheel = function () {
     if (!App.state.wheelZoomEnabled) return; 
     if (App.noteRenderInteraction) App.noteRenderInteraction();
     const r = App.svg.getBoundingClientRect();
-    
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     const old = App._wheelPending;
     App._wheelPending = {
@@ -602,7 +538,6 @@ App.wireWheel = function () {
 };
 
 App.wireDragDrop = function () {
-  
   App.svg.addEventListener('dragover', e => {
     const types = e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
     if (types.includes('text/plain') || types.includes('Files')) {
@@ -625,7 +560,6 @@ App.wireDragDrop = function () {
       App.handleFiles(e.dataTransfer.files);
     }
   });
-  
   let lastFileDrop = 0;
   window.addEventListener('dragover', e => { e.preventDefault(); });
   window.addEventListener('drop', e => {
@@ -654,11 +588,9 @@ window.addEventListener('error', e => {
 
 document.addEventListener('DOMContentLoaded', () => App.boot());
 
-
 App.i18n.onApply(function () {
   if (App.updateBaseButtons) App.updateBaseButtons();
   if (App.updateZoomWheelButton) App.updateZoomWheelButton();
-  
   if (App.updateInsertBelowButton) App.updateInsertBelowButton();
   if (App.refreshCount) App.refreshCount();
   if (App.updateHideBgButton) App.updateHideBgButton();
@@ -666,23 +598,15 @@ App.i18n.onApply(function () {
   if (App.renderHistGrid) App.renderHistGrid();
   if (App.renderFavGrid) App.renderFavGrid();
   if (App.refreshShortcutPanel) App.refreshShortcutPanel();
-  
   if (App.keymapUI) App.keymapUI.render();
-  
   if (App.refreshEditBarKeys) App.refreshEditBarKeys();
-  
   if (App.evDropdownSyncAll) App.evDropdownSyncAll();
-  
   if (App.refreshFluentIcons) App.refreshFluentIcons();
-  
   if (App.refreshToolbarIcons) App.refreshToolbarIcons();
-  
   if (App.refreshLogPath) {
     var lp = document.getElementById('logPanel');
     if (lp && !lp.classList.contains('hidden')) App.refreshLogPath();
   }
-  
   if (App.refreshLibraryPanel) App.refreshLibraryPanel();
-  
   if (App.Home && App.Home.shown && App.Home.refresh) App.Home.refresh();
 });

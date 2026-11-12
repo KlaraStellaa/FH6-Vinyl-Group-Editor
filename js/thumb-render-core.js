@@ -1,5 +1,4 @@
 'use strict';
-
 (function (global) {
   const NS = 'http://www.w3.org/2000/svg';
   const NON_DRAW = /^(defs|title|desc|metadata|style|script|namedview)$/;
@@ -11,7 +10,6 @@
   function isMaskElement(el) {
     if (!el || !el.getAttribute) return false;
     const tag = tagOf(el);
-    
     if (tag === 'mask' || tag === 'pattern' || tag === 'symbol') return false;
     const id = String(el.getAttribute('id') || '').toLowerCase();
     const fillAttr = String(el.getAttribute('fill') || '').toLowerCase();
@@ -23,7 +21,6 @@
   function hasMasks(svgText) {
     const text = String(svgText || '');
     if (!text || text.indexOf('mask') < 0) return false;
-    
     return /<(?:g|use|path|rect|image|polygon|ellipse|circle)\b[^>]*(?:data-forza-mask-group\s*=\s*["']1["']|\bid\s*=\s*["']mask_|mask_indicator)/i.test(text);
   }
 
@@ -72,7 +69,6 @@
     Array.prototype.slice.call(el.children || []).forEach(makeOpaqueShape);
   }
 
-  
   function knockoutMasks(svgText) {
     const text = String(svgText || '');
     if (!hasMasks(text)) return text;
@@ -176,7 +172,6 @@
     }
   }
 
-  
   function mulMat(A, B) {
     return [
       A[0] * B[0] + A[2] * B[1], A[1] * B[0] + A[3] * B[1],
@@ -217,14 +212,12 @@
 
   function frameToContent(svgText) {
     const text = String(svgText || '');
-    
     if (!text || text.indexOf('<use') < 0) return text;
     try {
       const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
       const root = doc.documentElement;
       if (!root || tagOf(root) !== 'svg' || root.querySelector('parsererror')) return text;
       const box = viewBoxOf(root);
-      
       const symBox = {};
       Array.prototype.slice.call(root.querySelectorAll('symbol')).forEach(function (s) {
         const id = s.getAttribute('id');
@@ -272,7 +265,7 @@
       if (!(x1 > x0) || !(y1 > y0)) return text;
       const eps = Math.max(x1 - x0, y1 - y0) * 1e-4;
       if (x0 >= box.x - eps && y0 >= box.y - eps &&
-          x1 <= box.x + box.w + eps && y1 <= box.y + box.h + eps) return text;  
+          x1 <= box.x + box.w + eps && y1 <= box.y + box.h + eps) return text;   
       const pad = Math.max(x1 - x0, y1 - y0) * 0.02;
       const nw = (x1 - x0) + 2 * pad, nh = (y1 - y0) + 2 * pad;
       root.setAttribute('viewBox', (x0 - pad) + ' ' + (y0 - pad) + ' ' + nw + ' ' + nh);
@@ -352,7 +345,6 @@
     return blobToDataUrl(await canvasToBlob(canvas));
   }
 
-  
   function reframeRootAt(svgText, box, canvasW, canvasH, longSidePx) {
     try {
       const text = String(svgText || '');
@@ -379,12 +371,10 @@
 
   async function renderCardBlob(svgText, outputSize) {
     const size = outputSize || 480;
-    
     const framed = frameToContent(svgText);
     let processed = hasMasks(framed) ? knockoutMasks(framed) : String(framed || '');
     const img = await loadSvg(processed);
     svgText = '';
-    
     const ANALYSIS_SIDE = 960;
     let fullScale = Math.min(ANALYSIS_SIDE / img.naturalWidth, ANALYSIS_SIDE / img.naturalHeight, 1);
     if (!(fullScale > 0)) fullScale = 0.2;
@@ -394,7 +384,6 @@
     const fg = full.getContext('2d', { willReadFrequently: true });
     fg.drawImage(img, 0, 0, fw, fh);
     img.src = '';
-    
     const solid = contentBox(full, 200, 1, 2);
     const box = contentBox(full, 8, 1, 2) || solid;
     let sx = 0, sy = 0, sw = fw, sh = fh;
@@ -402,7 +391,6 @@
       sx = Math.max(0, Math.min(box.x, fw - 1)); sy = Math.max(0, Math.min(box.y, fh - 1));
       sw = Math.max(1, Math.min(box.w, fw - sx)); sh = Math.max(1, Math.min(box.h, fh - sy));
     }
-    
     if (Math.max(sw, sh) < size && processed) {
       const rewritten = reframeRootAt(processed, { x: sx, y: sy, w: sw, h: sh },
         fw, fh, Math.min(size * 2, 2048));
@@ -420,7 +408,7 @@
             sx2 = Math.max(0, Math.min(box2.x, w2 - 1)); sy2 = Math.max(0, Math.min(box2.y, h2 - 1));
             sw2 = Math.max(1, Math.min(box2.w, w2 - sx2)); sh2 = Math.max(1, Math.min(box2.h, h2 - sy2));
           }
-          full.width = 1; full.height = 1;      
+          full.width = 1; full.height = 1;       
           full = full2; sx = sx2; sy = sy2; sw = sw2; sh = sh2;
         } catch (e) {
           console.warn('[thumb-core] 内容盒重取景失败，退回整画布结果', String(e && e.message || e).slice(0, 180));
@@ -441,7 +429,6 @@
     full.width = 1; full.height = 1;
     const blob = await canvasToBlob(canvas);
     canvas.width = 1; canvas.height = 1;
-    
     await nextFrame();
     await nextFrame();
     return blob;

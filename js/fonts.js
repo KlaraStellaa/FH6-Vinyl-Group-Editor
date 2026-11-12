@@ -1,12 +1,10 @@
 'use strict';
-
 App.fonts = {
   DEFAULT_ID: 'default',
   list: [],
   current: 'default',
   _lastLang: null,
 
-  
   supported() {
     const l = String((App.settings && App.settings.lang) || 'zh-CN');
     return l.indexOf('zh') === 0;
@@ -35,7 +33,6 @@ App.fonts = {
     };
   },
 
-  
   apply() {
     const root = document.documentElement;
     let style = document.getElementById('sveUiFont');
@@ -50,28 +47,25 @@ App.fonts = {
       style.id = 'sveUiFont';
       document.head.appendChild(style);
     }
-    
     style.textContent =
       "@font-face{font-family:'SVEUI';src:url('app://fonts/" + encodeURIComponent(it.file) + "');font-display:swap;}";
     root.style.setProperty('--ui-font', "'SVEUI', 'Microsoft YaHei', system-ui, sans-serif");
-    try { if (document.fonts && document.fonts.load) document.fonts.load("12px 'SVEUI'"); } catch (e) {  }
+    try { if (document.fonts && document.fonts.load) document.fonts.load("12px 'SVEUI'"); } catch (e) {   }
   },
 
   setCurrent(id, opts) {
     const next = (id && id !== this.DEFAULT_ID && this.list.some(x => x.id === id)) ? id : this.DEFAULT_ID;
     this.current = next;
     this.apply();
-    this.render();      
+    this.render();       
     this.syncPanel();
     if (!opts || opts.save !== false) App.settings.save();
   },
 
-  
   syncPanel() {
     const row = document.getElementById('settingsFontRow');
     const btn = document.getElementById('btnFont');
     const ok = this.supported();
-    
     const lab = row && row.querySelector('label');
     if (lab) lab.textContent = App.i18n.t('settings.font');
     if (btn) {
@@ -81,7 +75,6 @@ App.fonts = {
     if (row) row.classList.toggle('disabled', !ok);
   },
 
-  
   open() {
     if (!this.supported()) return false;
     const box = document.getElementById('settingsPanel');
@@ -98,7 +91,6 @@ App.fonts = {
     const cb = box.querySelector('.confirm-box');
     if (cb) cb.classList.add('ft-mode');
     if (title) { title.setAttribute('data-i18n', 'font.title'); title.textContent = App.i18n.t('font.title'); }
-    
     App.attachDlgClose(cb, () => { App.hideOverlay(box); return true; });
     this.render();
     return true;
@@ -123,7 +115,6 @@ App.fonts = {
         '<button id="ftConfirm" data-i18n="font.confirm"></button>' +
       '</div>';
     el.dataset.built = '1';
-    
     if (App.i18n && App.i18n.apply) App.i18n.apply(el);
     el.querySelector('#ftDownload').addEventListener('click', () => {
       if (window.sveApi && window.sveApi.fontOpenDownload) window.sveApi.fontOpenDownload();
@@ -158,14 +149,12 @@ App.fonts = {
   },
   rowHtml(id, name, isCurrent) {
     const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-    
     const del = (id === this.DEFAULT_ID || isCurrent) ? '' : '<button class="ft-del" type="button" aria-label="×">×</button>';
     return '<div class="ft-row' + (isCurrent ? ' active' : '') + '" data-id="' + esc(id) + '"' +
       (isCurrent ? ' data-current="1"' : '') + '>' +
       '<span class="ft-name">' + esc(name) + '</span>' + del + '</div>';
   },
 
-  
   confirmDelete(id) {
     const it = this.list.find(x => x.id === id);
     if (!it) return;
@@ -227,7 +216,6 @@ App.fonts = {
     });
   },
 
-  
   onLangChanged() {
     const lang = String((App.settings && App.settings.lang) || 'zh-CN');
     const prev = this._lastLang || lang;
@@ -243,7 +231,6 @@ App.fonts = {
     if (App.fonts && App.fonts.render && document.getElementById('settingsFontView')) this.render();
   }
 };
-
 
 if (App.i18n && App.i18n.onApply) {
   App.i18n.onApply(function () {

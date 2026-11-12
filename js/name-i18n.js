@@ -1,4 +1,3 @@
-
 (function () {
   var DICT = {
     'zh-CN': {
@@ -69,7 +68,6 @@
   };
   var api = {
     langs: ['zh-CN', 'zh-TW', 'en', 'ja', 'ko'],
-    
     get: function (lang, key, params) {
       var d = DICT[lang] || DICT['zh-CN'];
       var s = d[key] || DICT['zh-CN'][key] || key;
@@ -83,7 +81,6 @@
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.NAME_I18N = api;
-  
   if (typeof App !== 'undefined' && App.i18n && App.i18n.dicts) {
     Object.keys(DICT).forEach(function (lang) {
       if (App.i18n.dicts[lang]) Object.assign(App.i18n.dicts[lang], DICT[lang]);

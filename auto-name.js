@@ -1,11 +1,9 @@
 ﻿'use strict';
 
-
 const ILLEGAL = /[\\/:*?\u0022<>|\u0000-\u001f]/g;
 const TRIM_EDGE = /^[.\s]+|[.\s]+$/g;
 const RESERVED_DEVICE = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 const STEM_MAX = 120;
-
 const NAME_PREFIX = {
   svg: { 'zh-CN': '图案-', 'zh-TW': '圖案-', 'en': 'Pattern-', 'ja': 'パターン-', 'ko': '패턴-' },
   work: { 'zh-CN': '工作进程-', 'zh-TW': '工作進程-', 'en': 'Workcopy-', 'ja': 'ワーク-', 'ko': '작업-' }
