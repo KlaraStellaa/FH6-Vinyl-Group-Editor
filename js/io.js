@@ -1,18 +1,14 @@
 'use strict';
-
-
 function blurActiveButton() {
   const el = document.activeElement;
   if (el && el.blur && (el.tagName === 'BUTTON' || el.tagName === 'INPUT')) el.blur();
 }
 App.initIO = function () {
   $('#btnOpen').addEventListener('click', App.openSVG);
-  
   document.addEventListener('click', e => {
     const b = e.target && e.target.closest && e.target.closest('button');
     if (b) setTimeout(() => b.blur(), 0);
   });
-  
   window.addEventListener('dragover', e => {
     if (e.dataTransfer && Array.from(e.dataTransfer.types || []).indexOf('Files') >= 0) e.preventDefault();
   });
@@ -33,22 +29,17 @@ App.initIO = function () {
   $('#btnSave').addEventListener('click', function () { App.exportForzaSVG(); });
   $('#btnSaveAs').addEventListener('click', function () { App.exportSvgAs(); });
   $('#btnSaveWork').addEventListener('click', function () { App.saveWorkCopy(); });
-  
   const btnOpenWorkEl = document.getElementById('btnOpenWork');
   if (btnOpenWorkEl) btnOpenWorkEl.addEventListener('click', App.openWorkCopy);
   $('#btnHistAnchor').addEventListener('click', App.openHistAnchor);
-  
-  
   const logBtnInSettings = document.getElementById('btnLogInSettings');
   if (logBtnInSettings) logBtnInSettings.addEventListener('click', function () {
     if (App.settings) App.settings.toggle();
     App.toggleLogPanel();
   });
   $('#btnLogCopy').addEventListener('click', () => App.copyLog());
-  
   $('#btnLogCopyFlip').addEventListener('click', () => App.copyLog('flip'));
   $('#btnLogOpen').addEventListener('click', async () => {
-    
     const r = await window.sveApi.logSave();
     if (!r || !r.ok) { showToast(App.i18n.tf('toast.io.logSaveFail', { v: ((r && r.error) || App.i18n.t('toast.unknownError')) })); return; }
     showToast(App.i18n.tf('toast.io.logSaved', { n: r.lines, v: r.path }));
@@ -56,19 +47,15 @@ App.initIO = function () {
     if (!o || !o.ok) showToast(App.i18n.t('toast.io.logOpenFail'));
   });
   $('#btnLogClose').addEventListener('click', () => $('#logPanel').classList.add('hidden'));
-  
   $('#btnOpenImage').addEventListener('click', App.openBgImageDialog);
-  
   $('#btnSavePalette').addEventListener('click', function () {
     const items = App.operationTargets();
     const sel = (items || []).slice()
       .sort((a, b) => App.state.layers.indexOf(a) - App.state.layers.indexOf(b));
     App.exportForzaSVG(sel.length ? sel : undefined);
   });
-  
   App.startHistAnchors();
 };
-
 
 App.toggleLogPanel = async function () {
   const panel = $('#logPanel');
@@ -77,13 +64,11 @@ App.toggleLogPanel = async function () {
   await App.refreshLogPath();
   panel.classList.remove('hidden');
 };
-
 App.refreshLogPath = async function () {
   const el = $('#logPathText');
   if (!el) return;
   try {
     const r = await window.sveApi.logPath();
-    
     if (r && r.auto && r.autoPath) el.textContent = App.i18n.tf('log.autoPath', { v: r.autoPath });
     else if (r && r.path) el.textContent = App.i18n.tf('log.savedPath', { v: r.path });
     else el.textContent = App.i18n.tf('log.inMemory', { n: (r ? r.buffered : 0) });
@@ -91,8 +76,6 @@ App.refreshLogPath = async function () {
     el.textContent = App.i18n.t('log.pathUnavailable');
   }
 };
-
-
 App.copyLog = async function (filter) {
   try {
     const wantFilter = (typeof filter === 'string' && filter) ? filter : null;
@@ -108,7 +91,6 @@ App.copyLog = async function (filter) {
   }
 };
 
-
 App.openBgImageDialog = async function () {
   const r = await window.sveApi.openImageDialog();
   blurActiveButton();
@@ -119,16 +101,13 @@ App.openBgImageDialog = async function () {
   App.setBackgroundImage(r.dataUrl);
 };
 
-
 App.recordSvgSource = function (name) {
   const nm = String(name || '');
   if (App.Tabs && App.Tabs.current) App.Tabs.current.svgSource = nm || null;
   else App.currentSvgSource = nm || null;
 };
 
-
 App.exportForzaSVG = async function (layersOverride) {
-  
   const __t0 = performance.now();
   const sourceDoc = App.Tabs && App.Tabs.current ? App.Tabs.current : null;
   const sourceDocId = sourceDoc ? sourceDoc.id : null;
@@ -138,7 +117,6 @@ App.exportForzaSVG = async function (layersOverride) {
   blurActiveButton();
   if (!built) return;
   const srcName = sourceDoc ? (sourceDoc.svgSource || null) : (App.currentSvgSource || null);
-  
   const autoName = App.autoNamePrefix() + (Number(built.layers) || 0);
   const defName = String(srcName || autoName).replace(/\.svg$/i, '') || autoName;
   const inp = await App.fzaTextPrompt(App.i18n.t('dlg.saveSvgTitle'),
@@ -150,13 +128,11 @@ App.exportForzaSVG = async function (layersOverride) {
     showToast(App.i18n.t('toast.home.badName')); return;
   }
   const final = nm + '.svg';
-  
   const r = await window.sveApi.fileSaveSvg(final, built.str, fullDocumentSave ? srcName : null);
   if (r && r.canceled) { showToast(App.i18n.t('toast.io.saveCancelled')); return; }
-  try { App.log('info', '保存SVG(命名)', { ms: Math.round(performance.now() - __t0), kb: Math.round(built.str.length / 1024), name: final, exists: !!(r && r.exists) }); } catch (e) {  }
+  try { App.log('info', '保存SVG(命名)', { ms: Math.round(performance.now() - __t0), kb: Math.round(built.str.length / 1024), name: final, exists: !!(r && r.exists) }); } catch (e) {   }
   if (!r || !r.ok) { showToast(App.i18n.tf('toast.io.saveFail', { v: ((r && r.error) || '') })); return; }
   showToast(App.i18n.tf('toast.io.saved', { ov: (r.exists ? App.i18n.t('toast.io.overwrite') : ''), v: r.name }));
-  
   if (fullDocumentSave) {
     if (sourceDoc && App.Tabs && App.Tabs.docs && App.Tabs.docs.includes(sourceDoc)) {
       sourceDoc.svgSource = final;
@@ -170,7 +146,6 @@ App.exportForzaSVG = async function (layersOverride) {
   if (App.Home && App.Home.refresh) App.Home.refresh();
 };
 
-
 App.exportSvgAs = async function () {
   const __t0 = performance.now();
   const sourceDoc = App.Tabs && App.Tabs.current ? App.Tabs.current : null;
@@ -182,7 +157,6 @@ App.exportSvgAs = async function () {
   const srcName = sourceDoc ? (sourceDoc.svgSource || null) : (App.currentSvgSource || null);
   const base = String(srcName || '').replace(/\.svg$/i, '')
     || (App.autoNamePrefix() + (Number(built.layers) || 0));
-  
   const defName = base + '-' + App.i18n.t('dlg.saveAsSuffix');
   const inp = await App.fzaTextPrompt(App.i18n.t('dlg.saveAsTitle'),
     App.i18n.t('dlg.saveAsMsg'), defName);
@@ -195,10 +169,9 @@ App.exportSvgAs = async function () {
   const final = nm + '.svg';
   const r = await window.sveApi.fileSaveSvg(final, built.str, null);
   if (r && r.canceled) { showToast(App.i18n.t('toast.io.saveCancelled')); return; }
-  try { App.log('info', '另存为SVG', { ms: Math.round(performance.now() - __t0), kb: Math.round(built.str.length / 1024), name: final, exists: !!(r && r.exists) }); } catch (e) {  }
+  try { App.log('info', '另存为SVG', { ms: Math.round(performance.now() - __t0), kb: Math.round(built.str.length / 1024), name: final, exists: !!(r && r.exists) }); } catch (e) {   }
   if (!r || !r.ok) { showToast(App.i18n.tf('toast.io.saveFail', { v: ((r && r.error) || '') })); return; }
   showToast(App.i18n.tf('toast.io.saved', { ov: (r.exists ? App.i18n.t('toast.io.overwrite') : ''), v: r.name }));
-  
   if (sourceDoc && App.Tabs && App.Tabs.docs && App.Tabs.docs.includes(sourceDoc)) {
     sourceDoc.svgSource = final;
     if (App.Tabs.setDocLabel) App.Tabs.setDocLabel(sourceDocId, nm);
@@ -213,7 +186,6 @@ App.exportSvgAs = async function () {
 App.exportSVG = async function () {
   const built = App.buildExportString();
   if (!built) return;
-  
   const autoName = App.autoNamePrefix() + App.state.layers.length + '.svg';
   const r = await window.sveApi.saveSvgDialog(autoName, built.str);
   blurActiveButton();
@@ -223,7 +195,6 @@ App.exportSVG = async function () {
   }
   showToast(App.i18n.tf('toast.io.backupExported', { v: r.path }));
 };
-
 
 App.buildExportString = function () {
   if (!App.state.layers.length) { showToast(App.i18n.t('toast.io.noPatterns')); return null; }
@@ -247,19 +218,14 @@ App.buildExportString = function () {
   if (bgG) bgG.remove();
   const gridP = c.querySelector('#sveGridP');
   if (gridP) gridP.remove();
-  
   $$('[data-proxy]', c).forEach(el => el.remove());
   $$('[data-layer]', c).forEach(el => el.removeAttribute('visibility'));
-  
   $$('.sve-edit-static', c).forEach(el => el.remove());
-  
   $$('[style]', c).forEach(el => { if (el.style && el.style.display === 'none') el.style.display = ''; });
   const layersRoot = c.querySelector('#layersRoot');
   if (layersRoot) {
     layersRoot.removeAttribute('id');
-    
     layersRoot.removeAttribute('style');
-    
     const ex = App.currentExcluded ? App.currentExcluded() : null;
     if (ex) {
       const scopeEls = [];
@@ -281,7 +247,6 @@ App.buildExportString = function () {
   c.setAttribute('viewBox', bx + ' ' + by + ' ' + bw + ' ' + bh);
   c.setAttribute('width', bw);
   c.setAttribute('height', bh);
-  
   $$('[data-layer]', c).forEach(el => {
     const id = parseInt(el.getAttribute('data-layer'), 10);
     const layer = App.findLayer(id);
@@ -306,9 +271,7 @@ App.openSVG = async function () {
   if (App.Tabs && App.Tabs.clearDirty) App.Tabs.clearDirty(); 
 };
 
-
 App.importSvgIntoCurrent = function (text, label) {
-      
       if (App.Tabs && !App.Tabs.testMode && App.Home && App.Home.shown) { App.Tabs.prodNewSvg(text, label || App.i18n.t('name.untitled'), null); return; }
   if (App.Tabs && !App.Tabs.testMode) {
     if (!App.Tabs.docs.length) App.Tabs.addDoc({ silent: true, label: label || null });
@@ -319,9 +282,7 @@ App.importSvgIntoCurrent = function (text, label) {
 
 App.importSVGContent = function (text) {
   if (App.cancelColorPreview) App.cancelColorPreview();
-  
   const __insAnchor = (App.state.insertBelow && App.insertAnchorLayer) ? App.insertAnchorLayer() : null;
-  
   if (App.state.eyeMode && App.setEyedropper) App.setEyedropper(null);
   if (App.invalidateEditStatic) App.invalidateEditStatic();
   App.perfCtx.lastOp = App.i18n.t('name.importPrefix') + 'SVG';
@@ -334,7 +295,6 @@ App.importSVGContent = function (text) {
   const n0 = App.state.layers.length;
   const hasForzaUse = $$('use', root).some(u =>
     App.FZA.useRe.test(u.getAttribute('href') || u.getAttributeNS(XLINK, 'href') || ''));
-  
   let __importKind = 'generic';
   const prevImporting = !!App._importingSvg;
   App._importingSvg = true;
@@ -346,7 +306,6 @@ App.importSVGContent = function (text) {
     App._importingSvg = prevImporting;
   }
   App.log('perf', '导入SVG', { kind: __importKind, ms: Math.round(performance.now() - __t0), layers: App.state.layers.length - n0, total: App.state.layers.length, kb: Math.round(text.length / 1024) });
-  
   if (App.diag && App.diag.enabled) {
     const __new = App.state.layers.slice(n0);
     const __st = { total: __new.length, flipH: 0, flipV: 0, both: 0 };
@@ -364,7 +323,6 @@ App.importSVGContent = function (text) {
       samples: App.diag.flips(__new.filter(l => l.flipH || l.flipV).slice(0, App.diag.maxItems))
     });
   }
-  
   const news = App.state.layers.slice(n0);
   if (news.length) {
     const v = App.state.view;
@@ -382,28 +340,20 @@ App.importSVGContent = function (text) {
       news.forEach(l => { l.x += dx; l.y += dy; App.applyLayerTransform(l); });
     }
   }
-  
   let __merged = null;
   if (news.length > 1) {
     __merged = App.mergeLayers(news.map(l => l.id));
     if (__merged) showToast(App.i18n.tf('toast.io.importedMerged', { n: news.length }));
   }
-  
   if (news.length && App.state.insertBelow && __insAnchor && App.reinsertLayersLikePaste) {
     App.reinsertLayersLikePaste(__merged ? [__merged] : news, __insAnchor);
   }
-  
   if (news.length && App.contentChanged) App.contentChanged();
-  
   if (App.warmupSymbols) App.warmupSymbols();
-  
   if (App.refreshImpBitmaps) App.refreshImpBitmaps();
-  
   if (App.maybeBakeProxy) {
     App.state.layers.forEach(l => { if (l.kind === 'merged') App.maybeBakeProxy(l); });
-      
       if (App.holdUntilRendered) App.holdUntilRendered();
-    
     setTimeout(() => {
       App.state.layers.forEach(l => {
         if (l.kind === 'merged' && App.countInLayer && App.countInLayer(l) > App.proxyThreshold &&
@@ -413,10 +363,8 @@ App.importSVGContent = function (text) {
   }
 };
 
-
 App.importOwn = function (root) {
   let count = 0;
-  
   const fileInd = root.querySelector('#sveMaskInd');
   if (fileInd) {
     const local = $('#sveMaskInd', App.defs);
@@ -433,17 +381,14 @@ App.importOwn = function (root) {
       rot: data.rot, skew: data.skew, flipH: data.flipH, flipV: data.flipV,
       isMask: data.isMask, symbolKey: data.symbolKey, patternKey: data.patternKey
     });
-    
     const sizeFixed = App.normalizeSymbolSize(l);
     l.el = el;
     el.setAttribute('data-layer', l.id);
     el.setAttribute('data-kind', l.kind);
-    
     if (l.kind === 'symbol') {
       const mask = el.querySelector('mask');
       let img = el.querySelector('image');
       if (!img) {
-        
         const useEl = el.querySelector('use');
         const href = useEl ? (useEl.getAttribute('href') || '').replace(/^#/, '') : '';
         if (href) {
@@ -459,14 +404,12 @@ App.importOwn = function (root) {
         if (rect) { rect.setAttribute('mask', 'url(#sveM' + l.id + ')'); l.rectEl = rect; }
       }
       if (img) l.dataUri = img.getAttribute('href') || img.getAttributeNS(XLINK, 'href') || '';
-      
       if (l.symbolKey && App.symbolMap.get(l.symbolKey)) {
         const sym = App.symbolMap.get(l.symbolKey);
         l.dataUri = App.symbolUri(sym);
         l.w = sym.w; l.h = sym.h;
       }
       if (l.dataUri) App.ensureSymbolImageDef(l); 
-      
       if (sizeFixed) App.rebuildLayerContent(l);
     } else if (l.kind === 'pattern') {
       const rect = el.querySelector('rect');
@@ -517,7 +460,6 @@ App.importOwn = function (root) {
   showToast(App.i18n.tf('toast.imported', { n: count }));
 };
 
-
 App.importGeneric = function (root) {
   const host = svgEl('svg');
   const vb = root.viewBox && root.viewBox.baseVal;
@@ -564,7 +506,6 @@ App.importGeneric = function (root) {
           });
         });
       }
-      
       const _ox = r.left - hostRect.left, _oy = r.top - hostRect.top;
       if (_ox || _oy) {
         const _t = ch.getAttribute("transform");
@@ -590,11 +531,9 @@ App.importGeneric = function (root) {
   else showToast(App.i18n.tf('toast.imported', { n: count }));
 };
 
-
 App.placePatternAt = function (spec, x, y) {
   if (App.cancelColorPreview) App.cancelColorPreview();
   App.history.markDiscrete();
-  
   const inv = clamp(1 / (App.state.view.scale || 1), 1 / (App.MAX_VIEW_SCALE || 512), 200);
   let l = null;
   if (spec.kind === 'symbol') {
@@ -606,7 +545,6 @@ App.placePatternAt = function (spec, x, y) {
     });
     l.symbolKey = spec.key;
     l.dataUri = App.symbolUri(sym);
-    
     App.insertNewLayer(l);
   } else {
     const pat = App.patterns.find(p => p.key === spec.key);
@@ -618,13 +556,11 @@ App.placePatternAt = function (spec, x, y) {
     l.patternKey = spec.key;
     App.insertNewLayer(l);
   }
-  
   if (App.state.batching) {
     App.state.selected = new Set([l.id]);
     App.state.selectedByTab = false;
     App.lastWheelIdx = 0;
   } else if (App.state.selected.size > 1 || (App.state.selectedByTab && App.state.selected.size >= 1)) {
-    
     const _pi = App.panelLayers().findIndex(x => x.id === l.id);
     App.lastWheelIdx = _pi >= 0 ? _pi : 0;
     App.scrollItemToTop(l);
@@ -634,17 +570,13 @@ App.placePatternAt = function (spec, x, y) {
   } else {
     App.state.selBarDismissed = false;
     App.state.selectedByTab = false;
-    
     const _pi2 = App.panelLayers().findIndex(x => x.id === l.id);
     App.lastWheelIdx = _pi2 >= 0 ? _pi2 : 0;
     App.setSelection([l.id], { scrollPanel: true });
-    
     if (App.requestFlashRefresh) App.requestFlashRefresh();
   }
   return l;
 };
-
-
 
 
 App.buildPaletteExportString = function (layers) {
@@ -654,14 +586,10 @@ App.buildPaletteExportString = function (layers) {
   let seq = 0;
   const processOne = layer => {
     const g = layer.el.cloneNode(true);
-    
     $$('[data-proxy]', g).forEach(el => el.remove());
     $$('[data-layer]', g).forEach(el => el.removeAttribute('visibility'));
-    
     $$('.sve-edit-static', g).forEach(el => el.remove());
-    
     $$('[style]', g).forEach(el => { if (el.style && el.style.display === 'none') el.style.display = ''; });
-    
     $$('use', g).forEach(u => {
       const href = u.getAttribute('href') || u.getAttributeNS(XLINK, 'href') || '';
       if (href && href.indexOf('#sveImg') === 0) {
@@ -669,7 +597,6 @@ App.buildPaletteExportString = function (layers) {
         if (src && !$('#' + href.slice(1), defs)) defs.appendChild(src.cloneNode(true));
       }
     });
-    
     $$('[fill]', g).forEach(el => {
       const m = /url\(#(svePat\d+)\)/.exec(el.getAttribute('fill') || '');
       if (!m) return;
@@ -688,7 +615,6 @@ App.buildPaletteExportString = function (layers) {
         }
       });
     });
-    
     const attach = (el, l) => {
       el.setAttribute('data-sve', JSON.stringify(App.serializeLayer(l, true)));
       if (l.kind === 'merged' && l.children) {
@@ -699,7 +625,6 @@ App.buildPaletteExportString = function (layers) {
     attach(g, layer);
     return g;
   };
-  
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
   list.forEach(l => {
     const b = App.getItemDocBBox(l);
@@ -724,7 +649,6 @@ App.buildPaletteExportString = function (layers) {
 };
 
 
-
 App.applySavedPalette = function (name, content, x, y) {
   if (App.cancelColorPreview) App.cancelColorPreview();
   if (App.invalidateEditStatic) App.invalidateEditStatic();
@@ -734,7 +658,6 @@ App.applySavedPalette = function (name, content, x, y) {
   if (doc.querySelector('parsererror')) { showToast(App.i18n.tf('toast.io.paletteBroken', { v: name })); return; }
   const tops = Array.from(doc.documentElement.children).filter(el => el.getAttribute && el.getAttribute('data-sve'));
   if (!tops.length) { showToast(App.i18n.tf('toast.io.paletteNoLayers', { v: name })); return; }
-  
   const vb = (doc.documentElement.getAttribute('viewBox') || '').split(/[\s,]+/).map(parseFloat);
   let cx = 0, cy = 0;
   if (vb.length >= 4) { cx = vb[0] + vb[2] / 2; cy = vb[1] + vb[3] / 2; }
@@ -751,18 +674,15 @@ App.applySavedPalette = function (name, content, x, y) {
     layers.push(l);
   }
   App.history.markDiscrete();
-  
   App.state.batching = true;
   try {
     layers.forEach(l => App.addLayer(l));
   } finally {
     App.state.batching = false;
   }
-  
   if (!App.state.layersHidden && App.state.eyeMode !== 'bg') App.layersRoot.style.display = '';
   App.refreshPanel();
   App.refreshCount();
-  
   if (App.state.selected.size > 1 || (App.state.selectedByTab && App.state.selected.size >= 1)) {
     App.state.selBarDismissed = false;
     App.lastWheelIdx = 0;
@@ -778,12 +698,10 @@ App.applySavedPalette = function (name, content, x, y) {
     App.setSelection([]);
     App.syncPanelSelectionClasses();
   }
-  
   if (App.refreshImpBitmaps) App.refreshImpBitmaps();
   if (layers.length && App.contentChanged) App.contentChanged();
   showToast(App.i18n.tf('toast.io.placed', { v: name }));
 };
-
 
 App.handleFiles = function (files) {
   Array.from(files).forEach(f => {
@@ -797,7 +715,6 @@ App.handleFiles = function (files) {
       };
       reader.readAsText(f);
     } else if (ext === 'svework') {
-      
       const reader = new FileReader();
       reader.onload = () => {
         const text = String(reader.result);
@@ -806,7 +723,6 @@ App.handleFiles = function (files) {
       };
       reader.readAsText(f);
     } else if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif', 'jfif', 'ico', 'tif', 'tiff'].includes(ext)) {
-      
       if (prod && !App.Tabs.docs.length) App.Tabs.addDoc({ silent: true, label: null });
       const reader = new FileReader();
       reader.onload = () => App.setBackgroundImage(String(reader.result));
@@ -817,16 +733,11 @@ App.handleFiles = function (files) {
   });
 };
 
-
-
 App.SKEW_MODEL_VERSION = 2;
-
-App.SKEW_LOGIC_SINCE = 1793298600000;   
-
+App.SKEW_LOGIC_SINCE = 1793298600000;    
 App.migrateWorkCopyModel = function (data, writtenAtMs) {
   return data;
 };
-
 
 App.workCopyLayerFromSlim = function (slim) {
   slim = slim || {};
@@ -841,9 +752,13 @@ App.workCopyLayerFromSlim = function (slim) {
 
 App.buildWorkCopyData = function (layers, b, stateData, histColors) {
   stateData = stateData || {};
+  const clipHistory = (stateData.clipboardHistory || []).slice(0, App.CLIPBOARD_HISTORY_MAX || 7).map(entry => ({
+    id: entry && entry.id ? String(entry.id) : '',
+    items: ((entry && entry.items) || []).map(App.workCopyLayerFromSlim)
+  })).filter(entry => entry.items.length);
+  const clipCurrent = (stateData.clipboard || []).map(App.workCopyLayerFromSlim);
   return {
     type: 'sve-work-copy',
-    
     version: App.skewMode === '132' ? 1 : App.SKEW_MODEL_VERSION,
     layers: layers || [],
     bg: b ? {
@@ -855,10 +770,12 @@ App.buildWorkCopyData = function (layers, b, stateData, histColors) {
     bgDisplayOpacity: stateData.bgDisplayOpacity ?? 1,
     layersHidden: !!stateData.layersHidden,
     layersDisplayOpacity: stateData.layersDisplayOpacity ?? 1,
-    
     groupEdit: stateData.groupEdit || null,
     histColors: (histColors || stateData.histColors || []).slice(0, 16),
     lastColor: stateData.lastColor,
+    clipboardHistory: clipHistory,
+    clipboard: clipCurrent,
+    clipboardActiveId: stateData.clipboardActiveId || (clipHistory[0] && clipHistory[0].id) || null,
     view: {
       x: stateData.view ? stateData.view.x : 0,
       y: stateData.view ? stateData.view.y : 0,
@@ -867,9 +784,9 @@ App.buildWorkCopyData = function (layers, b, stateData, histColors) {
   };
 };
 
-
 App.buildWorkCopyString = function () {
   const s = App.state;
+  App.ensureClipboardState();
   const stateData = {
     bgHidden: !!s.bg.hidden,
     bgDisplayOpacity: s.bgDisplayOpacity ?? 1,
@@ -877,7 +794,9 @@ App.buildWorkCopyString = function () {
     layersDisplayOpacity: s.layersDisplayOpacity ?? 1,
     lastColor: s.lastColor,
     view: s.view,
-    
+    clipboardHistory: App.cloneClipboardHistory(),
+    clipboardActiveId: s.clipboardActiveId,
+    clipboard: s.clipboard,
     groupEdit: (s.groupEdit && s.groupEdit.length)
       ? s.groupEdit.map(fr => ({
           excluded: s.layers.map((l, i) => (fr.excluded.has(l) ? i : -1)).filter(i => i >= 0),
@@ -894,7 +813,6 @@ App.buildWorkCopyString = function () {
   return JSON.stringify(data);
 };
 
-
 App.buildWorkCopyStringForDoc = function (doc) {
   if (!doc) return null;
   if (App.Tabs && App.Tabs.current === doc) return App.buildWorkCopyString();
@@ -903,12 +821,10 @@ App.buildWorkCopyStringForDoc = function (doc) {
   return JSON.stringify(App.buildWorkCopyData(layers, doc.bg || null, d, d.histColors));
 };
 
-
 App.recordWorkSource = function (source) {
   if (App.Tabs && App.Tabs.current) App.Tabs.current.workSource = source || null;
   else App.currentWorkSource = source || null;
 };
-
 
 App.saveWorkCopy = async function () {
   if (App.cancelColorPreview) App.cancelColorPreview();
@@ -920,9 +836,8 @@ App.saveWorkCopy = async function () {
   const str = App.buildWorkCopyString();
   const r = await window.sveApi.fileSaveWork(str, source);
   blurActiveButton();
-  try { App.log('info', '保存工作进程', { ms: Math.round(performance.now() - __t0), kb: Math.round(str.length / 1024), path: r && r.path, overwrite: !!(source && r && r.ok) }); } catch (e) {  }
+  try { App.log('info', '保存工作进程', { ms: Math.round(performance.now() - __t0), kb: Math.round(str.length / 1024), path: r && r.path, overwrite: !!(source && r && r.ok) }); } catch (e) {   }
   if (!r || !r.ok) { showToast(App.i18n.tf('toast.io.saveFail', { v: ((r && r.error) || '') })); return null; }
-  
   if (sourceDoc && App.Tabs && App.Tabs.docs && App.Tabs.docs.includes(sourceDoc)) {
     if ((sourceDoc.contentRevision || 0) === sourceRevision) sourceDoc.dirty = false;
     if (r.source) sourceDoc.workSource = r.source;
@@ -937,7 +852,6 @@ App.saveWorkCopy = async function () {
   return r;
 };
 
-
 App.openWorkCopy = async function () {
   const r = await window.sveApi.workOpen();
   blurActiveButton();
@@ -948,14 +862,11 @@ App.openWorkCopy = async function () {
   App.openWorkCopyContent(r.content, r.name, r.source, r.mtimeMs);
 };
 
-
 App.openWorkCopyByName = async function (name) {
   const r = await window.sveApi.fileRead('workcopy', name);
   if (!r.ok) { showToast(App.i18n.tf('toast.home.openWorkFail', { v: (r.error || '') })); return; }
   App.openWorkCopyContent(r.content, r.name, r.source, r.mtimeMs);
 };
-
-
 
 App.openWorkCopyContent = function (content, name, source, mtimeMs, opts) {
   opts = opts || {};
@@ -964,7 +875,6 @@ App.openWorkCopyContent = function (content, name, source, mtimeMs, opts) {
   catch (e) { showToast(App.i18n.t('toast.io.workBroken')); return; }
   if (!data || data.type !== 'sve-work-copy') { showToast(App.i18n.t('toast.io.notWorkFile')); return; }
   if (App.state.edit) App.exitEdit(false);
-  
   const mode = opts.legacy ? '132' : 'v2';
   if (App.SkewMode) App.SkewMode.set(mode); else App.skewMode = mode;
   App.restoreWorkCopy(data, mtimeMs);
@@ -976,13 +886,10 @@ App.openWorkCopyContent = function (content, name, source, mtimeMs, opts) {
   }
 };
 
-
 App.restoreWorkCopy = function (data, writtenAtMs) {
-  
   data = App.migrateWorkCopyModel(data, writtenAtMs);
   App.history.markDiscrete(); 
   if (App.cancelColorPreview) App.cancelColorPreview();
-  
   if (App.state.eyeMode && App.setEyedropper) App.setEyedropper(null);
   if (App.invalidateEditStatic) App.invalidateEditStatic();
   App.state.batching = true;
@@ -996,7 +903,6 @@ App.restoreWorkCopy = function (data, writtenAtMs) {
     App.state.layersDisplayOpacity = 1;
     App.state.selected = new Set();
     App.state.selectedByTab = false;
-    
     (data.layers || []).forEach(slim => {
       const l = App.deserializeLayer(slim);
       App.relinkSymbolData(l);
@@ -1005,7 +911,6 @@ App.restoreWorkCopy = function (data, writtenAtMs) {
   } finally {
     App.state.batching = false;
   }
-  
   if (data.bg && data.bg.dataUrl) {
     const m = data.bg;
     const token = ++App.bgSeq;
@@ -1035,11 +940,11 @@ App.restoreWorkCopy = function (data, writtenAtMs) {
       App.updateBgOpacitySlider();
     }).catch(() => showToast(App.i18n.t('toast.bg.readFail2')));
   }
-  
   App.histColors = Array.isArray(data.histColors) ? data.histColors.slice(0, 16) : [];
   App.renderHistGrid();
   if (data.lastColor) App.state.lastColor = data.lastColor;
-  
+  App.restoreClipboardState(data.clipboardHistory, data.clipboard, data.clipboardActiveId);
+  if (App.closeClipboardHistory) App.closeClipboardHistory(true);
   App.state.groupEdit = (data.groupEdit || []).map(fr => {
     const set = new Set();
     (fr.excluded || []).forEach(i => { const l = App.state.layers[i]; if (l) set.add(l); });
@@ -1052,13 +957,11 @@ App.restoreWorkCopy = function (data, writtenAtMs) {
   App.updateHideLayersButton();
   App.updateLayersDisplaySlider();
   App.applyLayersDisplayOpacity();
-  
   if (!(data.bg && data.bg.dataUrl)) {
     App.updateBgOpacitySlider();
     if (App.updateHideBgButton) App.updateHideBgButton();
   }
   if (data.view && isFinite(data.view.x)) {
-    
     const nv = App.normalizeViewScale(data.view);
     App.state.view.x = nv.x;
     App.state.view.y = nv.y;
@@ -1069,13 +972,12 @@ App.restoreWorkCopy = function (data, writtenAtMs) {
   App.ensureMaskIndDef();
   App.refreshPanel();
   App.refreshCount();
+  App.refreshClipboardPanel();
   App.refreshLayerThumbs();
-  
   if (App.maybeBakeProxy) App.state.layers.forEach(l => { if (l.kind === 'merged') App.maybeBakeProxy(l); });
   if (App.warmupSymbols) App.warmupSymbols();
   if (App.contentChanged) App.contentChanged({ preserveAutoStatic: false });
   if (App.requestFlashRefresh) App.requestFlashRefresh(false);
-  
   if (App._proxyBake && App.countInLayer && App.proxyThreshold !== undefined) {
     setTimeout(() => {
       App.state.layers.forEach(l => {
@@ -1087,7 +989,6 @@ App.restoreWorkCopy = function (data, writtenAtMs) {
   }
 };
 
-
 App.histAnchorIntervalMs = function () {
   const a = (App.settings && App.settings.autoSave) || App.autoSaveDefaults;
   const m = a && a.intervalMin;
@@ -1095,32 +996,28 @@ App.histAnchorIntervalMs = function () {
 };
 App.startHistAnchors = function () {
   const a = (App.settings && App.settings.autoSave) || App.autoSaveDefaults;
-  if (a && a.enabled === false) return;          
+  if (a && a.enabled === false) return;           
   if (App._histAnchorTimer) return;
   App._histAnchorTimer = setInterval(() => {
-    
     if (App.state.layers.length > 0 || (App.state.bg.image && App.state.bg.image.el)) {
       App.saveHistAnchor();
     }
   }, App.histAnchorIntervalMs());
 };
 
-
 App.restartHistAnchors = function () {
   if (App._histAnchorTimer) { clearInterval(App._histAnchorTimer); App._histAnchorTimer = null; }
   App.startHistAnchors();
 };
-
 
 App.saveHistAnchor = async function () {
   const __t0 = performance.now();
   const str = App.buildWorkCopyString();
   const r = await window.sveApi.histAnchorSave(str);
   if (!r.ok) { console.warn('[hist-anchor] 保存失败', r.error); return null; }
-  try { App.log('info', '历史锚点保存', { name: r.name, ms: Math.round(performance.now() - __t0) }); } catch (e) {  }
+  try { App.log('info', '历史锚点保存', { name: r.name, ms: Math.round(performance.now() - __t0) }); } catch (e) {   }
   return r.name;
 };
-
 
 App.openHistAnchor = async function () {
   const list = await window.sveApi.histAnchorList();
@@ -1130,18 +1027,15 @@ App.openHistAnchor = async function () {
   App.showHistAnchorPicker(list.files);
 };
 
-
 App.showHistAnchorPicker = function (files) {
   let ov = $('#histAnchorOv');
   if (!ov) {
     ov = document.createElement('div');
     ov.id = 'histAnchorOv';
     ov.className = 'confirm-overlay hidden';
-    
     ov.innerHTML = '<div class="confirm-box anchor-box"><div class="anchor-title" data-i18n="toolbar.histAnchor">恢复工作进程</div><div class="anchor-list"></div><div class="anchor-btns"><button class="anchor-cancel" data-i18n="dlg.cancel">取消</button></div></div>';
     document.body.appendChild(ov);
     if (App.i18n) App.i18n.apply(ov);
-    
     ov.addEventListener('click', e => { if (e.target === ov) App.hideOverlay(ov); });
     ov.querySelector('.anchor-cancel').addEventListener('click', () => App.hideOverlay(ov));
     if (App.attachDlgClose) App.attachDlgClose(ov.querySelector('.confirm-box'), () => { App.hideOverlay(ov); return true; });
@@ -1151,17 +1045,14 @@ App.showHistAnchorPicker = function (files) {
   files.slice().reverse().forEach(f => {
     const item = document.createElement('div');
     item.className = 'anchor-item';
-    
     item.innerHTML = '<img class="anchor-thumb" alt="" aria-hidden="true">' +
       '<span class="anchor-time"></span><span class="anchor-name"></span>';
     item.querySelector('.anchor-time').textContent = f.time;
     item.querySelector('.anchor-name').textContent = f.name;
-    
     const thumbImg = item.querySelector('.anchor-thumb');
     if (thumbImg && App.buildSvgFromAnchor && App.fzaSvgThumb) {
       (async () => {
         try {
-          
           const built = await App.buildSvgFromAnchor(f.name);
           const svg = built && built.str ? built.str : null;
           if (!svg) return;
@@ -1184,7 +1075,6 @@ App.showHistAnchorPicker = function (files) {
   App.showOverlay(ov);
 };
 
-
 App.pickHistAnchor = async function (name, time) {
   const hasWork = App.state.layers.length > 0 || (App.state.bg.image && App.state.bg.image.el);
   let savedBefore = null;
@@ -1199,7 +1089,6 @@ App.pickHistAnchor = async function (name, time) {
   App.restoreWorkCopy(data, r.mtimeMs);
   showToast(App.i18n.tf('toast.io.rewound', { v: time, extra: (savedBefore ? App.i18n.t('toast.io.rewoundExtra') : '') }));
 };
-
 
 App.holdUntilRendered = function () {
   const root = App.layersRoot;

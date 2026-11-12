@@ -1,8 +1,6 @@
 'use strict';
-
 App.helpHint = {
   el: null,
-  
   TEXTS: [
     '请鼠标右击！右击！！编辑页面中上方的“？”帮助按键后，左击！画布与左侧图层栏（不是+栏！不是+栏！），弹出的帮助窗口可能会教会你更容易地使用这个软件',
     '請滑鼠右擊！右擊！！編輯頁面中上方的「？」說明按鍵後，左擊！畫布與左側圖層欄（不是+欄！不是+欄！），彈出的說明視窗可能會教會你更容易地使用這個軟體',
@@ -25,21 +23,17 @@ App.helpHint = {
       this.esc(t) + '</p>').join('');
     p.innerHTML =
       '<div class="confirm-box" style="width:560px;max-width:92vw;">' +
-        
         '<div class="helphint-contact">QQ：1074132460   X：@KlaraStellak</div>' +
-        
         '<div style="max-height:240px;overflow-y:auto;border:1px solid var(--btn-border);border-radius:10px;padding:8px 10px;">' + paras + '</div>' +
         '<div class="anchor-btns"><button class="helphint-ok">确认</button></div>' +
       '</div>';
     document.body.appendChild(p);
-    
     p.addEventListener('click', e => { if (e.target === p) e.stopPropagation(); });
     p.querySelector('.helphint-ok').addEventListener('click', () => this.confirm());
     this.el = p;
     return p;
   },
 
-  
   check() {
     if (!App.settings) return false;
     if (App.settings.helpHintAck === true) return false;
@@ -49,7 +43,6 @@ App.helpHint = {
   open() {
     const p = this.build();
     App.showOverlay(p);
-    
     if (!this._esc) {
       this._esc = e => {
         if (e.key === 'Escape' && this.isOpen()) { e.stopPropagation(); e.preventDefault(); }
@@ -59,11 +52,10 @@ App.helpHint = {
     return true;
   },
 
-  
   confirm() {
     if (App.settings) {
       App.settings.helpHintAck = true;
-      try { App.settings.save(); } catch (e) {  }
+      try { App.settings.save(); } catch (e) {   }
     }
     this.close();
     return true;

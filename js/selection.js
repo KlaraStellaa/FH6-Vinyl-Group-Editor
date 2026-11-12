@@ -1,12 +1,9 @@
 'use strict';
-
 App.setSelection = function (ids, opts) {
   opts = opts || {};
   App.state.selected = new Set(ids);
-  
   App.syncPanelSelectionClasses();
   App.drawOutlines();
-  
   if (App.state.selected.size) App.startFlash();
   else if (App.stopFlash) App.stopFlash();
   App.updateSelToolbar();
@@ -14,7 +11,6 @@ App.setSelection = function (ids, opts) {
     const l = App.findLayer(ids[0]);
     if (l) App.scrollItemToTop(l);
   }
-  
   if (App.state.hideOthers && App.syncHideOthersSelection) App.syncHideOthersSelection();
 };
 
@@ -37,12 +33,9 @@ App.hitLayer = function (e) {
   return null;
 };
 
-
 App.actOnWhiteBoxLayer = function () {
   if (!App.state.layers.length) return;
-  
   if (App.state.plusAnchorActive) return;
-  
   App.state.selBarDismissed = true;
   const ids = App.panelLayers().map(l => l.id);
   let i;
@@ -56,34 +49,27 @@ App.actOnWhiteBoxLayer = function () {
   const wasSelected = App.state.selected.has(layer.id);
   const legacySingle = App.state.selectedByTab && App.state.selected.size === 1;
   App.state.sweepDir = 0;
-  
   App.state.tabAutoSel = { id: layer.id, prevSelected: wasSelected };
-  
   if (App.state.selected.size === 1 && !wasSelected && !App.state.selectedByTab) {
     App.state.selectedByTab = false;
     App.setSelection([]);
   }
   if (legacySingle && wasSelected) {
-    
     App.state.sweepMode = 'remove';
     App.state.selectedByTab = false;
     App.setSelection([]);
   } else if (wasSelected && App.state.selected.size === 1) {
-    
     App.state.sweepMode = 'add';
     App.state.selectedByTab = true;
     App.setSelection(Array.from(App.state.selected));
   } else if (wasSelected) {
-    
     App.state.sweepMode = 'remove';
     App.toggleLayerSelection(layer);
   } else {
-    
     App.state.sweepMode = 'add';
     App.toggleLayerSelection(layer);
   }
 };
-
 
 App.rollbackTabAutoSel = function () {
   const t = App.state.tabAutoSel;
@@ -103,7 +89,6 @@ App.rollbackTabAutoSel = function () {
   return t.id;
 };
 
-
 App.canvasAlphaAt = function (c, layer, clientX, clientY) {
   const doc = App.screenToDoc(clientX, clientY);
   const inv = App.transformChainMat ? App.transformChainMat(layer).inverse() : null;
@@ -118,7 +103,6 @@ App.canvasAlphaAt = function (c, layer, clientX, clientY) {
   if (px < 0 || py < 0 || px >= c.width || py >= c.height) return 0;
   return c.getContext('2d', { willReadFrequently: true }).getImageData(px, py, 1, 1).data[3];
 };
-
 App.hitLayerPaintedSync = function (clientX, clientY) {
   for (let i = App.state.layers.length - 1; i >= 0; i--) {
     if (App.layerVisibleAtSync(App.state.layers[i], clientX, clientY)) return App.state.layers[i];
@@ -140,7 +124,6 @@ App.layerVisibleAtSync = function (layer, clientX, clientY) {
   const pd = App.screenToDoc(clientX, clientY);
   if (!App.pointInQuad(pd, b.corners)) return false;
   if (layer.kind === 'symbol' && !layer.isMask) {
-    
     if (App.symbolVecHit) {
       const vh = App.symbolVecHit(layer, clientX, clientY);
       if (vh !== null) return vh;
@@ -152,32 +135,25 @@ App.layerVisibleAtSync = function (layer, clientX, clientY) {
   return true; 
 };
 
-
 App.onCanvasPointerDown = function (e) {
   if (App.state.spaceDown) return; 
-  
   let rolledId = e && e._rolledId;
   if (App.state.tabDown && rolledId === undefined) rolledId = App.rollbackTabAutoSel();
-  
   let layer = (e.clientX === 0 && e.clientY === 0 && e.target)
     ? App.hitLayer(e)
     : App.hitLayerPaintedSync(e.clientX, e.clientY);
-  
   if (!App.inGroupEditScope(layer)) layer = null;
   if (layer) {
     const top = App.topOf(layer);
     if (App.state.tabDown) {
-      
       App.state.tabGestureUsed = true;
       App.toggleLayerSelection(top);
       const ids = App.panelLayers().map(l => l.id);
       const bi = ids.indexOf(top.id);
       if (bi >= 0) { App.lastWheelIdx = bi; App.syncPanelSelectionClasses(); }
       App.scrollItemToTop(top);
-      
       App.requestFlashRefresh(false);
     } else if (App.state.selected.size > 1 || (App.state.selectedByTab && App.state.selected.size >= 1)) {
-      
       App.state.selBarDismissed = false;
       const ids = App.panelLayers().map(l => l.id);
       const i = ids.indexOf(top.id);
@@ -187,17 +163,14 @@ App.onCanvasPointerDown = function (e) {
       App.requestFlashRefresh();
       App.scrollItemToTop(top);
     } else {
-      
       App.state.selectedByTab = false;
       App.lastWheelIdx = undefined;
       App.state.selBarDismissed = false;
       App.setSelection([top.id], { scrollPanel: true });
     }
   } else {
-    
     if (App.state.replacing || App.state.tabDown) return;
     if (App.state.selected.size > 1 || (App.state.selectedByTab && App.state.selected.size >= 1)) {
-      
       App.state.selBarDismissed = true;
       App.updateSelToolbar();
     } else {
@@ -207,10 +180,8 @@ App.onCanvasPointerDown = function (e) {
   }
 };
 
-
 App.boxSelect = null;
 App.startBoxSelect = function (e, mode) {
-  
   if (App.state.tabDown) App.rollbackTabAutoSel();
   const p = App.screenToDoc(e.clientX, e.clientY);
   App.boxSelect = { mode, x0: p.x, y0: p.y, x1: p.x, y1: p.y, startCX: e.clientX, startCY: e.clientY };
@@ -219,7 +190,7 @@ App.startBoxSelect = function (e, mode) {
     App.overlayG.appendChild(App.boxSelG);
   }
   App.drawBoxSelect();
-  try { App.svg.setPointerCapture(e.pointerId); } catch (err) {  }
+  try { App.svg.setPointerCapture(e.pointerId); } catch (err) {   }
   if (e.preventDefault) e.preventDefault();
 };
 App.moveBoxSelect = function (e) {
@@ -238,7 +209,6 @@ App.drawBoxSelect = function () {
   if (!g) {
     g = svgEl('g');
     const rect = svgEl('rect', { fill: 'rgba(78,161,255,.15)', stroke: '#4ea1ff', 'stroke-width': 1.5 / sc, class: 'sve-boxsel' });
-    
     const mark = svgEl('text', {
       class: 'sve-boxsel-mark', 'text-anchor': 'middle', 'dominant-baseline': 'central',
       'font-size': 16 / sc, 'font-weight': 'bold', fill: '#ffffff', stroke: '#1d6fd1',
@@ -272,7 +242,6 @@ App.endBoxSelect = function (e) {
   const moved = Math.hypot(e.clientX - b.startCX, e.clientY - b.startCY) > 4;
   if (b.el) b.el.remove();
   if (!moved) {
-    
     const t = document.elementFromPoint(e.clientX, e.clientY);
     const fake = Object.assign({}, e, { target: t || App.svg });
     App.onCanvasPointerDown(fake);
@@ -288,7 +257,6 @@ App.endBoxSelect = function (e) {
   App.state.selectedByTab = s.size >= 1;
   App.state.selBarDismissed = true; 
   App.setSelection(Array.from(s));
-  
   if (s.size) {
     let target = null;
     for (let i = App.state.layers.length - 1; i >= 0; i--) {
@@ -297,12 +265,10 @@ App.endBoxSelect = function (e) {
     if (target) {
       App.scrollItemToTop(target);
       App.syncPanelSelectionClasses();
-      
       if (App.requestFlashRefresh) App.requestFlashRefresh(false);
     }
   }
 };
-
 
 App.pointInPoly = function (p, poly) {
   let sign = 0;
@@ -317,7 +283,6 @@ App.pointInPoly = function (p, poly) {
   }
   return true;
 };
-
 App.segIntersect = function (p1, p2, p3, p4) {
   const d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x);
   if (d === 0) return false;
@@ -325,17 +290,13 @@ App.segIntersect = function (p1, p2, p3, p4) {
   const u = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / d;
   return t >= 0 && t <= 1 && u >= 0 && u <= 1;
 };
-
 App.layerPolyHitBox = function (layer, x, y, w, h) {
   const bb = App.getItemDocBBox(layer);
   const poly = (bb.corners && bb.corners.length === 4) ? bb.corners
     : [{ x: bb.x, y: bb.y }, { x: bb.x + bb.w, y: bb.y }, { x: bb.x + bb.w, y: bb.y + bb.h }, { x: bb.x, y: bb.y + bb.h }];
   const rect = [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }];
-  
   if (poly.some(p => p.x >= x && p.x <= x + w && p.y >= y && p.y <= y + h)) return true;
-  
   if (rect.some(p => App.pointInPoly(p, poly))) return true;
-  
   for (let i = 0; i < 4; i++) {
     for (let j = 0; j < 4; j++) {
       if (App.segIntersect(poly[i], poly[(i + 1) % 4], rect[j], rect[(j + 1) % 4])) return true;
@@ -343,11 +304,9 @@ App.layerPolyHitBox = function (layer, x, y, w, h) {
   }
   return false;
 };
-
 App.layersInBox = function (x, y, w, h) {
   const out = [];
   App.state.layers.forEach(top => {
-    
     if (!App.inGroupEditScope(top)) return;
     if (top.kind === 'merged') {
       const leaves = [];
@@ -360,8 +319,6 @@ App.layersInBox = function (x, y, w, h) {
   });
   return out;
 };
-
-
 
 App.setSelToolbarVisible = function (show) {
   const bar = $('#selToolbar');
@@ -377,7 +334,6 @@ App.setSelToolbarVisible = function (show) {
     setTimeout(() => { bar.classList.add('hidden'); bar.classList.remove('sve-bar-out'); }, 180);
   }
 };
-
 App.syncGroupBackBtn = function () {
   const btn = $('#btnGroupBack');
   if (!btn) return;
@@ -388,19 +344,15 @@ App.syncGroupBackBtn = function () {
 App.updateSelToolbar = function () {
   const bar = $('#selToolbar');
   const inEdit = !!App.state.edit;
-  
   const locateBtn = $('#btnLocateLayer');
   if (locateBtn) locateBtn.disabled = !App.whiteBoxLayer();
-  
   const geBtn = $('#btnGroupEdit');
   if (geBtn) {
     const one = App.operationTargets();
     geBtn.disabled = !(one.length === 1 && one[0].kind === 'merged');
   }
   App.syncGroupBackBtn();
-  
   if (App.syncColorPanelToTargets) App.syncColorPanelToTargets();
-  
   if (!App.state.selected.size || inEdit || App.state.plusAnchorActive) { App.setSelToolbarVisible(false); return; }
   const items = App.operationTargets();
   const single = items.length === 1;
@@ -408,34 +360,28 @@ App.updateSelToolbar = function () {
   $('#btnReplace').disabled = !canReplace;
   $('#btnMerge').disabled = items.length < 2;
   $('#btnSplit').disabled = !App.splitTarget();
-  
   const allMask = items.every(l => !!l.isMask);
   const anyMask = items.some(l => !!l.isMask);
   $('#btnToMask').disabled = allMask;
   $('#btnToLayer').disabled = !anyMask;
-  
   const show = !App.state.selBarDismissed;
   App.setSelToolbarVisible(!!show);
 };
 
 
-
 App.groupEditActive = function () {
   return !!(App.state.groupEdit && App.state.groupEdit.length);
 };
-
 App.currentExcluded = function () {
   if (!App.groupEditActive()) return null;
   return App.state.groupEdit[App.state.groupEdit.length - 1].excluded;
 };
-
 App.inGroupEditScope = function (layer) {
   if (!layer) return false;
   const ex = App.currentExcluded();
   if (!ex) return true;
   return !ex.has(layer);
 };
-
 App.groupEditInsertIndex = function () {
   const ex = App.currentExcluded();
   if (!ex) return -1;
@@ -447,8 +393,6 @@ App.groupEditInsertIndex = function () {
   }
   return -1;
 };
-
-
 App.enterGroupEdit = function (merged) {
   if (!merged || merged.kind !== 'merged') return false;
   const children = (merged.children || []).slice();
@@ -456,13 +400,11 @@ App.enterGroupEdit = function (merged) {
   if (!App.state.groupEdit) App.state.groupEdit = [];
   const prev = App.currentExcluded();
   App.history.markDiscrete();
-  App.splitMerged(merged);                     
-  
+  App.splitMerged(merged);                      
   const inScope = new Set(children);
   const excluded = new Set();
   App.state.layers.forEach(l => { if (!inScope.has(l)) excluded.add(l); });
   if (prev) prev.forEach(l => excluded.add(l));
-  
   let anchor = children[0];
   children.forEach(ch => {
     if (App.state.layers.indexOf(ch) > App.state.layers.indexOf(anchor)) anchor = ch;
@@ -474,20 +416,17 @@ App.enterGroupEdit = function (merged) {
   App.updateSelToolbar();
   App.drawOutlines();
   if (App.requestFlashRefresh) App.requestFlashRefresh();
-  try { App.log('info', '进入分组内编辑', { children: children.length }); } catch (e) {  }
+  try { App.log('info', '进入分组内编辑', { children: children.length }); } catch (e) {   }
   return true;
 };
-
 App.exitGroupEdit = function () {
   if (!App.groupEditActive()) return false;
   const ex = App.currentExcluded();
   const frame = App.state.groupEdit[App.state.groupEdit.length - 1];
   const scope = App.state.layers.filter(l => !ex.has(l));
-  
   let merged = null;
   if (scope.length >= 2) {
     App.history.markDiscrete();
-    
     if (frame && frame.anchor && scope.indexOf(frame.anchor) >= 0) {
       const ids = App.panelLayers().map(l => l.id);
       const i = ids.indexOf(frame.anchor.id);
@@ -499,7 +438,6 @@ App.exitGroupEdit = function () {
   App.state.selected = new Set();
   App.state.selectedByTab = false;
   App.refreshPanel();
-  
   if (merged && App.state.layers.indexOf(merged) >= 0 && App.scrollItemToTop) {
     App.scrollItemToTop(merged, true);
   }
@@ -507,12 +445,9 @@ App.exitGroupEdit = function () {
   App.updateSelToolbar();
   App.drawOutlines();
   if (App.requestFlashRefresh) App.requestFlashRefresh();
-  try { App.log('info', '退出分组内编辑', { rest: scope.length }); } catch (e) {  }
+  try { App.log('info', '退出分组内编辑', { rest: scope.length }); } catch (e) {   }
   return true;
 };
-
-
-
 
 
 App.setSelectedMask = function (flag) {
@@ -536,14 +471,13 @@ App.setSelectedMask = function (flag) {
   const finish = () => {
     if (token !== App._maskRenderToken) return;
     App._maskRenderBusy = false;
-    
     items.forEach(l => { if (App.dropEditStaticItem) App.dropEditStaticItem(l); });
     if (App.contentChanged) App.contentChanged({ preserveAutoStatic });
     items.forEach(l => { if (l.kind === 'merged' && App.markProxyDirty) App.markProxyDirty(l); });
     App.refreshPanel();
     App.updateSelToolbar();
     App.refreshLayerThumbs();
-    try { App.log('info', '蒙版切换', { flag: !!flag, layers: leaves.length }); } catch (e) {  }
+    try { App.log('info', '蒙版切换', { flag: !!flag, layers: leaves.length }); } catch (e) {   }
     showToast(flag ? App.i18n.t('toast.sel.maskOn') : App.i18n.t('toast.sel.maskOff'));
   };
 
@@ -553,7 +487,6 @@ App.setSelectedMask = function (flag) {
     return;
   }
 
-  
   if (App.stopFlash) App.stopFlash();
   let i = 0;
   const step = () => {
@@ -572,17 +505,13 @@ App.setSelectedMask = function (flag) {
   setTimeout(step, 0);
 };
 
-
 App.flipSelected = function (axis) {
   const items = App.operationTargets();
   if (!items.length) return;
-  
   const __flipBefore = App.diag ? App.diag.geoms(items) : null;
   App.history.markDiscrete();
   items.forEach(l => {
-    
     const c = l.kind === 'merged' && App.mergedContentCenter ? App.mergedContentCenter(l) : null;
-    
     const wantH = axis === 'h' ? !l.flipH : !!l.flipH;
     const wantV = axis === 'v' ? !l.flipV : !!l.flipV;
     App.flipSkewByParity(l, wantH, wantV);
@@ -596,10 +525,9 @@ App.flipSelected = function (axis) {
   });
   App.refreshLayerThumbs();
   App.drawOutlines();
-  
   items.forEach(l => { if (App.dropEditStaticItem) App.dropEditStaticItem(l); });
   if (App.contentChanged) App.contentChanged();
-  try { App.log('info', '翻转', { axis, layers: items.length }); } catch (e) {  }
+  try { App.log('info', '翻转', { axis, layers: items.length }); } catch (e) {   }
   if (App.diag) {
     const __flipAfter = App.diag.geoms(items);
     App.diag.log('select', {
@@ -610,8 +538,6 @@ App.flipSelected = function (axis) {
   }
   showToast(axis === 'h' ? App.i18n.t('toast.sel.flipH') : App.i18n.t('toast.sel.flipV'));
 };
-
-
 
 App.whiteBoxLayer = function () {
   if (App.state.plusAnchorActive) return null;
@@ -624,13 +550,11 @@ App.whiteBoxLayer = function () {
   if (i < 0 || i >= ids.length) i = 0;
   return App.findLayer(ids[i]);
 };
-
 App.operationTargets = function () {
   if (App.state.selectedByTab && App.state.selected.size) return App.selectedItems();
   const box = App.whiteBoxLayer();
   return box ? [box] : App.selectedItems();
 };
-
 App.whiteBoxOutsideSet = function () {
   if (!(App.state.selectedByTab && App.state.selected.size)) return false;
   const box = App.whiteBoxLayer();
@@ -640,9 +564,158 @@ App.activeTargetItems = function () {
   return App.operationTargets();
 };
 
+App.CLIPBOARD_HISTORY_MAX = 7;
+
+App.clipboardEntrySig = function (items) {
+  try { return JSON.stringify(items || []); }
+  catch (e) { return ''; }
+};
+
+App.newClipboardEntryId = function () {
+  App._clipboardEntrySeq = (App._clipboardEntrySeq || 0) + 1;
+  return 'cp_' + Date.now().toString(36) + '_' + App._clipboardEntrySeq.toString(36);
+};
+
+App.makeClipboardEntry = function (raw, idOverride) {
+  if (!raw) return null;
+  const items = Array.isArray(raw) ? raw : raw.items;
+  if (!Array.isArray(items) || !items.length) return null;
+  const sig = App.clipboardEntrySig(items);
+  if (!sig) return null;
+  return {
+    id: idOverride ? String(idOverride) : ((raw && raw.id) ? String(raw.id) : App.newClipboardEntryId()),
+    sig: sig,
+    items: items,
+    thumbUrl: (raw && raw.thumbUrl) || null,
+    bw: (raw && raw.bw) || 0,
+    bh: (raw && raw.bh) || 0
+  };
+};
+
+App.normalizeClipboardState = function (rawHistory, rawCurrent, activeId, rawCurrentEntry) {
+  const hist = [];
+  const bySig = new Map();
+  (rawHistory || []).forEach(raw => {
+    const entry = App.makeClipboardEntry(raw);
+    if (!entry || bySig.has(entry.sig)) return;
+    bySig.set(entry.sig, entry);
+    hist.push(entry);
+  });
+
+  let current = null;
+  const rawItems = Array.isArray(rawCurrent) ? rawCurrent : [];
+  const entryItems = (rawCurrentEntry && Array.isArray(rawCurrentEntry.items)) ? rawCurrentEntry.items : [];
+  if (rawItems.length) {
+    const sig = App.clipboardEntrySig(rawItems);
+    if (rawCurrentEntry && sig === App.clipboardEntrySig(entryItems)) {
+      current = App.makeClipboardEntry(rawCurrentEntry, activeId || rawCurrentEntry.id);
+    } else {
+      current = { id: activeId ? String(activeId) : App.newClipboardEntryId(), sig: sig, items: rawItems, thumbUrl: null, bw: 0, bh: 0 };
+    }
+  } else if (rawCurrentEntry && entryItems.length) {
+    current = App.makeClipboardEntry(rawCurrentEntry, activeId || rawCurrentEntry.id);
+  } else if (activeId) {
+    const at = hist.findIndex(e => e.id === String(activeId));
+    if (at >= 0) current = hist.splice(at, 1)[0];
+  }
+  if (!current && hist.length) current = hist.shift();
+
+  if (!current) return { history: [], current: null, activeId: null };
+  const cleanHist = hist.filter(e => e.id !== current.id && e.sig !== current.sig)
+    .slice(0, App.CLIPBOARD_HISTORY_MAX);
+  return { history: cleanHist, current: current, activeId: current.id };
+};
+
+App.ensureClipboardState = function () {
+  const s = App.state;
+  if (!s) return [];
+  const n = App.normalizeClipboardState(s.clipboardHistory, s.clipboard, s.clipboardActiveId, s.clipboardCurrent);
+  s.clipboardHistory = n.history;
+  s.clipboardCurrent = n.current;
+  s.clipboardActiveId = n.activeId;
+  s.clipboard = n.current ? n.current.items : [];
+  return s.clipboardHistory;
+};
+
+App.restoreClipboardState = function (rawHistory, rawCurrent, activeId, rawCurrentEntry) {
+  if (!App.state) return;
+  const n = App.normalizeClipboardState(rawHistory, rawCurrent, activeId, rawCurrentEntry);
+  App.state.clipboardHistory = n.history;
+  App.state.clipboardCurrent = n.current;
+  App.state.clipboardActiveId = n.activeId;
+  App.state.clipboard = n.current ? n.current.items : [];
+};
+
+App.storeClipboardLayers = function (layers) {
+  const items = (layers || []).map(l => App.serializeLayer(l, true));
+  if (!items.length) return null;
+  const hist = App.ensureClipboardState();
+  const sig = App.clipboardEntrySig(items);
+  const prev = App.state.clipboardCurrent;
+
+  if (prev && prev.sig === sig) {
+    prev.items = items;
+    App.state.clipboard = prev.items;
+    if (App.closeClipboardHistory) App.closeClipboardHistory(true);
+    return prev;
+  }
+
+  let entry = null;
+  const at = hist.findIndex(e => e.sig === sig);
+  if (at >= 0) entry = hist.splice(at, 1)[0];
+  if (!entry) {
+    entry = { id: App.newClipboardEntryId(), sig: sig, items: items, thumbUrl: null, bw: 0, bh: 0 };
+  } else {
+    entry.items = items;
+    entry.sig = sig;
+  }
+
+  if (prev) hist.unshift(prev);
+  if (hist.length > App.CLIPBOARD_HISTORY_MAX) hist.length = App.CLIPBOARD_HISTORY_MAX;
+
+  App.state.clipboardHistory = hist;
+  App.state.clipboardCurrent = entry;
+  App.state.clipboardActiveId = entry.id;
+  App.state.clipboard = entry.items;
+  if (App.closeClipboardHistory) App.closeClipboardHistory(true);
+  return entry;
+};
+
+App.selectClipboardEntry = function (id) {
+  const hist = App.ensureClipboardState();
+  const at = hist.findIndex(e => e.id === String(id));
+  if (at < 0) return false;
+  const entry = hist.splice(at, 1)[0];
+  const prev = App.state.clipboardCurrent;
+  if (prev) hist.unshift(prev);
+  if (hist.length > App.CLIPBOARD_HISTORY_MAX) hist.length = App.CLIPBOARD_HISTORY_MAX;
+  App.state.clipboardCurrent = entry;
+  App.state.clipboardActiveId = entry.id;
+  App.state.clipboard = entry.items;
+  if (App.closeClipboardHistory) App.closeClipboardHistory();
+  if (App.refreshClipboardPanel) App.refreshClipboardPanel();
+  return true;
+};
+
+App.cloneClipboardEntry = function (entry) {
+  if (!entry) return null;
+  return {
+    id: entry.id,
+    items: JSON.parse(JSON.stringify(entry.items || [])),
+    thumbUrl: entry.thumbUrl || null,
+    bw: entry.bw || 0,
+    bh: entry.bh || 0
+  };
+};
+App.cloneClipboardHistory = function () {
+  return (App.state.clipboardHistory || []).map(e => App.cloneClipboardEntry(e));
+};
+App.cloneClipboardCurrent = function () {
+  return App.cloneClipboardEntry(App.state.clipboardCurrent);
+};
+
 App.cutSelection = function () {
   const hadSel = App.state.selected.size > 0;
-  
   let items;
   if (App.whiteBoxOutsideSet()) {
     const box = App.whiteBoxLayer();
@@ -651,10 +724,10 @@ App.cutSelection = function () {
     items = App.activeTargetItems();
   }
   if (!items.length) { showToast(App.i18n.t('toast.sel.noCut')); return; }
-  const anchor = App.removeAnchorLayer(items);   
+  const anchor = App.removeAnchorLayer(items);    
   App.history.markDiscrete();
-  try { App.log('info', '剪切', { layers: items.length }); } catch (e) {  }
-  App.state.clipboard = items.map(l => App.serializeLayer(l, true));
+  try { App.log('info', '剪切', { layers: items.length }); } catch (e) {   }
+  App.storeClipboardLayers(items);
   items.forEach(l => App.removeTopLayer(l));
   if (hadSel) App.setSelection([]);
   App.selectAfterRemove(anchor);
@@ -662,23 +735,18 @@ App.cutSelection = function () {
   showToast(App.i18n.tf('toast.sel.cut', { n: App.state.clipboard.length }));
 };
 
-
 App.copySelection = function () {
   const items = App.activeTargetItems();
   if (!items.length) { showToast(App.i18n.t('toast.sel.noCopy')); return; }
-  App.history.markDiscrete();
-  App.state.clipboard = items.map(l => App.serializeLayer(l, true));
+  App.storeClipboardLayers(items);
   App.refreshClipboardPanel();
   showToast(App.i18n.tf('toast.sel.copied', { n: items.length }));
 };
 
-
 App.insertLayersLikePaste = function (newLayers, anchorArg) {
   const layers = App.state.layers;
   if (!newLayers || !newLayers.length) return false;
-  
   if (App.state.plusAnchorActive && layers.length) {
-    
     const insertAt = layers.length;
     const topEl = layers[insertAt - 1] ? layers[insertAt - 1].el : null;
     newLayers.forEach((l) => {
@@ -691,7 +759,6 @@ App.insertLayersLikePaste = function (newLayers, anchorArg) {
   } else {
     const anchor = (anchorArg !== undefined) ? anchorArg : App.insertAnchorLayer();
     if (!anchor || !layers.includes(anchor)) return false;
-    
     const idx = layers.indexOf(anchor);
     newLayers.forEach((l, k) => {
       if (!l.el) App.buildLayerElement(l);
@@ -702,7 +769,6 @@ App.insertLayersLikePaste = function (newLayers, anchorArg) {
       l.thumbDirty = true;
     });
   }
-  
   if (!App.state.batching) {
     App.refreshPanel();
     App.refreshCount();
@@ -711,16 +777,14 @@ App.insertLayersLikePaste = function (newLayers, anchorArg) {
 };
 
 App.pasteClipboard = function () {
+  App.ensureClipboardState();
   if (!App.state.clipboard.length) { return; }
   App.history.markDiscrete();
-  try { App.log('info', '粘贴', { layers: App.state.clipboard.length }); } catch (e) {  }
+  try { App.log('info', '粘贴', { layers: App.state.clipboard.length }); } catch (e) {   }
   const items = App.state.clipboard;
-  
   const newLayers = items.map(slim => App.deserializeLayer(slim));
-  
   const hideBatch = newLayers.length > 50 && App.layersRoot.style.display !== 'none';
   if (hideBatch) App.layersRoot.style.display = 'none';
-  
   const docked = !!(App.state.plusAnchorActive && App.state.layers.length);
   const anchorBefore = docked ? null : App.insertAnchorLayer();
   const placed = App.insertLayersLikePaste(newLayers);
@@ -729,24 +793,18 @@ App.pasteClipboard = function () {
     App.refreshPanel();
     App.refreshCount();
   }
-  
   if (hideBatch && !App.state.layersHidden && App.state.eyeMode !== 'bg') App.layersRoot.style.display = '';
-  
   App.state.selectedByTab = false;
   App.state.selBarDismissed = false;
   App.setSelection([]);
   if (docked) {
-    
-    try { App.log('info', '粘贴到「+」栏下方', { layers: newLayers.length, firstId: newLayers[0] && newLayers[0].id }); } catch (e) {  }
+    try { App.log('info', '粘贴到「+」栏下方', { layers: newLayers.length, firstId: newLayers[0] && newLayers[0].id }); } catch (e) {   }
   } else {
-    try { App.log('info', '粘贴（非停靠）', { layers: newLayers.length, anchorId: anchorBefore && anchorBefore.id }); } catch (e) {  }
-    
+    try { App.log('info', '粘贴（非停靠）', { layers: newLayers.length, anchorId: anchorBefore && anchorBefore.id }); } catch (e) {   }
     if (newLayers.length && App.scrollItemToTop) App.scrollItemToTop(newLayers[newLayers.length - 1], true);
   }
   if (App.contentChanged) App.contentChanged();
 };
-
-
 
 
 App.insertAnchorLayer = function () {
@@ -759,16 +817,13 @@ App.insertAnchorLayer = function () {
   return anchor && App.state.layers.includes(anchor) ? anchor : null;
 };
 
-
 App.insertNewLayer = function (layer) {
   if (App.state.insertBelow && App.insertLayersLikePaste([layer])) {
-    
     if (App.contentChanged) App.contentChanged();
     return layer;
   }
   return App.addLayer(layer);
 };
-
 
 App.reinsertLayersLikePaste = function (list, anchorArg) {
   const layers = App.state.layers;
@@ -782,11 +837,9 @@ App.reinsertLayersLikePaste = function (list, anchorArg) {
     App.unregisterChildren(l);
   });
   if (App.insertLayersLikePaste(ordered, anchorArg)) return true;
-  
   ordered.forEach(l => App.addLayer(l));
   return false;
 };
-
 
 App.removeAnchorLayer = function (items) {
   const panel = App.panelLayers();
@@ -809,7 +862,6 @@ App.selectAfterRemove = function (anchor) {
       return;
     }
   }
-  
   App.state.selectedByTab = false;
   App.setSelection([]);
   App.setPlusAnchor(true);
@@ -817,7 +869,6 @@ App.selectAfterRemove = function (anchor) {
 
 App.deleteSelection = function () {
   const hadSel = App.state.selected.size > 0;
-  
   let items;
   if (App.whiteBoxOutsideSet()) {
     const box = App.whiteBoxLayer();
@@ -826,14 +877,13 @@ App.deleteSelection = function () {
     items = App.activeTargetItems();
   }
   if (!items.length) return;
-  const anchor = App.removeAnchorLayer(items);   
+  const anchor = App.removeAnchorLayer(items);    
   App.history.markDiscrete();
   items.forEach(l => App.removeTopLayer(l));
   if (hadSel) App.setSelection([]);
   App.selectAfterRemove(anchor);
   showToast(App.i18n.tf('toast.sel.deleted', { n: items.length }));
 };
-
 
 App.deleteAllLayers = function () {
   if (!App.state.layers.length) { showToast(App.i18n.t('toast.sel.barEmpty')); return; }
@@ -845,7 +895,6 @@ App.deleteAllLayers = function () {
   } finally {
     App.state.batching = false;
   }
-  
   App.state.layersHidden = false;
   if (App.updateHideLayersButton) App.updateHideLayersButton();
   App.refreshPanel();
@@ -874,14 +923,12 @@ App.splitSelected = function () {
   App.setSelection([]);
   showToast(App.i18n.t('toast.sel.split'));
 };
-
 App.splitTarget = function () {
   const items = App.operationTargets();
   if (items.length === 1 && items[0].kind === 'merged') return items[0];
   const box = App.whiteBoxLayer();
   return (box && box.kind === 'merged') ? box : null;
 };
-
 
 App.initSelectionToolbar = function () {
   $('#btnEditPos').addEventListener('click', () => {
@@ -901,7 +948,6 @@ App.initSelectionToolbar = function () {
   $('#btnFlipV').addEventListener('click', () => App.flipSelected('v'));
   $('#btnMerge').addEventListener('click', App.mergeSelected);
   $('#btnSplit').addEventListener('click', App.splitSelected);
-  
   $('#btnGroupEdit').addEventListener('click', () => {
     const items = App.operationTargets();
     if (items.length !== 1 || items[0].kind !== 'merged') return;
@@ -913,7 +959,6 @@ App.initSelectionToolbar = function () {
   $('#btnDelete').addEventListener('click', App.deleteSelection);
   $('#btnSelectAll').addEventListener('click', App.selectAllLayers);
   $('#btnClearSel').addEventListener('click', () => {
-    
     App.state.selectedByTab = false;
     App.setSelection([]);
   });
@@ -921,21 +966,18 @@ App.initSelectionToolbar = function () {
   $('#btnLocateLayer').addEventListener('click', App.locateWhiteBoxLayer);
 };
 
-
 App.locateWhiteBoxLayer = function () {
   const layer = App.whiteBoxLayer();
-  if (!layer) return;                       
+  if (!layer) return;                        
   const b = App.getItemDocBBox(layer);
   if (!b || !isFinite(b.x) || !isFinite(b.y) || !isFinite(b.w) || !isFinite(b.h)) return;
   const r = App.wrap.getBoundingClientRect();
   const v = App.state.view;
   const sc = v.scale || 1;
-  
   v.x = (b.x + b.w / 2) - r.width / (2 * sc);
   v.y = (b.y + b.h / 2) - r.height / (2 * sc);
   App.updateView();
 };
-
 
 App.selectAllLayers = function () {
   if (!App.state.layers.length) { showToast(App.i18n.t('toast.sel.noHighlight')); return; }

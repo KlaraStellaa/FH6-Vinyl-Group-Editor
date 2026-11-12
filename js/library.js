@@ -1,10 +1,8 @@
 'use strict';
-
 App.symbols = [];        
 App.symbolMap = new Map();
 App.categories = [];     
 App.patterns = [];       
-
 
 App.LIB_CAT_MAP = {
   '01_Primitives': { id: 'c01', key: 'lib.cat.01' },
@@ -43,7 +41,6 @@ App.LIB_CAT_MAP = {
   '34_Upper_Letters_11': { id: 'font11', key: 'lib.cat.font11' },
   '35_Lower_Letters_11': { id: 'font11', key: 'lib.cat.font11' }
 };
-
 App.LIB_HIDE_PATTERN_GROUP = true;
 App.libText = null;
 App.symbolUri = s => 'data:image/jpeg;base64,' + App.libText.slice(s.uriStart, s.uriEnd);
@@ -54,7 +51,6 @@ App.loadLibrary = async function () {
     fetch('assets/FH6_Vinyl_Patterns.svg').then(r => { if (!r.ok) throw new Error('patterns fetch ' + r.status); return r.text(); })
   ]);
   App.libText = symText;
-  
   try {
     const r = window.sveApi && window.sveApi.libAssetVer ? await window.sveApi.libAssetVer() : null;
     App.libAssetVer = (r && r.ok && r.ver) ? r.ver : ('len:' + symText.length + ':' + patText.length);
@@ -64,15 +60,12 @@ App.loadLibrary = async function () {
   App.parseSymbols();
   App.parsePatterns(patText);
   App.ensureMaskIndDef();
-  
   await App.loadLibThumbManifest();
-  
   App.loadLibVecManifest();
   App.buildLibraryPanel();
   App.state.loaded = true;
   $('#loadingOverlay').classList.add('hidden');
 };
-
 
 App.loadLibThumbManifest = function () {
   if (!App.LIB_THUMB_PRE_URL) App.LIB_THUMB_PRE_URL = 'assets/lib-thumbs/index.json';
@@ -86,21 +79,17 @@ App.loadLibThumbManifest = function () {
       return;
     }
     App.LIB_THUMB_PRE = new Set(man.keys);
-    
     App.LIB_THUMB_PRE_BASE = new URL('assets/lib-thumbs/', location.href).href;
     if (App.kickLibraryThumbQueue) App.kickLibraryThumbQueue();
-  }).catch(() => {  });
-  
+  }).catch(() => {   });
   return Promise.race([load, new Promise(r => setTimeout(r, 400))]);
 };
-
 
 App.libThumbPreUrl = function (symbol) {
   if (!App.LIB_THUMB_PRE || !symbol || !symbol.key) return '';
   if (!App.LIB_THUMB_PRE.has(symbol.key)) return '';
   return App.LIB_THUMB_PRE_BASE + encodeURIComponent(symbol.key) + '.png';
 };
-
 
 App.libVec = { enabled: true, ready: false, unit: 1000, items: null, layers: null, count: 0 };
 App.loadLibVecManifest = function () {
@@ -115,16 +104,14 @@ App.loadLibVecManifest = function () {
       return;
     }
     App.libVec.items = man.items;
-    
     App.libVec.layers = man.layers || {};
     App.libVec.unit = Number(man.unit) || 1000;
     App.libVec.count = Object.keys(man.items).length;
     App.libVec.layered = Object.keys(App.libVec.layers).length;
     App.libVec.ready = true;
     console.log('[library] lib-vec:', App.libVec.count, 'paths,', App.libVec.layered, 'layered');
-    
     if (App.refreshAllSymbolTextures) App.refreshAllSymbolTextures();
-  }).catch(() => {  });
+  }).catch(() => {   });
   return Promise.race([load, new Promise(r => setTimeout(r, 400))]);
 };
 
@@ -194,11 +181,9 @@ App.parsePatterns = function (text) {
   console.log('[library] patterns:', App.patterns.length);
 };
 
-
 App.maskThemeKey = function () {
   return App.state.bg.base === 'dark' ? 'mask_indicator_dark' : 'mask_indicator_light';
 };
-
 
 App.ensureMaskIndDef = function () {
   if (!App.defs) return;
@@ -231,10 +216,9 @@ App.ensureMaskIndDef = function () {
   App.defs.appendChild(node);
 };
 
-App.libFilter = null;   
+App.libFilter = null;    
 
-
-App.libFavOpen = false;   
+App.libFavOpen = false;    
 App.LibFav = {
   list: [],
   has(key) { return this.list.indexOf(key) >= 0; },
@@ -249,7 +233,6 @@ App.LibFav = {
     this.list.splice(i, 1);
     return true;
   },
-  
   move(key, beforeKey) {
     const i = this.list.indexOf(key);
     if (i < 0) return false;
@@ -267,7 +250,6 @@ App.LibFav = {
   },
   payload() { return this.list.slice(); }
 };
-
 App.libFavItem = function (key) {
   const sym = App.symbolMap.get(key);
   if (sym) return { key: key, item: sym, isPat: false };
@@ -276,18 +258,17 @@ App.libFavItem = function (key) {
   return null;
 };
 
-
 App.libClickLog = [];
 App.libClickTraceOn = true;
 App.libClickTrace = function (cat, item, tile, path, act) {
   if (!App.libClickTraceOn) { act(); return null; }
   const scroll = $('#libScroll');
   const rec = {
-    groupKey: (cat && cat.id) || null,   
+    groupKey: (cat && cat.id) || null,    
     renderedIndex: -1,
     scrollOffset: scroll ? Math.round(scroll.scrollTop) : 0,
     tileId: item && item.key,
-    previewId: item && item.key,     
+    previewId: item && item.key,      
     committedId: null,
     path: path
   };
@@ -317,7 +298,6 @@ App.buildLibraryPanel = function () {
   if (!App.LIB_HIDE_PATTERN_GROUP) cats.push({ id: 'pattern', key: 'lib.cat.pattern', items: App.patterns, isPattern: true });
   const catLabel = id => { const c = cats.find(x => x.id === id); return App.i18n.t(c && c.key ? c.key : String(id)); };
 
-  
   const filterBar = document.createElement('div');
   filterBar.className = 'lib-filter-bar';
   const filterBtn = document.createElement('div');
@@ -341,7 +321,7 @@ App.buildLibraryPanel = function () {
       App.libFilter = value;
       filterBtn.textContent = label;
       filterPanel.classList.remove('open');
-      App.buildLibraryPanel();   
+      App.buildLibraryPanel();    
     });
     filterPanel.appendChild(item);
   };
@@ -351,7 +331,6 @@ App.buildLibraryPanel = function () {
   filterBtn.addEventListener('click', e => {
     e.stopPropagation();
     if (App.libFavOpen) {
-      
       App.libFavOpen = false;
       App.buildLibraryPanel();
       return;
@@ -360,7 +339,6 @@ App.buildLibraryPanel = function () {
   });
   favBtn.addEventListener('click', e => {
     e.stopPropagation();
-    
     if (App.libFavOpen) return;
     App.libFavOpen = true;
     App.buildLibraryPanel();
@@ -383,7 +361,6 @@ App.buildLibraryPanel = function () {
   };
   const pumpThumbs = () => {
     if (thumbEpoch !== App.libThumbEpoch) return;
-    
     if (App.Home && App.Home.shown) return;
     if (App.renderInteractionBusy && App.renderInteractionBusy()) {
       scheduleThumbPump(100);
@@ -425,7 +402,6 @@ App.buildLibraryPanel = function () {
   }, { root: scroll, rootMargin: '300px' });
   App.libThumbObserver = observer;
 
-  
   const makeTile = (cat, item, isPat) => {
     const tile = document.createElement('div');
     tile.className = 'lib-item';
@@ -435,16 +411,13 @@ App.buildLibraryPanel = function () {
     tile.title = isPat ? item.name : item.label;
     const img = document.createElement('img');
     img.draggable = false;
-    
     tile.appendChild(img);
     tile.addEventListener('dragstart', e => {
       e.dataTransfer.setData('text/plain', 'SVE:' + JSON.stringify({ kind: isPat ? 'pattern' : 'symbol', key: item.key }));
-      e.dataTransfer.effectAllowed = 'copy';
-      
+      e.dataTransfer.effectAllowed = 'copyMove';
       App.libFavDrag = (App.libFavOpen && tile.closest('#libFavGrid')) ? { key: item.key } : null;
     });
     tile.addEventListener('click', () => {
-      
       if (App.state.edit) {
         App.libClickTrace(cat, item, tile, 'edit', () =>
           App.replacePatternInEdit({ kind: isPat ? 'pattern' : 'symbol', key: item.key }));
@@ -455,7 +428,6 @@ App.buildLibraryPanel = function () {
           App.replaceSelectedPattern({ kind: isPat ? 'pattern' : 'symbol', key: item.key }));
       }
     });
-    
     tile.addEventListener('contextmenu', e => {
       e.preventDefault();
       e.stopPropagation();
@@ -465,12 +437,10 @@ App.buildLibraryPanel = function () {
   };
   const mountThumb = (tile, isPat, key) => {
     const img = $('img', tile);
-    
     const pre = (isPat ? '' : App.libThumbPreUrl({ key: key }));
     if (pre) {
       img.loading = 'lazy';
       img.decoding = 'async';
-      
       img.onerror = () => {
         img.onerror = null;
         tile.classList.remove('sve-thumb-pre');
@@ -484,14 +454,13 @@ App.buildLibraryPanel = function () {
     }
   };
 
-  
   if (App.libFavOpen) {
     const grid = document.createElement('div');
     grid.className = 'lib-grid lib-fav-grid';
     grid.id = 'libFavGrid';
     App.LibFav.list.forEach(key => {
       const r = App.libFavItem(key);
-      if (!r) return;                       
+      if (!r) return;                        
       const tile = makeTile(null, r.item, r.isPat);
       tile.setAttribute('data-fav-key', key);
       grid.appendChild(tile);
@@ -520,8 +489,7 @@ App.buildLibraryPanel = function () {
   });
 };
 
-
-App.libFavDrag = null;   
+App.libFavDrag = null;    
 App.wireLibFavDrag = function (grid) {
   const tiles = () => Array.prototype.filter.call(grid.children, el => el.classList && el.classList.contains('lib-item'));
   let line = document.getElementById('libFavDrop');
@@ -532,33 +500,53 @@ App.wireLibFavDrag = function (grid) {
     grid.appendChild(line);
   }
   const hide = () => { line.classList.remove('visible'); grid.removeAttribute('data-fav-before'); };
-  
   const compute = e => {
     const list = tiles();
     for (let i = 0; i < list.length; i++) {
       const b = list[i].getBoundingClientRect();
-      const sameRow = e.clientY >= b.top && e.clientY <= b.bottom;
-      const before = sameRow ? (e.clientX < b.left + b.width / 2) : (e.clientY < b.top);
-      if (before) return { tile: list[i], append: false };
+      if (e.clientY < b.top) return { index: i, tile: list[i], append: false };
+      if (e.clientY <= b.bottom) {
+        if (e.clientX < b.left + b.width / 2) return { index: i, tile: list[i], append: false };
+        continue;
+      }
     }
-    return { tile: list[list.length - 1] || null, append: true };
+    return { index: list.length, tile: list[list.length - 1] || null, append: true };
   };
   const show = e => {
     if (!App.libFavDrag) return;
+    const list = tiles();
     const hit = compute(e);
     if (!hit.tile) { hide(); return; }
     const gb = grid.getBoundingClientRect();
-    const b = hit.tile.getBoundingClientRect();
-    line.style.left = ((hit.append ? b.right - gb.left + 2 : b.left - gb.left - 2)) + 'px';
-    line.style.top = (b.top - gb.top) + 'px';
-    line.style.height = b.height + 'px';
+    const gap = parseFloat(getComputedStyle(grid).columnGap) || 0;
+    const idx = Math.max(0, Math.min(hit.index, list.length));
+    const next = idx < list.length ? list[idx] : null;
+    const prev = idx > 0 ? list[idx - 1] : null;
+    const sameRow = !!(prev && next && Math.abs(prev.offsetTop - next.offsetTop) < 2);
+    let center = 0;
+    let anchor = next || prev;
+    if (sameRow) {
+      center = (prev.getBoundingClientRect().right + next.getBoundingClientRect().left) / 2;
+      anchor = next;
+    } else if (next) {
+      center = next.getBoundingClientRect().left - gap / 2;
+      anchor = next;
+    } else {
+      center = prev.getBoundingClientRect().right + gap / 2;
+      anchor = prev;
+    }
+    const ab = anchor.getBoundingClientRect();
+    const x = Math.max(0, Math.min(grid.clientWidth - 2, center - gb.left - grid.clientLeft - 1));
+    line.style.left = x + 'px';
+    line.style.top = (ab.top - gb.top - grid.clientTop) + 'px';
+    line.style.height = ab.height + 'px';
     line.classList.add('visible');
     grid.setAttribute('data-fav-before', hit.append ? '' : (hit.tile.getAttribute('data-fav-key') || ''));
   };
   grid.addEventListener('dragover', e => {
     if (!App.libFavDrag) return;
     e.preventDefault();
-    try { e.dataTransfer.dropEffect = 'move'; } catch (err) {  }
+    try { e.dataTransfer.dropEffect = 'move'; } catch (err) {   }
     show(e);
   });
   grid.addEventListener('dragleave', e => {
@@ -569,22 +557,24 @@ App.wireLibFavDrag = function (grid) {
     e.preventDefault();
     e.stopPropagation();
     const key = App.libFavDrag.key;
-    const before = grid.getAttribute('data-fav-before') || null;
+    const hit = compute(e);
+    const before = hit.append ? null : (hit.tile.getAttribute('data-fav-key') || null);
     hide();
     App.libFavDrag = null;
     if (App.LibFav.move(key, before)) {
-      try { App.settings.save(); } catch (err) {  }
+      try { App.settings.save(); } catch (err) {   }
+      const sc = $('#libScroll');
+      const st = sc ? sc.scrollTop : 0;
       App.buildLibraryPanel();
+      if (sc) sc.scrollTop = st;
     }
   });
 };
-
 window.addEventListener('dragend', function () {
   App.libFavDrag = null;
   const line = document.getElementById('libFavDrop');
   if (line) line.classList.remove('visible');
 }, true);
-
 
 App.libFavPrompt = function (spec, isFav) {
   if (!spec || !spec.key) return;
@@ -617,21 +607,18 @@ App.libFavPrompt = function (spec, isFav) {
   ov.querySelector('.libfav-cancel').addEventListener('click', () => close());
   ov.querySelector('.libfav-ok').addEventListener('click', () => {
     if (isFav) App.LibFav.remove(spec.key); else App.LibFav.add(spec.key);
-    try { App.settings.save(); } catch (e) {  }
+    try { App.settings.save(); } catch (e) {   }
     close();
-    
     App.buildLibraryPanel();
   });
   App.showOverlay(ov);
 };
-
 
 App.refreshLibraryPanel = function () {
   if (App.state && App.state.loaded) App.buildLibraryPanel();
 };
 
 App.findSymbol = key => App.symbolMap.get(key);
-
 
 App.applyPatternToLayer = function (layer, spec) {
   if (!layer || !spec) return false;
@@ -642,7 +629,6 @@ App.applyPatternToLayer = function (layer, spec) {
     layer.symbolKey = spec.key;
     layer.name = sym.label;
     layer.dataUri = App.symbolUri(sym);
-    
     App.normalizeSymbolSize(layer);
   } else {
     const pat = App.patterns.find(p => p.key === spec.key);
@@ -661,13 +647,11 @@ App.applyPatternToLayer = function (layer, spec) {
   return true;
 };
 
-
 App.samePattern = function (layer, spec) {
   if (!layer || !spec) return false;
   if (spec.kind === 'symbol') return layer.kind === 'symbol' && layer.symbolKey === spec.key;
   return layer.kind === 'pattern' && layer.patternKey === spec.key;
 };
-
 
 App.replacePatternInEdit = function (spec) {
   if (!App.state.edit || !spec) return false;
@@ -679,7 +663,7 @@ App.replacePatternInEdit = function (spec) {
   if (spec.kind === 'pattern' && !App.patterns.find(p => p.key === spec.key)) return false;
   if (App.samePattern(layer, spec)) return false;
   if (App.editHist) {
-    App.editHist.endGesture();      
+    App.editHist.endGesture();       
     App.editHist.checkpoint();
     App.editHist.endGesture();
   }
@@ -688,7 +672,6 @@ App.replacePatternInEdit = function (spec) {
   return ok;
 };
 
-
 App.replaceSelectedPattern = function (spec) {
   const sel = App.operationTargets();
   if (sel.length !== 1) { showToast(App.i18n.t('toast.lib.oneLayerOnly')); return; }
@@ -696,7 +679,6 @@ App.replaceSelectedPattern = function (spec) {
   if (layer.kind === 'merged') { showToast(App.i18n.t('toast.lib.mergedNoReplace')); return; }
   App.history.markDiscrete();
   if (!App.applyPatternToLayer(layer, spec)) return;
-  
   App.setReplacing(false);
   if (App.requestFlashRefresh) App.requestFlashRefresh();
 };

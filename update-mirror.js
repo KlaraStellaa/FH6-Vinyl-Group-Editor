@@ -1,9 +1,7 @@
 'use strict';
 
-
 const fs = require('fs');
 const path = require('path');
-
 
 const PROXIES = [
   'https://gh-proxy.com/',
@@ -11,7 +9,6 @@ const PROXIES = [
   'https://hk.gh-proxy.com/',
   'https://edgeone.gh-proxy.com/'
 ];
-
 
 function endpoints(url) {
   const u = String(url || '');
@@ -23,7 +20,6 @@ function endpoints(url) {
   }
   return out;
 }
-
 
 function proxyHost(prefix) {
   try { return new URL(prefix).host; } catch (e) { return String(prefix || ''); }
@@ -40,9 +36,8 @@ function writePreferred(file, prefix) {
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, JSON.stringify({ prefix: String(prefix || ''), at: Date.now() }, null, 2), 'utf8');
-  } catch (e) {  }
+  } catch (e) {   }
 }
-
 
 function getJson(url, net, timeoutMs) {
   return new Promise((resolve, reject) => {
@@ -54,15 +49,15 @@ function getJson(url, net, timeoutMs) {
     const finish = (err, val) => {
       if (done) return;
       done = true;
-      try { clearTimeout(timer); } catch (e) {  }
+      try { clearTimeout(timer); } catch (e) {   }
       if (err) reject(err); else resolve(val);
     };
-    const timer = setTimeout(() => { try { req.abort(); } catch (e) {  } finish(new Error('timeout')); }, timeoutMs || 8000);
+    const timer = setTimeout(() => { try { req.abort(); } catch (e) {   } finish(new Error('timeout')); }, timeoutMs || 8000);
     try {
       req.setHeader('User-Agent', 'VinylFH6-UpdateCheck');
       req.setHeader('Accept', 'application/vnd.github+json');
       req.setHeader('Accept-Encoding', 'identity');
-    } catch (e) {  }
+    } catch (e) {   }
     let body = '';
     req.on('response', res => {
       if (res.statusCode !== 200) { finish(new Error('HTTP ' + res.statusCode)); return; }
@@ -78,12 +73,11 @@ function getJson(url, net, timeoutMs) {
   });
 }
 
-
 function fetchReleaseJson(url, opts) {
   const o = opts || {};
   const net = o.net;
   const timeoutMs = o.timeoutMs || 9000;
-  const cands = endpoints(url);   
+  const cands = endpoints(url);    
   return new Promise((resolve, reject) => {
     let pending = cands.length;
     let lastErr = new Error('no-endpoint');
@@ -102,8 +96,6 @@ function fetchReleaseJson(url, opts) {
     });
   });
 }
-
-
 
 
 function probeMirrors(url, opts) {
@@ -126,8 +118,8 @@ function probeMirrors(url, opts) {
       const finish = ok => {
         if (settled) return;
         settled = true;
-        try { clearTimeout(timer); } catch (e) {  }
-        try { req.abort(); } catch (e) {  }
+        try { clearTimeout(timer); } catch (e) {   }
+        try { req.abort(); } catch (e) {   }
         if (ok) results.push({ url: cand, ms: Date.now() - t0 });
         done();
       };
@@ -136,14 +128,13 @@ function probeMirrors(url, opts) {
         req.setHeader('Range', 'bytes=0-65535');
         req.setHeader('User-Agent', 'VinylFH6-Updater');
         req.setHeader('Accept-Encoding', 'identity');
-      } catch (e) {  }
+      } catch (e) {   }
       req.on('response', res => finish(res.statusCode === 200 || res.statusCode === 206));
       req.on('error', () => finish(false));
       req.end();
     });
   });
 }
-
 
 const DL_IDLE_MS = 45000;
 function downloadToFile(url, dest, onPct, net) {
@@ -154,14 +145,14 @@ function downloadToFile(url, dest, onPct, net) {
     let settled = false;
     let idleTimer = null;
     const report = (pct, got, total) => {
-      try { if (typeof onPct === 'function') onPct(pct, got, total); } catch (e) {  }
+      try { if (typeof onPct === 'function') onPct(pct, got, total); } catch (e) {   }
     };
     const fail = err => {
       if (settled) return;
       settled = true;
-      if (idleTimer) { try { clearTimeout(idleTimer); } catch (e) {  } idleTimer = null; }
-      try { out.destroy(); } catch (e) {  }
-      try { fs.unlinkSync(dest); } catch (e) {  }
+      if (idleTimer) { try { clearTimeout(idleTimer); } catch (e) {   } idleTimer = null; }
+      try { out.destroy(); } catch (e) {   }
+      try { fs.unlinkSync(dest); } catch (e) {   }
       reject(err);
     };
     out.on('error', fail);
@@ -169,13 +160,12 @@ function downloadToFile(url, dest, onPct, net) {
     catch (e) { fail(e); return; }
     try {
       req.setHeader('User-Agent', 'VinylFH6-Updater');
-      
       req.setHeader('Accept-Encoding', 'identity');
-    } catch (e) {  }
+    } catch (e) {   }
     const armIdle = () => {
-      if (idleTimer) { try { clearTimeout(idleTimer); } catch (e) {  } }
+      if (idleTimer) { try { clearTimeout(idleTimer); } catch (e) {   } }
       idleTimer = setTimeout(() => {
-        try { req.abort(); } catch (e) {  }
+        try { req.abort(); } catch (e) {   }
         fail(new Error('timeout'));
       }, DL_IDLE_MS);
     };
@@ -191,14 +181,14 @@ function downloadToFile(url, dest, onPct, net) {
         let ok = true;
         try { ok = out.write(chunk); } catch (e) { fail(e); return; }
         if (ok === false) {
-          try { res.pause(); } catch (e) {  }
-          out.once('drain', () => { try { res.resume(); } catch (e) {  } });
+          try { res.pause(); } catch (e) {   }
+          out.once('drain', () => { try { res.resume(); } catch (e) {   } });
         }
         if (total) report(Math.min(99, Math.round(got / total * 100)), got, total);
         else report(-1, got, total);
       });
       res.on('end', () => {
-        if (idleTimer) { try { clearTimeout(idleTimer); } catch (e) {  } idleTimer = null; }
+        if (idleTimer) { try { clearTimeout(idleTimer); } catch (e) {   } idleTimer = null; }
         if (total && got !== total) { fail(new Error('incomplete ' + got + '/' + total)); return; }
         out.end(() => {
           if (settled) return;
@@ -215,7 +205,6 @@ function downloadToFile(url, dest, onPct, net) {
   });
 }
 
-
 async function downloadAsset(opts) {
   const o = opts || {};
   const net = o.net;
@@ -229,7 +218,6 @@ async function downloadAsset(opts) {
   const push = u => { if (u && order.indexOf(u) < 0) order.push(u); };
   if (preferred && probes.some(p => p.url === preferred + url)) push(preferred + url);
   probes.forEach(p => push(p.url));
-  
   endpoints(url).forEach(push);
   const tried = [];
   for (const cand of order) {
@@ -238,7 +226,7 @@ async function downloadAsset(opts) {
       return { ok: true, via: cand, tried: tried };
     } catch (e) {
       tried.push({ url: cand, error: String(e && e.message || e).slice(0, 140) });
-      try { fs.unlinkSync(dest); } catch (e2) {  }
+      try { fs.unlinkSync(dest); } catch (e2) {   }
     }
   }
   return { ok: false, via: '', tried: tried };

@@ -1,10 +1,10 @@
 
 (function () {
-  const MIN_MS = 260;        
-  const MAX_MS = 12000;      
+  const MIN_MS = 260;         
+  const MAX_MS = 12000;       
   const POLL_MS = 90;
 
-  
+
   const G = App.renderGate = { on: false, armed: false, t0: 0, timer: null, el: null, tip: null,
     allowUntil: 0, done: false };
 
@@ -15,7 +15,7 @@
 
     const style = document.createElement('style');
     style.textContent =
-      
+
       '#renderGate{position:absolute;inset:0;z-index:18;display:none;align-items:center;' +
       'justify-content:center;flex-direction:column;gap:14px;background:var(--bg,#fafafc);' +
       'background:color-mix(in srgb, var(--bg,#fafafc) 92%, transparent);' +
@@ -38,7 +38,7 @@
     return d;
   }
 
-  
+
   function txt(key, fallback) {
     try { return (App.i18n && App.i18n.t) ? (App.i18n.t(key) || fallback) : fallback; } catch (e) { return fallback; }
   }
@@ -48,16 +48,16 @@
     if (G.tip) G.tip.textContent = txt(key, '正在渲染图案…');
     d.classList.add('on');
   }
-  
+
   try {
     if (App.i18n && typeof App.i18n.onApply === 'function') {
       App.i18n.onApply(function () {
-        try { if (G.on && G.key && G.tip) G.tip.textContent = txt(G.key, ''); } catch (e) {  }
+        try { if (G.on && G.key && G.tip) G.tip.textContent = txt(G.key, ''); } catch (e) {   }
       });
     }
-  } catch (e) {  }
+  } catch (e) {   }
 
-  
+
   function ready() {
     const a = App.autoStatic;
     if (!a) return true;
@@ -76,8 +76,8 @@
   }
 
   App.renderGateBegin = function (text) {
-    if (G.done) return;                       
-    if (Date.now() > (G.allowUntil || 0)) return;   
+    if (G.done) return;                        
+    if (Date.now() > (G.allowUntil || 0)) return;    
     G.armed = true;
     if (G.on) return;
     G.on = true;
@@ -90,7 +90,7 @@
 
   App.renderGateEnd = function () {
     G.armed = false;
-    G.done = true;            
+    G.done = true;             
     if (!G.on) return;
     G.on = false;
     App.state.renderGate = false;
@@ -98,8 +98,8 @@
     if (G.el) G.el.classList.remove('on');
   };
 
-  
-  
+
+
   const modalOpen = () => {
     const m = document.querySelector('.confirm-overlay:not(.hidden), .confirm-overlay:not([style*="display: none"])');
     return !!m;
@@ -112,7 +112,7 @@
   ['keydown', 'keyup', 'wheel', 'pointerdown', 'pointerup', 'pointermove', 'mousedown', 'dblclick', 'contextmenu']
     .forEach(t => window.addEventListener(t, swallow, true));
 
-  
+
   function watchEntry(name, text, always) {
     const orig = App[name];
     if (typeof orig !== 'function') return;
@@ -124,8 +124,8 @@
       const countAfter = (App.Tabs && App.Tabs.list) ? App.Tabs.list.length : 0;
       const freshDoc = always || (tabAfter !== tabBefore) || (countAfter > countBefore);
       if (freshDoc) {
-        G.done = false;                                   
-        G.allowUntil = Date.now() + 15000;                
+        G.done = false;                                    
+        G.allowUntil = Date.now() + 15000;                 
         App.renderGateBegin(text);
       }
       if (r && typeof r.then === 'function') {
@@ -137,11 +137,11 @@
   watchEntry('importSVGContent', 'render.gate', false);
   watchEntry('openWorkCopyContent', 'render.gate.open', true);
 
-  
+
   let lastDocSig = '';
   setInterval(function () {
     if (G.on || G.done) return;
-    if (Date.now() > (G.allowUntil || 0)) return;   
+    if (Date.now() > (G.allowUntil || 0)) return;    
     const a = App.autoStatic;
     if (!a || !a.baking || a.active) return;
     let n = 0;

@@ -1,6 +1,5 @@
 'use strict';
 
-
 App.XB_I18N = {
   'zh-CN': {
     'xb.notInCanvas': '不在画布中无法添加',
@@ -53,7 +52,6 @@ Object.keys(App.XB_I18N).forEach(function (lang) {
 });
 
 App.xbind = {
-  
   ACT: {
     btnHideLayers: 'hideLayers',
     btnHideBg: 'hideBg',
@@ -66,14 +64,13 @@ App.xbind = {
     btnPropMode: 'sizeMode',
     btnInsertBelow: 'insertBelow'
   },
-  map: {},          
-  names: {},        
+  map: {},           
+  names: {},         
   picking: false,
   dlg: null,
   hintEl: null,
   wasRef: false,
 
-  
   load(saved) {
     this.map = {};
     this.names = {};
@@ -81,7 +78,6 @@ App.xbind = {
     if (src && typeof src === 'object') {
       Object.keys(src).forEach(k => {
         if (!Array.isArray(src[k])) return;
-        
         if (this.ACT[k]) return;
         const list = src[k].filter(c => typeof c === 'string' &&
           window.SVE_KEYMAP && window.SVE_KEYMAP.isValidCombo(c)).slice(0, 4);
@@ -106,7 +102,6 @@ App.xbind = {
   },
   clear() { this.map = {}; this.names = {}; },
 
-  
   entries() {
     return Object.keys(this.map)
       .filter(k => (this.map[k] || []).length)
@@ -120,10 +115,9 @@ App.xbind = {
     return true;
   },
 
-  
   elOf(key) {
     if (!key) return null;
-    if (key.indexOf(':') === 0) return null;              
+    if (key.indexOf(':') === 0) return null;               
     const byId = document.getElementById(key);
     if (byId) return byId;
     return document.querySelector('[data-xbind="' + key + '"]');
@@ -133,7 +127,6 @@ App.xbind = {
     if (el.id) return el.id;
     return el.getAttribute('data-xbind') || '';
   },
-  
   nameOf(el) {
     if (!el) return '';
     let txt = '';
@@ -159,18 +152,12 @@ App.xbind = {
     return this.names[key] || key;
   },
 
-  
   excludes(target) {
     if (!target || !target.closest) return false;
-    
     if (target.closest('#tabHome, .tab-pill, .tab-close, #btnSettings')) return true;
-    
     if (target.closest('#btnShortcuts, #helpFab')) return true;
-    
     if (target.closest('.layer-item')) return true;
-    
     if (target.closest('.lib-item, .lib-filter-btn, .lib-filter-panel')) return true;
-    
     if (target.closest('#colorWheel, #hRange, #sRange, #bRange, #hInput, #sInput, #bInput')) return true;
     return false;
   },
@@ -179,11 +166,10 @@ App.xbind = {
     const el = target.closest('button, label[data-tab], #layerPlusRow');
     if (!el) return null;
     if (this.excludes(el)) return null;
-    if (!this.keyOf(el)) return null;                 
+    if (!this.keyOf(el)) return null;                  
     return el;
   },
 
-  
   canFire(el) {
     if (!el || !el.isConnected) return false;
     if (el.disabled) return false;
@@ -209,7 +195,6 @@ App.xbind = {
   },
   blocked() {
     if (this.picking || (this.dlg && !this.dlg.el.classList.contains('hidden'))) return true;
-    
     if (App.Home && App.Home.shown) return true;
     if (App.keymapUI && (App.keymapUI.isOpen() || App.keymapUI.capturing)) return true;
     return false;
@@ -238,25 +223,20 @@ App.xbind = {
     el.click();
   },
 
-  
   canvasActive() {
     return !(App.Home && App.Home.shown);
   },
   startPick() {
     if (this.picking) return;
     if (!this.canvasActive()) { showToast(App.i18n.t('xb.notInCanvas')); return; }
-    
     if (App.state.edit) App.exitEdit(true);
     if (App.help && App.help.isArmed && App.help.isArmed()) App.help.exit();
     this.picking = true;
-    
     const box = document.getElementById('settingsPanel');
     if (box && !box.classList.contains('hidden')) App.hideOverlay(box);
     this.closeOtherWindows();
-    
     this.wasRef = !!(App.RefWindow && App.RefWindow.el && !App.RefWindow.el.classList.contains('hidden'));
     if (this.wasRef && App.RefWindow) App.RefWindow.hide();
-    
     if (App.setSelToolbarVisible) App.setSelToolbarVisible(true);
     document.body.classList.add('sve-xpick');
     this.showHint();
@@ -265,7 +245,6 @@ App.xbind = {
   },
 
   closeOtherWindows() {
-    
     document.querySelectorAll('.confirm-overlay').forEach(el => {
       if (!el.classList.contains('hidden')) App.hideOverlay(el);
     });
@@ -285,7 +264,6 @@ App.xbind = {
     this.bindPickEvents(false);
     document.body.classList.remove('sve-xpick');
     this.hideHint();
-    
     if (this.wasRef && App.RefWindow && App.RefWindow.el) {
       App.RefWindow.el.classList.remove('hidden');
     }
@@ -297,7 +275,7 @@ App.xbind = {
       if (App.keymapUI) {
         App.keymapUI.render();
         const list = document.getElementById('kmList');
-        if (list) list.scrollTop = list.scrollHeight;   
+        if (list) list.scrollTop = list.scrollHeight;    
       }
     }
     App.log && App.log('info', 'xbind.pick.end', { back: !!backToSettings });
@@ -314,19 +292,17 @@ App.xbind = {
   },
   hideHint() { if (this.hintEl) this.hintEl.classList.remove('sve-show'); },
 
-  
   bindPickEvents(on) {
     const docs = ['pointerdown', 'mousedown', 'click'];
     if (on) {
       this._pick = e => this.onPick(e);
       docs.forEach(tp => document.addEventListener(tp, this._pick, true));
-      
       this._pickKey = e => {
         if (!this.picking) return;
         e.preventDefault(); e.stopPropagation();
         if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
         if (this.dlgOpen()) {
-          if (e.key === 'Escape') { this.closeDlg(); return; }  
+          if (e.key === 'Escape') { this.closeDlg(); return; }   
           this.dlgKeyDown(e);
           return;
         }
@@ -350,7 +326,6 @@ App.xbind = {
   dlgOpen() { return !!(this.dlg && !this.dlg.el.classList.contains('hidden')); },
   onPick(e) {
     if (!this.picking) return;
-    
     if (this.dlgOpen()) {
       if (this.dlg.el.contains(e.target)) return;
       e.preventDefault(); e.stopPropagation();
@@ -366,7 +341,6 @@ App.xbind = {
     }
     const el = this.bindable(t);
     if (!el) {
-      
       return;
     }
     e.preventDefault(); e.stopPropagation();
@@ -376,7 +350,6 @@ App.xbind = {
     }
   },
 
-  
   buildDlg() {
     if (this.dlg && this.dlg.el.isConnected) return this.dlg.el;
     const ov = document.createElement('div');
@@ -399,7 +372,6 @@ App.xbind = {
     this.dlg = { el: ov, key: '', name: '', keys: [], pending: [], down: new Set(), btn: null };
     ov.querySelector('.xb-cancel').addEventListener('click', () => this.closeDlg());
     ov.querySelector('.xb-ok').addEventListener('click', () => this.commitDlg());
-    
     this._dlgKeyDown = e => this.dlgKeyDown(e);
     this._dlgKeyUp = e => this.dlgKeyUp(e);
     this._dlgMouse = e => this.dlgMouse(e);
@@ -410,7 +382,6 @@ App.xbind = {
     const d = this.dlg;
     d.key = this.keyOf(el);
     d.name = this.nameOf(el);
-    
     d.keys = [];
     d.pending = [];
     d.down = new Set();
@@ -418,7 +389,6 @@ App.xbind = {
     if (App.i18n.apply) App.i18n.apply(ov);
     this.paintDlg();
     App.showOverlay(ov);
-    
     window.addEventListener('mousedown', this._dlgMouse, true);
   },
   closeDlg() {
@@ -427,7 +397,6 @@ App.xbind = {
     window.removeEventListener('mousedown', this._dlgMouse, true);
     this.dlg.pending = [];
     this.dlg.down = new Set();
-    
     if (this.picking) this.showHint();
   },
   paintDlg() {
@@ -457,13 +426,13 @@ App.xbind = {
     });
     const hint = d.el.querySelector('#xbHint');
     if (hint) hint.textContent = App.i18n.t(all.length ? 'xb.press' : 'xb.press');
-    d.el.querySelector('.xb-ok').disabled = all.length === 0;   
+    d.el.querySelector('.xb-ok').disabled = all.length === 0;    
   },
   dlgKeyDown(e) {
     if (!this.dlg || this.dlg.el.classList.contains('hidden')) return;
     e.preventDefault(); e.stopPropagation();
     if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
-    if (e.key === 'Escape') { this.closeDlg(); return; }     
+    if (e.key === 'Escape') { this.closeDlg(); return; }      
     const combo = window.SVE_KEYMAP.comboFromEvent(e);
     if (!combo) return;
     if (window.SVE_KEYMAP.modOnly(combo)) return;
@@ -502,7 +471,6 @@ App.xbind = {
       this.paintDlg();
     }
   },
-  
   findConflict(key, combos) {
     const KM = window.SVE_KEYMAP;
     const name = id => App.i18n.t((KM.ACTIONS_BY_ID[id] || {}).label || id);
@@ -524,13 +492,11 @@ App.xbind = {
     const hasKey = add.some(c => !window.SVE_KEYMAP.isMouseCombo(c));
     if (hasMouse && hasKey) { showToast(App.i18n.t('km.mix')); return; }
 
-    
     const act = this.ACT[key];
     if (act) {
       const r = App.keymap.overwriteCombos(act, add);
       if (r && r.error === 'mix') { showToast(App.i18n.t('km.mix')); return; }
       if (r && r.error) { showToast(App.i18n.tf('km.saveFail', { v: r.error })); return; }
-      
       Object.keys(this.map).forEach(k => {
         const left = (this.map[k] || []).filter(c => !add.some(d2 => window.SVE_KEYMAP.sameBinding(c, d2)));
         if (left.length) this.map[k] = left; else { delete this.map[k]; delete this.names[k]; }
@@ -541,7 +507,6 @@ App.xbind = {
       return;
     }
 
-    
     const clash = this.findConflict(key, add);
     if (clash) { showToast(App.i18n.tf('xb.conflict', { v: clash })); return; }
     const out = add.slice(0, 4);
@@ -554,11 +519,9 @@ App.xbind = {
     this.names[key] = d.name;
     this.finishDlgApply(d);
     showToast(App.i18n.t('km.extraAdded'));
-    
     this.endPick(true);
   },
 
-  
   finishDlgApply(d) {
     App.hideOverlay(d.el);
     window.removeEventListener('mousedown', this._dlgMouse, true);
@@ -567,10 +530,8 @@ App.xbind = {
   },
 };
 
-
 window.addEventListener('keydown', function (e) { App.xbind.onKey(e); }, true);
 window.addEventListener('mousedown', function (e) { App.xbind.onMouse(e); }, true);
-
 
 if (App.i18n && App.i18n.onApply) {
   App.i18n.onApply(function () {

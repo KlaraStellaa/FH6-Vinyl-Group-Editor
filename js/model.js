@@ -6,7 +6,7 @@ App.GRID_STEP = 20 / 3;
 App.DEFAULT_VIEW_SCALE = 3;
 
 App.MIN_VIEW_SCALE = 0.005;
-App.MAX_VIEW_SCALE = 512;   
+App.MAX_VIEW_SCALE = 512;    
 
 App.normalizeViewScale = function (v, cw, ch) {
   const s = App.DEFAULT_VIEW_SCALE;
@@ -30,25 +30,30 @@ App.state = {
   axisHint: true,           
   showHandles: true,        
   lastColor: '#ffffff',     
-  clipboard: [],
+  clipboard: [],             
+
+  clipboardCurrent: null,
+
+  clipboardHistory: [],
+  clipboardActiveId: null,
   bg: { base: 'light', grid: true, image: null },
   layersHidden: false,       
   layersDisplayOpacity: 1,   
   selBarDismissed: false,    
   plusAnchorActive: false,   
-  
+
   insertBelow: false,
   batching: false,           
   wheelZoomEnabled: true,    
-  
+
   editSpeeds: { move: 70, size: 95, rotate: 70, skew: 32, opacity: 30 },
   nudgeSpeeds: { move: 0.5, size: 1, rotate: 0.2, skew: 2, opacity: 1 },
-  
+
   dragSpeeds: { move: 1, size: 1, rotate: 1, skew: 1 },
-  
+
   anchor: null,
   anchorPlacing: false,
-  view: { x: 0, y: 0, scale: 3 },   
+  view: { x: 0, y: 0, scale: 3 },    
   replacing: false,
   keys: new Set(),
   spaceDown: false,
@@ -57,7 +62,7 @@ App.state = {
   sweepDir: 0,              
   tabGestureUsed: false,    
   tabAutoSel: null,         
-  
+
   quickModDown: false,
   quickClickOn: false,
   quickModUsed: false,
@@ -91,7 +96,7 @@ App.newLayer = function (opt) {
     el: null, maskEl: null, rectEl: null, innerEl: null,
     patDefEl: null, patBaseRect: null, patStroke: null,
     thumbDirty: true, thumbCache: null,
-    
+
     _symbolColorEpoch: 0,
   };
 };
@@ -106,7 +111,7 @@ App.ensureSymbolImageDef = function (layer) {
   if (!layer.dataUri) return null;
   const sym = App.symbolMap.get(layer.symbolKey);
   const w = sym ? sym.w : layer.w, h = sym ? sym.h : layer.h;
-  
+
   const vd = App.symbolVecPathOf && layer.symbolKey ? App.symbolVecPathOf(layer.symbolKey) : null;
   if (vd && App.libVec && App.libVec.ready) {
     const u = App.libVec.unit;
@@ -207,7 +212,7 @@ App.silhouetteCacheKey = function (uri, color, size, ident) {
 App.symbolColorCanvas = function (uri, color, w, h, ident, opts) {
   const key = App.symbolColorCacheKey(uri, color, w, h, ident);
   if (silhouetteCache.has(key)) return Promise.resolve(silhouetteCache.get(key));
-  
+
   if (App.symbolColorPending.has(key)) return App.symbolColorPending.get(key);
   const p = App.decodedImage(uri).then(img => {
     if (!img) return null;
@@ -248,7 +253,7 @@ App.symbolVecPath = function (layer) {
   if (!sym || !(sym.w > 0) || !(sym.h > 0)) return null;
   const d = L.items[key];
   if (d) return { d: d, w: sym.w, h: sym.h };
-  
+
   const lv = L.layers && L.layers[key];
   if (lv && lv.d && lv.d.length > 1) return { levels: lv.d, n: lv.d.length, w: sym.w, h: sym.h };
   return null;
@@ -271,7 +276,7 @@ App.symbolVecUrl = function (layer) {
   const vbw = Math.round(v.w * u), vbh = Math.round(v.h * u);
   let body;
   if (v.levels) {
-    
+
     const parts = [];
     for (let i = 0; i < v.n; i++) {
       const d = v.levels[i];
@@ -284,7 +289,7 @@ App.symbolVecUrl = function (layer) {
   } else {
     body = '<path d="' + v.d + '" fill="' + color + '" fill-rule="evenodd"/>';
   }
-  
+
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + vbw + '" height="' + vbh +
     '" viewBox="0 0 ' + vbw + ' ' + vbh + '" preserveAspectRatio="none">' + body + '</svg>';
   const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
@@ -296,7 +301,7 @@ App._vecPoly = new Map();
 App.symbolVecPoly = function (key) {
   const hit = App._vecPoly.get(key);
   if (hit) return hit.polys;
-  
+
   let d = App.libVec && App.libVec.items ? App.libVec.items[key] : null;
   if (!d && App.libVec && App.libVec.layers) {
     const lv = App.libVec.layers[key];
@@ -306,7 +311,7 @@ App.symbolVecPoly = function (key) {
     }
   }
   if (!d) return null;
-  
+
   const polys = [];
   let cur = null;
   let cx = 0, cy = 0;
@@ -329,7 +334,7 @@ App.symbolVecPoly = function (key) {
     } else if (c === 'C') {
       i++;
       const x1 = num(), y1 = num(), x2 = num(), y2 = num(), x3 = num(), y3 = num();
-      
+
       const seg = Math.hypot(x1 - cx, y1 - cy) + Math.hypot(x2 - x1, y2 - y1) + Math.hypot(x3 - x2, y3 - y2);
       const steps = Math.max(3, Math.min(24, Math.round(seg / 400)));
       for (let k = 1; k <= steps; k++) {
@@ -426,10 +431,10 @@ App.refreshAllSymbolTextures = function () {
 
 
 App.symbolColorUrl = function (layer, opts) {
-  
+
   const vurl = App.symbolVecUrl ? App.symbolVecUrl(layer) : '';
   if (vurl) return Promise.resolve(vurl);
-  
+
   const k = Math.max(0.02, Number(opts && opts.k) || 1);
   const w = Math.max(1, Math.round(layer.w * k));
   const h = Math.max(1, Math.round(layer.h * k));
@@ -453,7 +458,7 @@ App.installSymbolColorUrl = function (layer, imgEl, opts) {
   const w = Math.max(1, Math.round(layer.w));
   const h = Math.max(1, Math.round(layer.h));
   const lodMode = !!(opts && opts.lod);
-  
+
   const lodKey = lodMode && App.layerLodKey ? App.layerLodKey(layer) : '';
   let p;
   try { p = (lodMode && App.layerLodUrl) ? App.layerLodUrl(layer) : App.symbolColorUrl(layer); }
@@ -463,9 +468,9 @@ App.installSymbolColorUrl = function (layer, imgEl, opts) {
         (layer.dataUri || null) !== source || (layer.symbolKey || null) !== symbolKey ||
         (layer.color || '#ffffff') !== color ||
         Math.max(1, Math.round(layer.w)) !== w || Math.max(1, Math.round(layer.h)) !== h) return false;
-    
+
     if (imgEl.parentNode && layer.el && imgEl.parentNode !== layer.el) return false;
-    
+
     imgEl.setAttribute('href', url);
     layer._lodKey = lodKey;
     return true;
@@ -477,7 +482,7 @@ App.buildLayerElement = function (layer) {
   const g = svgEl('g', { 'data-layer': layer.id, 'data-kind': layer.kind });
   if (layer.kind === 'symbol') {
     if (layer.isMask) {
-      
+
       const m = svgEl('mask', {
         id: 'sveM' + layer.id, maskUnits: 'userSpaceOnUse', maskContentUnits: 'userSpaceOnUse',
         x: -layer.w / 2, y: -layer.h / 2, width: layer.w, height: layer.h
@@ -495,7 +500,7 @@ App.buildLayerElement = function (layer) {
       layer.maskEl = m; layer.rectEl = r;
     } else {
       layer._symbolColorEpoch = (layer._symbolColorEpoch || 0) + 1;
-      
+
       const imgEl = svgEl('image', {
         id: 'sveLImg' + layer.id,
         x: -layer.w / 2, y: -layer.h / 2, width: layer.w, height: layer.h,
@@ -523,7 +528,7 @@ App.buildLayerElement = function (layer) {
     g.appendChild(inner);
     layer.innerEl = inner;
     if (layer.isMask) App.styleImportAsMask(layer);
-    
+
     if (App.impMarkDirty && !layer._detachedRender) App.impMarkDirty(layer);
   } else if (layer.kind === 'merged') {
     (layer.children || []).forEach(ch => {
@@ -540,7 +545,7 @@ App.buildLayerElement = function (layer) {
 App.rebuildLayerContent = function (layer) {
   if (!layer.el) return;
   layer.el.innerHTML = '';
-  
+
   layer._symbolColorEpoch = (layer._symbolColorEpoch || 0) + 1;
   layer.maskEl = null; layer.rectEl = null; layer.innerEl = null; layer.imgEl = null;
   layer.bitmapEl = null; 
@@ -591,7 +596,7 @@ App.rebuildLayerContent = function (layer) {
     g.appendChild(inner);
     layer.innerEl = inner;
     if (layer.isMask) App.styleImportAsMask(layer);
-    
+
     if (App.impMarkDirty && !layer._detachedRender) App.impMarkDirty(layer);
   } else if (layer.kind === 'merged') {
     (layer.children || []).forEach(ch => g.appendChild(ch.el || App.buildLayerElement(ch)));
@@ -656,7 +661,7 @@ App.flipSkewByScale = function (g, wantH, wantV) {
 App.applyLayerTransform = function (layer) {
   if (!layer.el) return;
   const sfx = layer.flipH ? -1 : 1, sfy = layer.flipV ? -1 : 1;
-  
+
   const head = 'translate(' + layer.x + ' ' + layer.y + ') rotate(' + layer.rot + ') ';
   const sc = 'scale(' + (layer.sx * sfx) + ' ' + (layer.sy * sfy) + ')';
   const sk = 'skewX(' + layer.skew + ')';
@@ -667,8 +672,8 @@ App.applyLayerTransform = function (layer) {
 App.applyItemTransform = function (it) {
   if (it.kind === 'bg') App.applyBgTransform(it);
   else App.applyLayerTransform(it);
-  
-  
+
+
   if (!App._batchTransformDepth && App.requestFlashRefresh) App.requestFlashRefresh(false);
 };
 
@@ -688,9 +693,9 @@ App.unregisterChildren = function (layer) {
 
 App.addLayer = function (layer) {
   if (!layer.el) App.buildLayerElement(layer);
-  
+
   if (App.state.batching && App.layersRoot.style.display !== 'none') App.layersRoot.style.display = 'none';
-  
+
   const ins = App.groupEditInsertIndex ? App.groupEditInsertIndex() : -1;
   const next = ins >= 0 ? App.state.layers[ins] : null;
   if (next) {
@@ -707,28 +712,28 @@ App.addLayer = function (layer) {
     App.refreshPanel();
     App.refreshCount();
   }
-  
+
   if (layer.kind === 'merged' && App.maybeBakeProxy) App.maybeBakeProxy(layer);
-    
+
     if (App.contentChanged) App.contentChanged();
   return layer;
 };
 
 App.removeTopLayer = function (layer) {
-  
+
   const invalidateColor = function (l) {
     if (!l) return;
     l._symbolColorEpoch = (l._symbolColorEpoch || 0) + 1;
     if (l.kind === 'merged' && l.children) l.children.forEach(invalidateColor);
   };
   invalidateColor(layer);
-  
+
   if (App.dropEditStaticItem) App.dropEditStaticItem(layer);
-  
+
   if (layer.kind === 'merged' && App.unbakeProxy) App.unbakeProxy(layer);
-  
+
   if (App.impCleanup) App.impCleanup(layer);
-  
+
   if (App.state.batching && App.layersRoot.style.display !== 'none') App.layersRoot.style.display = 'none';
   if (layer.el && layer.el.parentNode) layer.el.parentNode.removeChild(layer.el);
   const i = App.state.layers.indexOf(layer);
@@ -739,9 +744,9 @@ App.removeTopLayer = function (layer) {
   if (!App.state.batching) {
     App.refreshPanel();
     App.refreshCount();
-    
+
     if (App.requestFlashRefresh) App.requestFlashRefresh();
-    
+
     if (App.contentChanged) App.contentChanged();
   }
 };
@@ -763,15 +768,15 @@ App.topOf = function (layer) {
 
 
 App.mergeLayers = function (ids) {
-  
-  
-  
+
+
+
   if (App.cancelColorPreview) App.cancelColorPreview();
   App.perfCtx.lastOp = App.i18n.t('name.mergedLayer');
   const __t0 = performance.now();
   const items = ids.map(id => App.findLayer(id)).filter(Boolean);
   if (items.length < 2) return null;
-  
+
   const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
   let aIdx = items.indexOf(box);
   if (aIdx < 0) {
@@ -786,22 +791,22 @@ App.mergeLayers = function (ids) {
   const removedBefore = items.filter(l => App.state.layers.indexOf(l) < anchorOld).length;
   const newIdx = anchorOld - removedBefore;
   const merged = App.newLayer({ kind: 'merged', name: App.i18n.t('name.mergedLayer'), color: '', opacity: 1 });
-  
+
   const ordered = items.slice().sort((a, b) => App.state.layers.indexOf(a) - App.state.layers.indexOf(b));
   merged.children = ordered;
   items.forEach(l => {
-    
+
     if (App.dropEditStaticItem) App.dropEditStaticItem(l);
     const i = App.state.layers.indexOf(l);
     if (i >= 0) App.state.layers.splice(i, 1);
     App.state.layerMap.delete(l.id);
   });
   App.buildLayerElement(merged); 
-  
+
   if (App.unbakeProxy) {
     merged.children.forEach(ch => { if (ch.kind === 'merged' && App._proxyBake && App._proxyBake.has(ch.id)) App.unbakeProxy(ch); });
   }
-  
+
   App.state.layers.splice(newIdx, 0, merged);
   const next = App.state.layers[newIdx + 1];
   if (next && next.el && next.el.parentNode === App.layersRoot) {
@@ -810,44 +815,44 @@ App.mergeLayers = function (ids) {
     App.layersRoot.appendChild(merged.el);
   }
   App.registerChildren(merged);
-  
+
   merged._localBB = undefined;
-  
-  setTimeout(function () { try { merged._localBB = undefined; } catch (e) {  } }, 0);
-  
+
+  setTimeout(function () { try { merged._localBB = undefined; } catch (e) {   } }, 0);
+
   App.lastWheelIdx = App.state.layers.length - 1 - newIdx;
-  
+
   App.state.selected = new Set();
   App.state.selectedByTab = false;
   App.refreshPanel();
   App.refreshCount();
-  
+
   if (App.scrollItemToTop) App.scrollItemToTop(merged, true);
-  
+
   if (App.maybeBakeProxy) App.maybeBakeProxy(merged);
-  
+
   if (App.contentChanged) App.contentChanged();
-  
-  try { App.log('info', '合并分组', { layers: items.length, ms: Math.round(performance.now() - __t0) }); } catch (e) {  }
+
+  try { App.log('info', '合并分组', { layers: items.length, ms: Math.round(performance.now() - __t0) }); } catch (e) {   }
   return merged;
 };
 
 App.splitMerged = function (merged) {
   if (!merged || merged.kind !== 'merged') return;
-  
+
   if (App.cancelColorPreview) App.cancelColorPreview();
-  
+
   if (App.dropEditStaticItem) App.dropEditStaticItem(merged);
   const __t0 = performance.now();
   const __n = merged.children ? merged.children.length : 0;
-  
+
   if (App.unbakeProxy) App.unbakeProxy(merged);
-  
+
   if (App.autoStaticRelease) App.autoStaticRelease();
   const i = App.state.layers.indexOf(merged);
   const next = i >= 0 ? App.state.layers[i + 1] : null;
   const refEl = next && next.el && next.el.parentNode === App.layersRoot ? next.el : null;
-  
+
   const mergedM = merged.el ? App.FZA.matFromString(merged.el.getAttribute('transform') || '') : null;
   if (mergedM) {
     (merged.children || []).forEach(ch => {
@@ -865,7 +870,7 @@ App.splitMerged = function (merged) {
       ch.flipV = p.sy < 0;
       App.applyLayerTransform(ch);
     });
-    
+
     if (App.diag && App.diag.enabled) App.diag.log('split.merged', {
       trigger: 'ungroup',
       parent: App.diag.geom(merged),
@@ -873,7 +878,7 @@ App.splitMerged = function (merged) {
       rule: 'flipH=false; flipV=(p.sy<0)'
     });
   }
-  
+
   if (merged.el && merged.el.parentNode) {
     while (merged.el.firstChild) {
       const ch = merged.el.firstChild;
@@ -888,23 +893,23 @@ App.splitMerged = function (merged) {
   if (i >= 0 && children.length) App.state.layers.splice(i, 0, ...children);
   else children.forEach(ch => App.state.layers.push(ch));
   children.forEach(ch => App.registerChildren(ch));
-  
+
   if (App.editStatic && App.editStatic.active && App.rebakeEditStaticViewport) {
     children.forEach(ch => { if (!App.editStatic.items.includes(ch)) App.editStatic.items.push(ch); });
     App.rebakeEditStaticViewport();
   }
-  
+
   App.state.selected = new Set();
   App.state.selectedByTab = false;
   App.refreshPanel();
   App.refreshCount();
-  
+
   const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
   if (App.scrollItemToTop) App.scrollItemToTop(box || children[0] || null, true);
-  
+
   if (App.autoStaticMaybe) App.autoStaticMaybe();
-  
-  try { App.log('info', '拆分分组', { layers: __n, ms: Math.round(performance.now() - __t0) }); } catch (e) {  }
+
+  try { App.log('info', '拆分分组', { layers: __n, ms: Math.round(performance.now() - __t0) }); } catch (e) {   }
 };
 
 
@@ -931,7 +936,7 @@ App.clearAllLayers = function () {
   App.state.layers = [];
   App.state.layerMap.clear();
   App.state.selected = new Set();
-  
+
   App.state.groupEdit = [];
   $$('pattern[id^="svePat"]', App.defs).forEach(p => p.remove());
 };
@@ -940,17 +945,17 @@ App.clearAllLayers = function () {
 App.setLayerColor = function (layer, color) {
   layer.color = color;
   layer.thumbDirty = true;
-  
+
   App._colorRev = (App._colorRev || 0) + 1;
-  
-  if (App.autoStaticMaybe) { try { App.autoStaticMaybe(); } catch (e) {  } }
+
+  if (App.autoStaticMaybe) { try { App.autoStaticMaybe(); } catch (e) {   } }
   if (layer.kind === 'symbol') {
-    
+
     layer._symbolColorEpoch = (layer._symbolColorEpoch || 0) + 1;
     if (layer.isMask) {
       if (layer.rectEl) layer.rectEl.setAttribute('fill', 'url(#sveMaskInd)');
     } else if (layer.imgEl) {
-      
+
       App.installSymbolColorUrl(layer, layer.imgEl);
     }
   } else if (layer.kind === 'pattern') {
@@ -961,14 +966,14 @@ App.setLayerColor = function (layer, color) {
       const f = e.getAttribute('fill');
       if (f && f !== 'none') e.setAttribute('fill', color);
     });
-    
+
     if (App.impMarkDirty) App.impMarkDirty(layer);
   } else if (layer.kind === 'merged' && layer.children) {
     layer.children.forEach(ch => App.setLayerColor(ch, color));
-    
+
     if (App.markProxyDirty) App.markProxyDirty(layer);
   }
-  
+
   if (App.editStatic && App.editStatic.active && App.rebakeEditStaticViewport) App.rebakeEditStaticViewport();
 };
 
@@ -1026,7 +1031,7 @@ App.deserializeLayer = function (slim) {
     isMask: slim.isMask, symbolKey: slim.symbolKey,
     patternKey: slim.patternKey, dataUri: slim.dataUri, importMarkup: slim.importMarkup
   });
-  
+
   App.normalizeSymbolSize(l);
   if (slim.kind === 'merged' && slim.children) {
     l.children = slim.children.map(ch => App.deserializeLayer(ch));
@@ -1066,7 +1071,7 @@ App.deserializeLayersDetached = function (slims, prefix) {
       const sym = App.symbolMap && App.symbolMap.get(layer.symbolKey);
       if (sym) layer.dataUri = App.symbolUri(sym);
     }
-    
+
     App.normalizeSymbolSize(layer);
     if (layer.kind === 'merged') layer.children = (slim.children || []).map(build);
     return layer;
@@ -1101,7 +1106,7 @@ App.relinkSymbolData = function (layer) {
     const sym = App.symbolMap.get(layer.symbolKey);
     if (sym) {
       layer.dataUri = App.symbolUri(sym);
-      
+
       const hasW = Number.isFinite(Number(layer.w)) && Number(layer.w) > 0;
       const hasH = Number.isFinite(Number(layer.h)) && Number(layer.h) > 0;
       if (!hasW) layer.w = sym.w;

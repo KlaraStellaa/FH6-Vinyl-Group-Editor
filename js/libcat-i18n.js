@@ -1,4 +1,3 @@
-
 App.LIB_CAT_I18N = {
   'zh-CN': {
     'lib.cat.all': '全部分组',
@@ -20,7 +19,6 @@ App.LIB_CAT_I18N = {
     'lib.cat.font7': '字体7', 'lib.cat.font8': '字体8', 'lib.cat.font9': '字体9',
     'lib.cat.font10': '字体10', 'lib.cat.font11': '字体11',
     'lib.cat.pattern': '填充图案',
-    
     'lib.fav': '收藏',
     'lib.favAskAdd': '是否收藏该图案？',
     'lib.favAskRemove': '是否取消收藏该图案？'
@@ -122,7 +120,6 @@ App.LIB_CAT_I18N = {
     'lib.favAskRemove': '이 도형을 즐겨찾기에서 뺄까요?'
   }
 };
-
 Object.keys(App.LIB_CAT_I18N).forEach(function (lang) {
   if (App.i18n.dicts[lang]) Object.assign(App.i18n.dicts[lang], App.LIB_CAT_I18N[lang]);
 });

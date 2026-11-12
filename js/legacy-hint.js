@@ -1,19 +1,16 @@
 'use strict';
 
-
-App.skewMode = 'v2';   
+App.skewMode = 'v2';    
 
 App.SkewMode = {
   isLegacy() { return App.skewMode === '132'; },
 
-  
   set(mode) {
     App.skewMode = (mode === '132') ? '132' : 'v2';
     if (App.Tabs && App.Tabs.current) App.Tabs.current.skewMode = App.skewMode;
     return App.skewMode;
   },
 
-  
   refreshTransforms() {
     const walk = l => {
       if (!l) return;
@@ -30,9 +27,8 @@ App.SkewMode = {
 
 App.LegacyHint = {
   el: null,
-  pending: null,     
+  pending: null,      
 
-  
   build() {
     if (this.el) return this.el;
     const host = document.getElementById('canvasWrap') || document.body;
@@ -57,7 +53,6 @@ App.LegacyHint = {
     cb.addEventListener('change', () => this.ack(cb.checked));
 
     this.syncText();
-    
     if (App.i18n && App.i18n.onApply) App.i18n.onApply(() => this.syncText());
     return box;
   },
@@ -73,18 +68,15 @@ App.LegacyHint = {
     this.el.querySelector('.lh-btn').textContent = T('legacy.change');
   },
 
-  
-  
   maybeShow(info) {
     if (!info || !info.content) return;
     if (App.settings && App.settings.legacyHintAck) return;
-    if (App.Tabs && App.Tabs.testMode) return;      
-    if (App.skewMode === '132') return;             
+    if (App.Tabs && App.Tabs.testMode) return;       
+    if (App.skewMode === '132') return;              
     this.pending = info;
     this.build();
     this.syncText();
     this.el.classList.remove('hidden');
-    
     this.el.classList.remove('lh-in');
     void this.el.offsetWidth;
     this.el.classList.add('lh-in');
@@ -94,36 +86,30 @@ App.LegacyHint = {
     if (this.el) this.el.classList.add('hidden');
   },
 
-  
-  
   change() {
     const info = this.pending;
     this.hide();
     if (!info) return;
     App.SkewMode.set('132');
-    
     if (App.openWorkCopyContent) {
       App.openWorkCopyContent(info.content, info.name, info.source, info.mtimeMs, { legacy: true, silentHint: true });
     }
   },
 
-  
   ack(on) {
     if (!on) return;
     if (App.settings) {
       App.settings.legacyHintAck = true;
-      try { App.settings.save(); } catch (e) {  }
+      try { App.settings.save(); } catch (e) {   }
     }
     this.hide();
   },
 
-  
   markLegacy() { App.SkewMode.set('132'); }
 };
 
 (function () {
-  
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {  });
+    document.addEventListener('DOMContentLoaded', () => {   });
   }
 })();

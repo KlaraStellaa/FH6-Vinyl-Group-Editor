@@ -8,10 +8,9 @@ const { pathToFileURL } = require('url');
 const { resolveAutoSaveName } = require('./auto-name');
 const { WorkcopyStore, atomicWrite } = require('./workcopy-store');
 const workcopyStore = new WorkcopyStore();
-const DLG = require('./dlg-i18n');   
-const updateApply = require('./update-apply');   
-const updateMirror = require('./update-mirror'); 
-
+const DLG = require('./dlg-i18n');    
+const updateApply = require('./update-apply');    
+const updateMirror = require('./update-mirror');  
 
 function uiLang() {
   try {
@@ -20,18 +19,15 @@ function uiLang() {
   } catch (e) { return 'zh-CN'; }
 }
 function dt(key, params) { return DLG.get(uiLang(), key, params); }
-
 const NAME_I18N = require('./js/name-i18n');
 function nt(key, params) { return NAME_I18N.get(uiLang(), key, params); }
-
-
 
 function isPackagedBuild() {
   if (!app.isPackaged) return false;
   try {
     const exe = String(process.execPath || '').replace(/\\/g, '/').toLowerCase();
     if (exe.indexOf('/node_modules/electron/dist/') >= 0) return false;
-  } catch (e) {  }
+  } catch (e) {   }
   return true;
 }
 
@@ -41,14 +37,11 @@ function appDataDir() {
   if (!isPackagedBuild()) base = __dirname;
   else base = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath('exe'));
   if (!_dataDirs.__base) {
-    if (!fs.existsSync(base)) { try { fs.mkdirSync(base, { recursive: true }); } catch (e) {  } }
+    if (!fs.existsSync(base)) { try { fs.mkdirSync(base, { recursive: true }); } catch (e) {   } }
     _dataDirs.__base = base;
   }
   return _dataDirs.__base;
 }
-
-
-
 
 
 
@@ -57,14 +50,12 @@ function portableExePath() {
   return p || '';
 }
 
-
 function updateStatePath() {
   try { return path.join(app.getPath('userData'), 'update-state.json'); } catch (e) { return ''; }
 }
 function updateResultPath() {
   try { return path.join(app.getPath('userData'), 'update-result.txt'); } catch (e) { return ''; }
 }
-
 let _pendingUpdate = null;
 function pendingUpdateInfo() { return _pendingUpdate; }
 
@@ -77,25 +68,22 @@ function recoverUpdateState() {
   const to = String(st.to || '');
   const result = updateApply.readResult(updateResultPath());
 
-  
   if (!to || to === 'unknown') {
     appendLog('info', '自动更新：上次安装结果未知，清理状态', { from: st.from, result: result || 'none' });
     updateApply.clearState(sf);
-    try { fs.unlinkSync(updateResultPath()); } catch (e) {  }
-    if (st.pkg) { try { fs.unlinkSync(st.pkg); } catch (e) {  } }
+    try { fs.unlinkSync(updateResultPath()); } catch (e) {   }
+    if (st.pkg) { try { fs.unlinkSync(st.pkg); } catch (e) {   } }
     return;
   }
 
   if (!updateApply.isNewer(to, cur)) {
-    
     appendLog('info', '自动更新：上次替换已生效', { from: st.from, to: to, now: cur });
     updateApply.clearState(sf);
-    try { fs.unlinkSync(updateResultPath()); } catch (e) {  }
-    if (st.pkg) { try { fs.unlinkSync(st.pkg); } catch (e) {  } }
+    try { fs.unlinkSync(updateResultPath()); } catch (e) {   }
+    if (st.pkg) { try { fs.unlinkSync(st.pkg); } catch (e) {   } }
     return;
   }
 
-  
   let pkgOk = false;
   try { pkgOk = !!(st.pkg && fs.existsSync(st.pkg) && checkExePackage(st.pkg).ok); } catch (e) { pkgOk = false; }
   _pendingUpdate = {
@@ -109,16 +97,13 @@ function recoverUpdateState() {
     from: st.from, to: to, now: cur, result: result || 'none', pkgKept: pkgOk
   });
   if (!pkgOk) {
-    
     updateApply.clearState(sf);
-    try { fs.unlinkSync(updateResultPath()); } catch (e) {  }
+    try { fs.unlinkSync(updateResultPath()); } catch (e) {   }
     _pendingUpdate = null;
   }
 }
 
-
 const EXE_MIN_BYTES = 20 * 1024 * 1024;
-
 
 function checkExePackage(file) {
   let st;
@@ -130,8 +115,7 @@ function checkExePackage(file) {
     fd = fs.openSync(file, 'r');
     const head = Buffer.alloc(2);
     fs.readSync(fd, head, 0, 2, 0);
-    if (head[0] !== 0x4d || head[1] !== 0x5a) return { ok: false, error: 'not-exe' };  
-    
+    if (head[0] !== 0x4d || head[1] !== 0x5a) return { ok: false, error: 'not-exe' };   
     const needle = Buffer.from('FH6 Vinyl Group Editor', 'utf16le');
     const chunk = Buffer.alloc(1 << 20);
     const tail = Buffer.alloc(needle.length - 1);
@@ -150,10 +134,9 @@ function checkExePackage(file) {
   } catch (e) {
     return { ok: false, error: 'unreadable', message: String(e && e.message || e).slice(0, 120) };
   } finally {
-    try { if (fd !== null) fs.closeSync(fd); } catch (e) {  }
+    try { if (fd !== null) fs.closeSync(fd); } catch (e) {   }
   }
 }
-
 
 function moveIntoPlace(src, dst) {
   try {
@@ -168,7 +151,6 @@ function moveIntoPlace(src, dst) {
   }
 }
 
-
 function scheduleExeReplace(newExe, targetExe, meta) {
   const m = meta || {};
   return updateApply.scheduleExeReplace({
@@ -181,19 +163,17 @@ function scheduleExeReplace(newExe, targetExe, meta) {
   });
 }
 
-
 const STALE_TMP_MS = 10 * 60 * 1000;
 function looksLikeOurExtraction(dir) {
   try {
     if (fs.existsSync(path.join(dir, 'app-64.7z'))) return true;
-    
     if (!fs.existsSync(path.join(dir, 'FH6 Vinyl Group Editor.exe'))) return false;
     return fs.statSync(path.join(dir, 'resources')).isDirectory();
   } catch (e) { return false; }
 }
 function cleanStalePortableTemp() {
   let self = '', selfParent = '';
-  try { self = path.dirname(process.execPath); selfParent = path.dirname(self); } catch (e) {  }
+  try { self = path.dirname(process.execPath); selfParent = path.dirname(self); } catch (e) {   }
   const tmp = os.tmpdir();
   let names = [];
   try { names = fs.readdirSync(tmp); } catch (e) { return 0; }
@@ -207,21 +187,18 @@ function cleanStalePortableTemp() {
     if (Date.now() - st.mtimeMs < STALE_TMP_MS) continue;
     if (!looksLikeOurExtraction(dir)) continue;
     try { fs.rmSync(dir, { recursive: true, force: true }); killed++; }
-    catch (e) {  }
+    catch (e) {   }
   }
   if (killed) appendLog('info', '已清理异常退出留下的临时解压目录', { dirs: killed, tmp: tmp });
   return killed;
 }
 
-
 const ISOLATE = process.env.SVGBIANJI_ISOLATE === '1';
 if (ISOLATE) {
-  
-  const isoDir = process.env.SVGBIANJI_ISOLATE_DIR || path.join(os.tmpdir(), 'svgbianji-cdp-' + process.pid);
+  const isoDir = process.env.SVGBIANJI_ISOLATE_DIR || path.join(os.tmpdir(), 'groupfh6-cdp-' + process.pid);
   app.setPath('userData', isoDir);
 } else {
-  
-  try { app.setPath('userData', path.join(appDataDir(), '_userdata')); } catch (e) {  }
+  try { app.setPath('userData', path.join(appDataDir(), '_userdata')); } catch (e) {   }
   const gotLock = app.requestSingleInstanceLock();
   if (!gotLock) {
     app.quit();
@@ -236,22 +213,17 @@ if (ISOLATE) {
   }
 }
 
-
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
 app.commandLine.appendSwitch('enable-zero-copy');
-
 app.commandLine.appendSwitch('disable-gpu-sandbox');
-
 app.commandLine.appendSwitch('force-high-performance-gpu');
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
 ]);
 
-
 let forceClose = false;
-
 
 let thumbRendererWin = null;
 let thumbRendererReady = null;
@@ -299,7 +271,6 @@ function ensureThumbRenderer() {
       partition: 'sve-thumb-renderer',
       contextIsolation: true,
       nodeIntegration: false,
-      
       sandbox: false,
       backgroundThrottling: false
     }
@@ -357,7 +328,6 @@ async function renderSvgThumbFile(name) {
   const sourcePath = path.join(ensureDataDir(DATA_DIRS.svg), safeName);
   const stat = await fs.promises.stat(sourcePath);
   if (!stat.isFile() || stat.size <= 0 || stat.size > 80 * 1024 * 1024) throw new Error('SVG 文件无效或过大');
-  
   const cacheKey = crypto.createHash('sha1').update('thumb-v9-480\0' + sourcePath + '\0' + stat.size + '\0' + stat.mtimeMs).digest('hex');
   const cacheDir = path.join(app.getPath('userData'), 'svg-thumb-cache');
   const cachePath = path.join(cacheDir, cacheKey + '.png');
@@ -371,7 +341,6 @@ async function renderSvgThumbFile(name) {
   }
   if (thumbFileInflight.has(cacheKey)) return thumbFileInflight.get(cacheKey);
   const task = (async () => {
-    
     const rendered = await enqueueThumbRender({ sourcePath, cachePath });
     if (rendered && rendered.saved) return { url: thumbCachePublicUrl(cacheKey), cached: false };
     const url = String(rendered && rendered.url || '');
@@ -401,8 +370,7 @@ ipcMain.on('sve-thumb-result', (event, result) => {
   else job.reject(new Error(String(result.error || '缩略图生成失败')));
 });
 
-
-const GENERIC_THUMB_DIR = 'thumb-cache';       
+const GENERIC_THUMB_DIR = 'thumb-cache';        
 function genericThumbDir(ns) {
   const safeNs = String(ns || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 24);
   if (!safeNs) return null;
@@ -414,7 +382,6 @@ function genericThumbPath(ns, key) {
   if (!dir || !/^[a-f0-9]{40}$/.test(safeKey)) return null;
   return path.join(dir, safeKey + '.png');
 }
-
 function genericThumbUrl(ns, key) {
   return 'app://thumb-cache/' + encodeURIComponent(String(ns)) + '/' + String(key) + '.png';
 }
@@ -447,14 +414,12 @@ async function writeGenericThumb(p, dataUrlOrBuffer) {
     return false;
   }
 }
-
 async function dropGenericThumb(ns, key) {
   const p = genericThumbPath(ns, key);
   if (!p) return false;
   try { await fs.promises.unlink(p); return true; }
   catch (err) { return !!(err && err.code === 'ENOENT'); }
 }
-
 async function dropGenericThumbNamespace(ns) {
   const dir = genericThumbDir(ns);
   if (!dir) return false;
@@ -462,9 +427,7 @@ async function dropGenericThumbNamespace(ns) {
   catch (err) { return false; }
 }
 
-
 const WORKCOPY_THUMB_NS = 'workcopy-thumb-v2';
-
 
 function workcopyThumbIndexPath() {
   const dir = genericThumbDir(WORKCOPY_THUMB_NS);
@@ -482,7 +445,7 @@ function writeWorkcopyThumbIndex(idx) {
   try {
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, JSON.stringify(idx), 'utf8');
-  } catch (err) {  }
+  } catch (err) {   }
 }
 function rememberWorkcopyThumbKey(name, key) {
   const n = String(name || '');
@@ -490,7 +453,7 @@ function rememberWorkcopyThumbKey(name, key) {
   const idx = readWorkcopyThumbIndex();
   const list = Array.isArray(idx[n]) ? idx[n] : [];
   if (list.indexOf(key) < 0) list.push(key);
-  idx[n] = list.slice(-8);            
+  idx[n] = list.slice(-8);             
   writeWorkcopyThumbIndex(idx);
 }
 function dropWorkcopyThumbs(names) {
@@ -509,20 +472,15 @@ function dropWorkcopyThumbs(names) {
   return touched.length;
 }
 
-
 const LOG_MAX = 12000;
 const logBuf = [];
 let logSavedPath = null;
-
-
 function settingsPath() { return path.join(appDataDir(), 'settings.json'); }
-
 const DATA_DIRS = {
   svg: 'SVGImages',
   workcopy: 'WorkCopies',
   history: 'WorkCopiesHistory',
   logs: 'sve-logs',
-  
   injectundo: 'InjectUndo'
 };
 const DATA_DIR_LEGACY = {
@@ -540,11 +498,11 @@ function ensureDataDir(name) {
       try {
         fs.renameSync(old, dir);
         appendLog('info', '数据目录改用英文名', { from: legacy, to: name });
-      } catch (e) {  }
+      } catch (e) {   }
     }
     if (!fs.existsSync(dir) && fs.existsSync(old)) dir = old;
   }
-  if (!fs.existsSync(dir)) { try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {  } }
+  if (!fs.existsSync(dir)) { try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {   } }
   _dataDirs[name] = dir;
   return dir;
 }
@@ -556,9 +514,8 @@ function fmtLogTime(d) {
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
     p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + '.' + String(d.getMilliseconds()).padStart(3, '0');
 }
-
-const AUTOLOG_MAX_BYTES = 3 * 1024 * 1024;  
-const AUTOLOG_KEEP = 2;                     
+const AUTOLOG_MAX_BYTES = 3 * 1024 * 1024;   
+const AUTOLOG_KEEP = 2;                      
 const AUTOLOG_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const AUTOLOG_FLUSH_MS = 400;
 const AUTOLOG_FLUSH_LINES = 32;
@@ -570,7 +527,7 @@ function autoLogEnabled() {
   try {
     const s = JSON.parse(fs.readFileSync(settingsPath(), 'utf8'));
     return !(s && s.diag && s.diag.autoWrite === false);
-  } catch (e) { return true; }   
+  } catch (e) { return true; }    
 }
 function autoLogDay() {
   const d = new Date(), p = n => String(n).padStart(2, '0');
@@ -590,12 +547,12 @@ function rotateAutoLog(fp) {
           if (fs.existsSync(dst)) fs.unlinkSync(dst);
           fs.renameSync(src, dst);
         }
-      } catch (e) {  }
+      } catch (e) {   }
     }
     const f1 = autoLogFileFor(day, 1);
     if (fs.existsSync(f1)) fs.unlinkSync(f1);
     fs.renameSync(fp, f1);
-  } catch (e) {  }
+  } catch (e) {   }
 }
 function cleanOldAutoLogs() {
   try {
@@ -603,15 +560,14 @@ function cleanOldAutoLogs() {
     const re = /^session-(\d{4})-(\d{2})-(\d{2})(?:-\d+)?\.log$/;
     fs.readdirSync(dir).forEach(n => {
       const m = re.exec(n);
-      if (!m) return;   
+      if (!m) return;    
       const t = new Date(+m[1], +m[2] - 1, +m[3]).getTime();
       if (Date.now() - t > AUTOLOG_MAX_AGE_MS) {
-        try { fs.unlinkSync(path.join(dir, n)); } catch (e) {  }
+        try { fs.unlinkSync(path.join(dir, n)); } catch (e) {   }
       }
     });
-  } catch (e) {  }
+  } catch (e) {   }
 }
-
 function flushAutoLog() {
   if (!autoLogReady || !autoPending.length) {
     if (autoFlushTimer) { clearTimeout(autoFlushTimer); autoFlushTimer = null; }
@@ -626,7 +582,7 @@ function flushAutoLog() {
     rotateAutoLog(fp);
     fs.appendFileSync(fp, lines.join('\n') + '\n', 'utf8');
     autoLogPath = fp;
-  } catch (e) {  }
+  } catch (e) {   }
 }
 function queueAutoLog(line, urgent) {
   if (!autoLogReady) return;
@@ -641,11 +597,9 @@ function appendLog(level, msg, data) {
     const line = '[' + fmtLogTime(new Date()) + '] [' + level + '] ' + msg + (data !== undefined ? ' | ' + JSON.stringify(data) : '');
     logBuf.push(line);
     if (logBuf.length > LOG_MAX) logBuf.splice(0, logBuf.length - LOG_MAX);
-    
     queueAutoLog(line, level === 'error' || String(msg).indexOf('FLIP ') === 0);
-  } catch (e) {  }
+  } catch (e) {   }
 }
-
 function saveLogFile() {
   try {
     const d = new Date();
@@ -661,27 +615,23 @@ function saveLogFile() {
   }
 }
 process.on('uncaughtException', err => {
-  try { appendLog('error', '主进程未捕获异常', { message: String(err && err.message), stack: String(err && err.stack).slice(0, 500) }); } catch (e) {  }
+  try { appendLog('error', '主进程未捕获异常', { message: String(err && err.message), stack: String(err && err.stack).slice(0, 500) }); } catch (e) {   }
 });
-
 
 function appName() {
   try {
     const pkg = require('./package.json');
     const n = (pkg && (pkg.productName || (pkg.build && pkg.build.productName))) || '';
     if (n) return n;
-  } catch (e) {  }
+  } catch (e) {   }
   try { return app.getName() || 'FH6 Vinyl Group Editor'; } catch (e) { return 'FH6 Vinyl Group Editor'; }
 }
-
 function clipDocName(name, max) {
   const s = String(name == null || name === '' ? nt('name.untitled') : name);
   const m = max || 30;
   return s.length > m ? s.slice(0, m) + '…' : s;
 }
-
 async function askCloseDoc(win, docName) {
-  
   const stub = process.env.SVGBIANJI_DIALOG_STUB;
   if (stub) {
     try {
@@ -691,7 +641,7 @@ async function askCloseDoc(win, docName) {
         buttons: [dt('dlg.yes'), dt('dlg.no'), dt('dlg.cancel')],
         docName: clipDocName(docName)
       }));
-    } catch (e) {  }
+    } catch (e) {   }
     return stub === 'save' ? 'save' : (stub === 'dont' ? 'dont' : 'cancel');
   }
   const r = await dialog.showMessageBox(win, {
@@ -705,7 +655,6 @@ async function askCloseDoc(win, docName) {
   });
   return r.response === 0 ? 'save' : (r.response === 1 ? 'dont' : 'cancel');
 }
-
 async function askOverwrite(name) {
   const stub = process.env.SVGBIANJI_DIALOG_STUB;
   if (stub) {
@@ -716,7 +665,7 @@ async function askOverwrite(name) {
         buttons: [dt('dlg.yes'), dt('dlg.cancel')],
         docName: clipDocName(name)
       }));
-    } catch (e) {  }
+    } catch (e) {   }
     return stub === 'save' || stub === 'yes';
   }
   if (process.env.SVGBIANJI_NO_CONFIRM === '1') return true;
@@ -733,7 +682,6 @@ async function askOverwrite(name) {
   const r = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
   return r.response === 0;
 }
-
 async function confirmClose(win) {
   if (process.env.SVGBIANJI_NO_CONFIRM === '1') { forceClose = true; win.close(); return; }
   let ok = true;
@@ -742,14 +690,13 @@ async function confirmClose(win) {
       '(async () => (typeof App !== "undefined" && App.Tabs && App.Tabs.closeAllTabsGuard) ? await App.Tabs.closeAllTabsGuard() : true)()'
     );
   } catch (err) {
-    ok = true; 
+    ok = true;  
   }
-  if (ok === false) return; 
+  if (ok === false) return;  
   await saveHistAnchorBeforeClose(win);
   forceClose = true;
   win.close();
 }
-
 
 async function saveHistAnchorBeforeClose(win) {
   try {
@@ -762,9 +709,8 @@ async function saveHistAnchorBeforeClose(win) {
         catch (e) { return false; }
       })()`
     );
-  } catch (err) {  }
+  } catch (err) {   }
 }
-
 
 const WIN_CTL_ACTIONS = { 'minimize': 1, 'toggle-maximize': 1, 'close': 1 };
 
@@ -778,7 +724,7 @@ function sendWinState(win) {
   if (!win || win.isDestroyed()) return;
   try {
     win.webContents.send('window-state', { maximized: win.isMaximized(), focused: win.isFocused() });
-  } catch (err) {  }
+  } catch (err) {   }
 }
 
 ipcMain.handle('window-control', (e, action) => {
@@ -789,13 +735,12 @@ ipcMain.handle('window-control', (e, action) => {
   try {
     if (act === 'minimize') win.minimize();
     else if (act === 'toggle-maximize') { win.isMaximized() ? win.unmaximize() : win.maximize(); }
-    else win.close();   
+    else win.close();    
     return { ok: true, maximized: win.isMaximized() };
   } catch (err) {
     return { ok: false, error: String(err && err.message || err) };
   }
 });
-
 
 ipcMain.handle('window-state-get', (e) => {
   const win = windowCtlTarget(e);
@@ -813,16 +758,13 @@ function createWindow() {
     backgroundColor: '#1e1f22',
     title: dt('app.title'),
     show: false,
-    
     frame: false,
     icon: path.join(__dirname, 'icons', 'app-icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      
       sandbox: false,
-      
       backgroundThrottling: !testMode
     }
   });
@@ -841,7 +783,6 @@ function createWindow() {
     confirmClose(win);
   });
   win.on('closed', () => destroyThumbRenderer());
-  
   win.on('maximize', () => sendWinState(win));
   win.on('unmaximize', () => sendWinState(win));
   win.on('focus', () => sendWinState(win));
@@ -852,12 +793,11 @@ function createWindow() {
       const first = args[0] || {};
       const msg = (first && typeof first === 'object' && 'message' in first) ? first.message : (args[2] != null ? args[2] : JSON.stringify(first));
       console.log('[renderer]', msg);
-    } catch (e) {  }
+    } catch (e) {   }
   });
 }
 
 app.whenReady().then(() => {
-  
   try {
     cleanOldAutoLogs();
     autoLogReady = true;
@@ -871,36 +811,30 @@ app.whenReady().then(() => {
       exe: String(process.env.PORTABLE_EXECUTABLE_FILE || app.getPath('exe') || '').slice(-160),
       autoLog: autoLogEnabled()
     });
-  } catch (e) {  }
-  
+  } catch (e) {   }
   try {
     if (process.env.SVE_PORTABLE_MODE === 'sibling') {
       const vf = path.join(app.getPath('userData'), 'sibling-app-version.txt');
       fs.mkdirSync(path.dirname(vf), { recursive: true });
       fs.writeFileSync(vf, app.getVersion(), 'utf8');
     }
-  } catch (e) {  }
-  
+  } catch (e) {   }
   try { recoverUpdateState(); } catch (e) { appendLog('warn', '更新状态恢复失败（已忽略）', { message: String(e && e.message || e).slice(0, 160) }); }
 
-  
   try {
     require('./update-check').check({
       onLog: appendLog,
       t: dt,
-      
       onAvailable: function (info) {
-        
-        try { if (info) info.isDev = !isPackagedBuild(); } catch (e) {  }
-        
+        try { if (info) info.isDev = !isPackagedBuild(); } catch (e) {   }
         try {
           const pend = pendingUpdateInfo();
           if (pend && String(pend.to) === String(info && info.remote)) info.pendingLocal = true;
-        } catch (e) {  }
+        } catch (e) {   }
         const push = (tries) => {
           const w = BrowserWindow.getAllWindows().find(x => !x.isDestroyed());
           if (w && w.webContents && !w.webContents.isLoading()) {
-            try { w.webContents.send('update-available', info); return; } catch (e) {  }
+            try { w.webContents.send('update-available', info); return; } catch (e) {   }
           }
           if (tries > 0) setTimeout(() => push(tries - 1), 1000);
         };
@@ -910,44 +844,37 @@ app.whenReady().then(() => {
   }
   catch (e) { appendLog('warn', '更新检查模块加载失败（已忽略）', { message: String(e && e.message || e).slice(0, 160) }); }
 
-  
   try {
-    
 [DATA_DIRS.history, DATA_DIRS.logs, DATA_DIRS.workcopy, DATA_DIRS.svg].forEach(n => ensureDataDir(n));
-  } catch (e) {  }
-  
+  } catch (e) {   }
   try {
     const exePath = process.env.PORTABLE_EXECUTABLE_FILE || (isPackagedBuild() ? app.getPath('exe') : '');
     if (exePath) {
       const dir = path.dirname(exePath);
-      
       const pend = pendingUpdateInfo();
       const keep = (pend && pend.pkg) ? path.resolve(pend.pkg).toLowerCase() : '';
       fs.readdirSync(dir).forEach(n => {
         if (/\.old\.exe$/i.test(n) || /^update-(manual-)?\d+\.exe$/i.test(n)) {
           const fp = path.join(dir, n);
           if (keep && path.resolve(fp).toLowerCase() === keep) return;
-          try { fs.unlinkSync(fp); } catch (e) {  }
+          try { fs.unlinkSync(fp); } catch (e) {   }
         }
       });
     }
-  } catch (e) {  }
+  } catch (e) {   }
   try {
     const tmpDir = os.tmpdir();
     fs.readdirSync(tmpDir).forEach(n => {
-      
       if (/^sve-(replace|update-restart)-[\d-]+\.(bat|cmd)$/i.test(n)) {
-        try { fs.unlinkSync(path.join(tmpDir, n)); } catch (e) {  }
+        try { fs.unlinkSync(path.join(tmpDir, n)); } catch (e) {   }
       }
     });
-  } catch (e) {  }
-  
+  } catch (e) {   }
   if (isPackagedBuild()) setTimeout(() => cleanStalePortableTemp(), 5000);
   protocol.handle('app', (request) => {
     const u = new URL(request.url);
     if (u.hostname === 'thumb-cache') {
       const rel = decodeURIComponent(u.pathname).replace(/^\/+/, '');
-      
       const single = /^[a-f0-9]{40}\.png$/i.test(rel);
       const namespaced = /^[a-z0-9_-]{1,24}\/[a-f0-9]{40}\.png$/i.test(rel);
       if (!single && !namespaced) return new Response('forbidden', { status: 403 });
@@ -959,12 +886,10 @@ app.whenReady().then(() => {
         return new Response('not found', { status: 404 });
       });
     }
-    
     if (u.hostname === 'fonts') {
       const rel = decodeURIComponent(u.pathname).replace(/^\/+/, '');
       if (!/^[a-z0-9_-]{1,40}\.(ttf|otf|ttc|woff2?)$/i.test(rel)) return new Response('forbidden', { status: 403 });
       const fp = path.join(appDataDir(), 'fonts', rel);
-      
       const types = { '.ttf': 'font/ttf', '.otf': 'font/otf', '.ttc': 'font/collection', '.woff': 'font/woff', '.woff2': 'font/woff2' };
       try {
         const buf = fs.readFileSync(fp);
@@ -1026,7 +951,6 @@ app.whenReady().then(() => {
     }
   });
 
-  
   ipcMain.handle('work-save', async (e, payload) => {
     const r = await dialog.showSaveDialog({
       title: dt('dlg.saveWork'),
@@ -1061,17 +985,15 @@ app.whenReady().then(() => {
   });
 
 
-  
   function histAnchorDirPath() {
     return ensureDataDir(DATA_DIRS.history);
   }
-  
   function histAnchorLimit() {
     try {
       const s = JSON.parse(fs.readFileSync(settingsPath(), 'utf8'));
       const n = Number(s && s.autoSave && s.autoSave.limit);
       if (isFinite(n) && n >= 1 && n <= 1000) return Math.round(n);
-    } catch (err) {  }
+    } catch (err) {   }
     return 15;
   }
   const pad2 = n => String(n).padStart(2, '0');
@@ -1079,7 +1001,6 @@ app.whenReady().then(() => {
     return '锚点-' + d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + '-' +
       pad2(d.getHours()) + '-' + pad2(d.getMinutes()) + '-' + pad2(d.getSeconds()) + '.svework';
   }
-  
   function histAnchorTime(name) {
     const m = /^锚点-(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})(?:-\d+)?\.svework$/.exec(name || '');
     if (!m) return name || '';
@@ -1094,12 +1015,11 @@ app.whenReady().then(() => {
       let i = 1;
       while (fs.existsSync(path.join(dir, name))) name = histAnchorName(d) + '-' + (++i) + '.svework';
       fs.writeFileSync(path.join(dir, name), payload.content, 'utf8');
-      
       const files = fs.readdirSync(dir).filter(f => /^锚点-.*\.svework$/.test(f)).sort();
       const limit = histAnchorLimit();
       while (files.length > limit) {
         const oldest = files.shift();
-        try { fs.unlinkSync(path.join(dir, oldest)); } catch (e2) {  }
+        try { fs.unlinkSync(path.join(dir, oldest)); } catch (e2) {   }
       }
       return { ok: true, name };
     } catch (err) {
@@ -1127,40 +1047,6 @@ app.whenReady().then(() => {
     }
   });
 
-  
-  const fzaSave = require('./forza-save');
-  const fzaCgroup = require('./forza-cgroup');
-  const FZA_SYMBOLS = path.join(__dirname, 'assets', 'FH6_Vinyl_Symbols.svg');
-  ipcMain.handle('forza-accounts', async () => {
-    try {
-      const accounts = fzaSave.listAccounts(fzaSave.DEFAULT_GAMESAVE_DIR);
-      const labels = fzaSave.accountLabels(accounts);
-      return { ok: true, accounts: labels, defaultDir: fzaSave.DEFAULT_GAMESAVE_DIR };
-    } catch (err) {
-      return { ok: false, error: String(err && err.message || err) };
-    }
-  });
-  ipcMain.handle('forza-groups', async (e, payload) => {
-    try {
-      const groups = fzaSave.listLayerGroups(String(payload && payload.containersRoot || ''));
-      
-      return { ok: true, groups, scan: fzaSave.lastGroupScan ? fzaSave.lastGroupScan() : null };
-    } catch (err) {
-      return { ok: false, error: String(err && err.message || err) };
-    }
-  });
-  ipcMain.handle('forza-thumb', async (e, payload) => {
-    try {
-      const p = String(payload && payload.path || '');
-      if (!fs.existsSync(p)) return { ok: false };
-      const buf = fs.readFileSync(p);
-      if (buf.length > 400 * 1024) return { ok: false, error: 'too large' };
-      return { ok: true, dataUrl: 'data:image/webp;base64,' + buf.toString('base64') };
-    } catch (err) {
-      return { ok: false, error: String(err && err.message || err) };
-    }
-  });
-  
   ipcMain.handle('confirm-close-doc', async (e, payload) => {
     try {
       const win = BrowserWindow.fromWebContents(e.sender);
@@ -1172,258 +1058,10 @@ app.whenReady().then(() => {
       return { action: 'dont', error: String(err && err.message || err) };
     }
   });
-  
-  ipcMain.handle('forza-thumb-write', async (e, payload) => {
-    try {
-      const p = String(payload && payload.path || '');
-      const dataUrl = String(payload && payload.dataUrl || '');
-      if (!/\bthumb\.webp$/i.test(p)) return { ok: false, error: 'not a thumb.webp path' };
-      const m = /^data:image\/webp;base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
-      if (!m) return { ok: false, error: 'bad dataUrl' };
-      const buf = Buffer.from(m[1], 'base64');
-      if (!buf.length || buf.length > 400 * 1024) return { ok: false, error: 'bad size' };
-      const dir = path.dirname(p);
-      if (!fs.existsSync(dir)) return { ok: false, error: 'group dir missing' };
-      if (!fs.existsSync(p)) return { ok: false, error: 'thumb.webp 不存在（只覆写既有文件，不新建）' };
-      
-      const st0 = fs.statSync(p, { bigint: true });
-      const tSaved = { atimeNs: st0.atimeNs, mtimeNs: st0.mtimeNs, birthtimeNs: st0.birthtimeNs };
-      const prev = fs.readFileSync(p);
-      try {
-        fzaCgroup.writeFileInPlace(p, buf, tSaved);
-      } catch (err) {
-        try { fzaCgroup.writeFileInPlace(p, prev, tSaved); } catch (e2) {  }
-        return { ok: false, error: '写入失败已回滚：' + String(err && err.message || err) };
-      }
-      return { ok: true, bytes: buf.length };
-    } catch (err) {
-      return { ok: false, error: String(err && err.message || err) };
-    }
-  });
-  
-  ipcMain.handle('forza-inject', async (e, payload) => {
-    try {
-      const cgroup = String(payload && payload.cgroup || '');
-      const header = String(payload && payload.header || cgroup.replace(/C_group$/, 'header'));
-      if (!fs.existsSync(cgroup) || !fs.existsSync(header)) return { ok: false, error: '占位组文件不存在' };
-      const model = payload && payload.model;
-      if (!model || model.kind !== 'group') return { ok: false, error: '模型无效' };
-      const r = fzaCgroup.writeCgroupFile(cgroup, model, fzaCgroup.loadShapeHalfExtents(FZA_SYMBOLS));
-      appendLog('info', 'Forza 注入完成', { layers: r.layers, cgroup });
-      return { ok: true, layers: r.layers };
-    } catch (err) {
-      appendLog('error', 'Forza 注入失败', { message: String(err && err.message || err) });
-      return { ok: false, error: String(err && err.message || err) };
-    }
-  });
-  
-  ipcMain.handle('forza-export', async (e, payload) => {
-    try {
-      const cgroup = String(payload && payload.cgroup || '');
-      const header = String(payload && payload.header || cgroup.replace(/C_group$/, 'header'));
-      if (!fs.existsSync(cgroup)) return { ok: false, error: '文件不存在' };
-      const model = fzaCgroup.decodeCgroupPayload(fzaCgroup.unwrapCgroupFile(cgroup));
-      let title = '', author = '';
-      if (fs.existsSync(header)) {
-        const h = fzaCgroup.parseHeader(header);
-        title = h.title; author = h.author;
-      }
-      return { ok: true, model, title, author };
-    } catch (err) {
-      return { ok: false, error: String(err && err.message || err) };
-    }
-  });
-  
-  ipcMain.handle('forza-backup', async (e, payload) => {
-    try {
-      const uDir = String(payload && payload.uDir || '');
-      if (!fs.existsSync(uDir)) return { ok: false, error: '账户目录不存在' };
-      const xuid = /^u_(\d+)_16D460$/.exec(path.basename(uDir));
-      const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, '');
-      const dlg = await dialog.showSaveDialog({
-        title: dt('dlg.backupSave'),
-        defaultPath: 'backup_' + (xuid ? xuid[1] : 'account') + '_' + ts + '.zip',
-        filters: [{ name: dt('dlg.filterZip'), extensions: ['zip'] }]
-      });
-      if (dlg.canceled || !dlg.filePath) return { canceled: true };
-      const out = fzaSave.backupAccount(uDir, dlg.filePath);
-      return { ok: true, path: out };
-    } catch (err) {
-      return { ok: false, error: String(err && err.message || err) };
-    }
-  });
-
-  
-  const UNDO_KEEP = 3;
-  const undoRoot = () => ensureDataDir(DATA_DIRS.injectundo);
-  const undoPad = (n, w) => String(n).padStart(w || 2, '0');
-  function undoStamp(d) {
-    return d.getFullYear() + undoPad(d.getMonth() + 1) + undoPad(d.getDate()) + '-' +
-      undoPad(d.getHours()) + undoPad(d.getMinutes()) + undoPad(d.getSeconds()) + '-' + undoPad(d.getMilliseconds(), 3);
-  }
-  function undoFmtTime(d) {
-    return d.getFullYear() + '-' + undoPad(d.getMonth() + 1) + '-' + undoPad(d.getDate()) + ' ' +
-      undoPad(d.getHours()) + ':' + undoPad(d.getMinutes()) + ':' + undoPad(d.getSeconds());
-  }
-  const UNDO_ID_RE = /^rec-\d{8}-\d{6}-\d{3}(-[a-z0-9]{4})?$/;
-  function undoListDirs() {
-    const root = undoRoot();
-    let names = [];
-    try { names = fs.readdirSync(root); } catch (e) { return []; }
-    return names.filter(n => UNDO_ID_RE.test(n))
-      .map(n => {
-        let meta = null;
-        try { meta = JSON.parse(fs.readFileSync(path.join(root, n, 'meta.json'), 'utf8')); } catch (e) { meta = null; }
-        return { id: n, meta };
-      })
-      .filter(r => r.meta && typeof r.meta.ts === 'number')
-      .sort((a, b) => b.meta.ts - a.meta.ts);
-  }
-  
-  function undoPrune() {
-    for (const r of undoListDirs().slice(UNDO_KEEP)) {
-      try {
-        fs.rmSync(path.join(undoRoot(), r.id), { recursive: true, force: true });
-        appendLog('info', '注入撤销备份已裁剪（超出保留条数，永久删除）', { id: r.id });
-      } catch (e) { appendLog('warn', '注入撤销备份裁剪失败', { id: r.id, message: String(e && e.message || e) }); }
-    }
-  }
-  ipcMain.handle('undo-save', async (e, payload) => {
-    try {
-      const groups = Array.isArray(payload && payload.groups) ? payload.groups : [];
-      if (!groups.length) return { ok: false, error: 'no groups' };
-      const now = new Date();
-      let id = 'rec-' + undoStamp(now);
-      const root = undoRoot();
-      if (fs.existsSync(path.join(root, id))) id += '-' + Math.random().toString(36).slice(2, 6);
-      const dir = path.join(root, id);
-      fs.mkdirSync(dir, { recursive: true });
-      const metas = [];
-      for (let i = 0; i < groups.length; i++) {
-        const g = groups[i] || {};
-        if (!g.model) throw new Error('模型缺失：' + (g.title || g.cgroup || ('#' + i)));
-        fs.writeFileSync(path.join(dir, i + '.model.json'), JSON.stringify(g.model), 'utf8');
-        let hasThumb = false;
-        const src = String(g.thumbPath || '');
-        if (src && fs.existsSync(src)) {
-          try { fs.copyFileSync(src, path.join(dir, i + '.thumb.webp')); hasThumb = true; }
-          catch (err) { appendLog('warn', '注入撤销：缩略图备份失败', { file: src, message: String(err && err.message || err) }); }
-        }
-        metas.push({
-          cgroup: String(g.cgroup || ''), header: String(g.header || ''), folder: String(g.folder || ''),
-          title: String(g.title || ''), author: String(g.author || ''), thumbPath: src, hasThumb
-        });
-      }
-      const meta = {
-        id, ts: now.getTime(), time: undoFmtTime(now),
-        account: payload && payload.account ? payload.account : null,
-        groups: metas
-      };
-      fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf8');
-      undoPrune();
-      appendLog('info', '注入撤销备份已保存', { id, groups: metas.length });
-      return { ok: true, id, count: metas.length };
-    } catch (err) {
-      appendLog('error', '注入撤销备份失败', { message: String(err && err.message || err) });
-      return { ok: false, error: String(err && err.message || err) };
-    }
-  });
-  ipcMain.handle('undo-list', async () => {
-    try {
-      return {
-        ok: true,
-        records: undoListDirs().map(r => ({
-          id: r.id, ts: r.meta.ts, time: r.meta.time,
-          account: r.meta.account || null,
-          count: (r.meta.groups || []).length,
-          titles: (r.meta.groups || []).map(g => g.title || g.folder || '')
-        }))
-      };
-    } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
-  });
-  ipcMain.handle('undo-read', async (e, payload) => {
-    try {
-      const id = String(payload && payload.id || '');
-      if (!UNDO_ID_RE.test(id)) return { ok: false, error: 'bad id' };
-      const dir = path.join(undoRoot(), id);
-      const meta = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'));
-      const groups = (meta.groups || []).map((g, i) => {
-        const out = Object.assign({}, g, {
-          index: i,
-          targetExists: !!(g.cgroup && fs.existsSync(g.cgroup) && g.header && fs.existsSync(g.header))
-        });
-        out.thumbDataUrl = '';
-        try {
-          const tp = path.join(dir, i + '.thumb.webp');
-          if (fs.existsSync(tp)) {
-            const buf = fs.readFileSync(tp);
-            if (buf.length && buf.length <= 400 * 1024) out.thumbDataUrl = 'data:image/webp;base64,' + buf.toString('base64');
-          }
-        } catch (err) {  }
-        return out;
-      });
-      return { ok: true, meta: { id: meta.id, ts: meta.ts, time: meta.time, account: meta.account || null }, groups };
-    } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
-  });
-  ipcMain.handle('undo-read-model', async (e, payload) => {
-    try {
-      const id = String(payload && payload.id || '');
-      const i = Number(payload && payload.index);
-      if (!UNDO_ID_RE.test(id) || !(i >= 0)) return { ok: false, error: 'bad args' };
-      const p = path.join(undoRoot(), id, i + '.model.json');
-      return { ok: true, model: JSON.parse(fs.readFileSync(p, 'utf8')) };
-    } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
-  });
-  
-  ipcMain.handle('undo-restore', async (e, payload) => {
-    const id = String(payload && payload.id || '');
-    const results = [];
-    try {
-      if (!UNDO_ID_RE.test(id)) return { ok: false, error: 'bad id' };
-      const dir = path.join(undoRoot(), id);
-      const meta = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'));
-      const halfExtents = fzaCgroup.loadShapeHalfExtents(FZA_SYMBOLS);
-      (meta.groups || []).forEach((g, i) => {
-        const rec = { index: i, title: g.title || '', folder: g.folder || '' };
-        try {
-          if (!g.cgroup || !fs.existsSync(g.cgroup) || !g.header || !fs.existsSync(g.header)) {
-            results.push(Object.assign(rec, { ok: false, missing: true, error: '原位置已不存在' }));
-            return;
-          }
-          const model = JSON.parse(fs.readFileSync(path.join(dir, i + '.model.json'), 'utf8'));
-          const r = fzaCgroup.writeCgroupFile(g.cgroup, model, halfExtents);
-          
-          const tp = path.join(dir, i + '.thumb.webp');
-          let thumbOk = false;
-          const dst = String(g.thumbPath || path.join(path.dirname(g.cgroup), 'thumb.webp'));
-          if (fs.existsSync(tp) && dst && fs.existsSync(dst)) {
-            try {
-              const t0 = fs.statSync(dst, { bigint: true });
-              fzaCgroup.writeFileInPlace(dst, fs.readFileSync(tp), { atimeNs: t0.atimeNs, mtimeNs: t0.mtimeNs, birthtimeNs: t0.birthtimeNs });
-              thumbOk = true;
-            } catch (err) { appendLog('warn', '注入撤销：缩略图还原失败', { file: dst, message: String(err && err.message || err) }); }
-          }
-          results.push(Object.assign(rec, { ok: true, layers: r.layers, thumbOk }));
-        } catch (err) {
-          results.push(Object.assign(rec, { ok: false, error: String(err && err.message || err) }));
-        }
-      });
-      const restored = results.filter(r => r.ok).length;
-      const missing = results.filter(r => r.missing).map(r => r.index);
-      appendLog('info', '注入撤销执行完成', { id, restored, missing });
-      return { ok: true, results, restored, missing };
-    } catch (err) {
-      appendLog('error', '注入撤销失败', { id, message: String(err && err.message || err) });
-      return { ok: false, error: String(err && err.message || err) };
-    }
-  });
-
-  
   ipcMain.handle('app-flags', async () => ({
     testMode: !!process.env.SVGBIANJI_TEST,
     exeDir: appDataDir()
   }));
-  
   ipcMain.handle('settings-get', async () => {
     try {
       const p = settingsPath();
@@ -1441,7 +1079,6 @@ app.whenReady().then(() => {
       return { ok: false, error: String(err && err.message || err) };
     }
   });
-  
   ipcMain.handle('update-install', async (e, payload) => {
     const url = payload && payload.exeUrl;
     if (!url) return { ok: false, error: 'no-asset' };
@@ -1449,7 +1086,7 @@ app.whenReady().then(() => {
     const sender = e.sender;
     const sendPct = (pct, got, total) => {
       try { if (sender && !sender.isDestroyed()) sender.send('update-progress', { pct: pct, got: got || 0, total: total || 0 }); }
-      catch (err) {  }
+      catch (err) {   }
     };
     const exePath = portableExePath();
     if (!exePath) return { ok: false, error: 'no-exe-path' };
@@ -1457,7 +1094,6 @@ app.whenReady().then(() => {
     const tmp = path.join(path.dirname(exePath), 'update-' + Date.now() + '.exe');
     let pkg = '';
     try {
-      
       const prev = updateApply.readState(updateStatePath());
       const prevChk = (prev && prev.pkg && String(prev.to || '') === version) ? checkExePackage(prev.pkg) : { ok: false };
       if (prevChk.ok) {
@@ -1479,28 +1115,26 @@ app.whenReady().then(() => {
         const prefix = updateMirror.PROXIES.find(p => r.via === p + url) || '';
         updateMirror.writePreferred(mirrorState, prefix);
         appendLog('info', '自动更新：下载完成', { via: String(r.via).slice(0, 160), switched: (r.tried || []).length });
-        
         const chk = checkExePackage(tmp);
         if (!chk.ok) {
-          try { fs.unlinkSync(tmp); } catch (e2) {  }
+          try { fs.unlinkSync(tmp); } catch (e2) {   }
           appendLog('warn', '自动更新：安装包校验未通过', chk);
           return { ok: false, error: 'bad-package', detail: chk.error };
         }
         pkg = tmp;
       }
       const size = fs.statSync(pkg).size;
-      
-      try { fs.unlinkSync(updateResultPath()); } catch (e2) {  }
+      try { fs.unlinkSync(updateResultPath()); } catch (e2) {   }
       updateApply.writeState(updateStatePath(), {
         from: app.getVersion(), to: version, target: exePath, pkg: pkg, at: Date.now()
       });
       scheduleExeReplace(pkg, exePath);
       appendLog('info', '自动更新：安装包就绪，退出后替换', { size: size, pkg: path.basename(pkg) });
-      setTimeout(() => { try { app.exit(0); } catch (e2) {  } }, 800);
+      setTimeout(() => { try { app.exit(0); } catch (e2) {   } }, 800);
       return { ok: true, size: size, reused: pkg !== tmp };
     } catch (err) {
-      try { if (pkg !== tmp) fs.unlinkSync(tmp); } catch (e2) {  }
-      if (pkg) { try { fs.unlinkSync(pkg); } catch (e2) {  } }
+      try { if (pkg !== tmp) fs.unlinkSync(tmp); } catch (e2) {   }
+      if (pkg) { try { fs.unlinkSync(pkg); } catch (e2) {   } }
       updateApply.clearState(updateStatePath());
       appendLog('warn', '自动更新失败', {
         message: String(err && err.message || err).slice(0, 300),
@@ -1510,13 +1144,11 @@ app.whenReady().then(() => {
     }
   });
 
-  
   ipcMain.handle('update-pick-exe', async (e, payload) => {
     if (!isPackagedBuild()) return { ok: false, error: 'dev' };
     const exePath = portableExePath();
     if (!exePath) return { ok: false, error: 'no-exe-path' };
     let src = '';
-    
     const forced = (process.env.SVGBIANJI_TEST && payload && payload.file) ? String(payload.file) : '';
     if (forced) {
       src = forced;
@@ -1545,17 +1177,16 @@ app.whenReady().then(() => {
     }
     const tmp = path.join(path.dirname(exePath), 'update-manual-' + Date.now() + '.exe');
     try {
-      
       moveIntoPlace(src, tmp);
     } catch (err) {
-      try { fs.unlinkSync(tmp); } catch (e2) {  }
+      try { fs.unlinkSync(tmp); } catch (e2) {   }
       appendLog('warn', '手动安装：搬移安装包失败', { message: String(err && err.message || err).slice(0, 160) });
       return { ok: false, error: String(err && err.message || err).slice(0, 160) };
     }
     appendLog('info', '手动安装：已搬入本地安装包（源文件已移除），安排退出后替换',
       { file: path.basename(src), size: chk.size });
     try {
-      try { fs.unlinkSync(updateResultPath()); } catch (e2) {  }
+      try { fs.unlinkSync(updateResultPath()); } catch (e2) {   }
       updateApply.writeState(updateStatePath(), {
         from: app.getVersion(),
         to: String((payload && payload.version) || 'unknown'),
@@ -1563,27 +1194,25 @@ app.whenReady().then(() => {
       });
       scheduleExeReplace(tmp, exePath);
     } catch (err) {
-      try { fs.unlinkSync(tmp); } catch (e2) {  }
+      try { fs.unlinkSync(tmp); } catch (e2) {   }
       updateApply.clearState(updateStatePath());
       return { ok: false, error: String(err && err.message || err).slice(0, 160) };
     }
-    setTimeout(() => { try { app.exit(0); } catch (e2) {  } }, 800);
+    setTimeout(() => { try { app.exit(0); } catch (e2) {   } }, 800);
     return { ok: true, size: chk.size };
   });
 
-  
   ipcMain.handle('update-open-repo', async () => {
     let url = 'https://github.com';
     try {
       const t = require('./update-check').readRepo();
       if (t && t.owner && t.repo) url = 'https://github.com/' + t.owner + '/' + t.repo;
-    } catch (e) {  }
+    } catch (e) {   }
     appendLog('info', '自动更新失败：打开仓库页', { url: url });
     try { await shell.openExternal(url); return { ok: true, url: url }; }
     catch (e) { return { ok: false, error: String(e && e.message || e), url: url }; }
   });
 
-  
   const FONT_RE = /^[a-z0-9_-]{1,40}\.(ttf|otf|ttc|woff2?)$/i;
   ipcMain.handle('font-import', async (e) => {
     try {
@@ -1627,12 +1256,10 @@ app.whenReady().then(() => {
     try { await shell.openExternal('https://www.100font.com/'); return { ok: true }; }
     catch (err) { return { ok: false, error: String(err && err.message || err) }; }
   });
-  
   ipcMain.handle('file-save-work', async (e, payload) => {
     try {
       const r = workcopyStore.save(payload && payload.content, payload && payload.source,
         ensureDataDir(DATA_DIRS.workcopy), uiLang());
-      
       if (r && r.ok) {
         dropWorkcopyThumbs([r.name, (payload && payload.source && payload.source.name) || '']);
       }
@@ -1641,19 +1268,16 @@ app.whenReady().then(() => {
       return { ok: false, error: String(err && err.message || err) };
     }
   });
-  
   ipcMain.handle('file-auto-save', async (e, payload) => {
     try {
       const kind = String(payload && payload.kind || '');
       const dirName = kind === 'svg' ? DATA_DIRS.svg : DATA_DIRS.workcopy;
       const dir = ensureDataDir(dirName);
 
-      
       let uiLang = null;
-      try { uiLang = JSON.parse(fs.readFileSync(settingsPath(), 'utf8')).lang || null; } catch (err3) {  }
+      try { uiLang = JSON.parse(fs.readFileSync(settingsPath(), 'utf8')).lang || null; } catch (err3) {   }
       const name = resolveAutoSaveName(kind, payload && payload.fileName, n => fs.existsSync(path.join(dir, n)), undefined, uiLang);
       const fp = path.join(dir, name);
-      
       let prevStat = null;
       if (kind === 'svg') { try { prevStat = fs.statSync(fp); } catch (err4) { prevStat = null; } }
       fs.writeFileSync(fp, String(payload && payload.content || ''), 'utf8');
@@ -1661,7 +1285,7 @@ app.whenReady().then(() => {
         try {
           const k = crypto.createHash('sha1').update('thumb-v9-480\0' + fp + '\0' + prevStat.size + '\0' + prevStat.mtimeMs).digest('hex');
           await fs.promises.unlink(path.join(app.getPath('userData'), 'svg-thumb-cache', k + '.png'));
-        } catch (err5) {  }
+        } catch (err5) {   }
       } else if (kind !== 'svg') {
         dropWorkcopyThumbs([name]);
       }
@@ -1670,7 +1294,6 @@ app.whenReady().then(() => {
       return { ok: false, error: String(err && err.message || err) };
     }
   });
-  
   ipcMain.handle('home-import-dialog', async () => {
     try {
       const r = await dialog.showOpenDialog({
@@ -1696,14 +1319,12 @@ app.whenReady().then(() => {
       return { ok: false, error: String(err && err.message || err) };
     }
   });
-  
   ipcMain.handle('home-open-folder', async () => {
     const dir = ensureDataDir(DATA_DIRS.svg);
     try {
       const err = await shell.openPath(dir);
       if (err) {
-        
-        try { shell.showItemInFolder(dir); } catch (e2) {  }
+        try { shell.showItemInFolder(dir); } catch (e2) {   }
         appendLog('warn', '打开 SVGImages 目录失败', { dir: dir, error: String(err).slice(0, 160) });
         return { ok: false, error: String(err), dir: dir };
       }
@@ -1725,7 +1346,7 @@ app.whenReady().then(() => {
           try {
             const st = fs.statSync(path.join(dir, name));
             out.push({ type: kind === DATA_DIRS.svg ? 'svg' : 'workcopy', name, path: path.join(dir, name), mtime: st.mtimeMs, size: st.size });
-          } catch (err3) {  }
+          } catch (err3) {   }
         });
       }
       out.sort((a, b) => b.mtime - a.mtime);
@@ -1752,13 +1373,11 @@ app.whenReady().then(() => {
     try {
       const text = String(payload && payload.text || '');
       if (!text || text.length > 80 * 1024 * 1024) return { ok: false, error: 'SVG 内容无效或过大' };
-      
       const ns = String(payload && payload.cacheNs || '');
       const identity = payload && payload.cacheIdentity;
       const key = (ns && identity != null)
         ? crypto.createHash('sha1').update(String(identity)).digest('hex') : '';
       const cachePath = key ? genericThumbPath(ns, key) : null;
-      
       if (key && ns === WORKCOPY_THUMB_NS && identity != null) {
         rememberWorkcopyThumbKey(String(identity).split('\u0000')[0], key);
       }
@@ -1778,7 +1397,6 @@ app.whenReady().then(() => {
       return { ok: false, error: String(err && err.message || err) };
     }
   });
-  
   ipcMain.handle('svg-thumb-cache-get', async (e, payload) => {
     try {
       const ns = String(payload && payload.ns || '');
@@ -1806,7 +1424,6 @@ app.whenReady().then(() => {
       return { ok: false, error: String(err && err.message || err) };
     }
   });
-  
   ipcMain.handle('svg-thumb-cache-drop', async (e, payload) => {
     try {
       const ns = String(payload && payload.ns || '');
@@ -1819,7 +1436,6 @@ app.whenReady().then(() => {
       return { ok: false, error: String(err && err.message || err) };
     }
   });
-  
   ipcMain.handle('lib-asset-ver', async () => {
     try {
       const parts = [];
@@ -1862,17 +1478,14 @@ app.whenReady().then(() => {
       const p = path.join(dir, name);
       const exists = fs.existsSync(p);
       const previous = exists ? fs.readFileSync(p, 'utf8') : null;
-      
       let prevStat = null;
       if (exists) { try { prevStat = fs.statSync(p); } catch (err2) { prevStat = null; } }
-      
       if (exists && name !== String(payload && payload.sourceName || '')) {
         if (!(await askOverwrite(name))) return { ok: false, canceled: true };
       }
       if (exists && (!fs.existsSync(p) || fs.readFileSync(p, 'utf8') !== previous))
         return { ok: false, error: dt('dlg.fileChanged') };
       atomicWrite(p, content, exists);
-      
       if (exists && prevStat) {
         try {
           const oldKey = crypto.createHash('sha1')
@@ -1885,7 +1498,6 @@ app.whenReady().then(() => {
       return { ok: false, error: String(err && err.message || err) };
     }
   });
-  
   ipcMain.handle('file-rename', async (e, payload) => {
     try {
       const kind = String(payload && payload.kind || '');
@@ -1904,7 +1516,6 @@ app.whenReady().then(() => {
       fs.renameSync(oldP, newP);
       if (kind === 'workcopy') {
         workcopyStore.renamed(oldP, newP);
-        
         dropWorkcopyThumbs([oldName]);
       }
       return { ok: true, path: newP, oldPath: oldP, name: newName };
@@ -1912,7 +1523,6 @@ app.whenReady().then(() => {
       return { ok: false, error: String(err && err.message || err) };
     }
   });
-  
   ipcMain.handle('file-delete', async (e, payload) => {
     try {
       const kind = String(payload && payload.kind || '');
@@ -1922,18 +1532,15 @@ app.whenReady().then(() => {
       if (!extOk) return { ok: false, error: '不支持的文件类型' };
       const fp = path.join(dir, name);
       if (!fs.existsSync(fp)) return { ok: false, error: '文件不存在' };
-      
       let st = null;
       if (kind === 'svg') { try { st = fs.statSync(fp); } catch (err2) { st = null; } }
       fs.unlinkSync(fp);
-      
-      try { fs.unlinkSync(fp + '.bak'); } catch (e) {  }
-      
+      try { fs.unlinkSync(fp + '.bak'); } catch (e) {   }
       if (kind === 'svg' && st) {
         try {
           const k = crypto.createHash('sha1').update('thumb-v9-480\0' + fp + '\0' + st.size + '\0' + st.mtimeMs).digest('hex');
           fs.unlinkSync(path.join(app.getPath('userData'), 'svg-thumb-cache', k + '.png'));
-        } catch (e) {  }
+        } catch (e) {   }
       } else if (kind === 'workcopy') {
         dropWorkcopyThumbs([name]);
       }
@@ -1952,7 +1559,6 @@ app.whenReady().then(() => {
     path: logSavedPath, buffered: logBuf.length,
     auto: autoLogEnabled(), autoPath: autoLogPath || autoLogFileFor(autoLogDay(), 0)
   }));
-  
   ipcMain.handle('sve-log-read', async (e, payload) => {
     try {
       const maxLen = Math.min(parseInt(payload && payload.maxLen, 10) || 200000, 500000);
@@ -2018,12 +1624,11 @@ app.whenReady().then(() => {
   });
 });
 
-
 app.on('before-quit', () => {
   try {
     appendLog('info', '会话结束', { lines: logBuf.length });
     flushAutoLog();
-  } catch (e) {  }
+  } catch (e) {   }
 });
 
 app.on('window-all-closed', () => {

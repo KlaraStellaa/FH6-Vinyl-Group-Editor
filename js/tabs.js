@@ -1,6 +1,5 @@
 'use strict';
 
-
 App.Tabs = {
   docs: [],         
   current: null,    
@@ -9,12 +8,10 @@ App.Tabs = {
   started: false,
   homeFirst: true,
 
-  
 
   async start() {
     if (this.started) return;
     this.started = true;
-    
     if (window.sveApi && window.sveApi.appTestMode !== undefined) {
       this.testMode = !!window.sveApi.appTestMode;
     } else {
@@ -25,9 +22,7 @@ App.Tabs = {
     }
     this.wireBar();
     if (this.testMode) {
-      
       this.addDoc({ label: null, silent: true });
-      
       if (App.Home) App.Home.hide();
     }
   },
@@ -58,7 +53,6 @@ App.Tabs = {
       }
       if (plus) { this.addDoc(); this.hideHome(); }
     });
-    
     let th = document.getElementById('tabThumb');
     if (!th) {
       th = document.createElement('div');
@@ -81,15 +75,12 @@ App.Tabs = {
       if (from && to !== from) this.hideTabThumb();
     });
     bar.addEventListener('mouseleave', () => this.hideTabThumb());
-    
     window.addEventListener('resize', () => {
       clearTimeout(this._resizeT);
       this._resizeT = setTimeout(() => { const b = document.getElementById('tabBar'); if (b) this.updateCompression(b); }, 120);
     });
   },
 
-  
-  
   prewarmDocThumb(d) {
     if (!d || d.__thumbUrl || d.__thumbPrewarm) return;
     d.__thumbPrewarm = true;
@@ -100,7 +91,7 @@ App.Tabs = {
       if (!d || d.__thumbUrl || this.docs.indexOf(d) < 0) return;
       Promise.resolve(this.docThumbUrl(d)).then(url => {
         if (url && !d.__thumbUrl && this.docs.indexOf(d) >= 0) d.__thumbUrl = url;
-      }).catch(() => {  });
+      }).catch(() => {   });
     }, 400);
   },
 
@@ -158,7 +149,6 @@ App.Tabs = {
       th.classList.add('hidden'); th.innerHTML = ''; th.classList.remove('empty');
     }
   },
-  
   async docThumbUrl(doc) {
     const importEls = [];
     try {
@@ -169,7 +159,6 @@ App.Tabs = {
       this._thumbRenderSeq = (this._thumbRenderSeq || 0) + 1;
       const prefix = 'tabthumb_' + this._thumbRenderSeq + '_';
       const children = App.deserializeLayersDetached(slims, prefix);
-      
       (function prepareImports(items) {
         (items || []).forEach(l => {
           if (l.kind === 'merged') prepareImports(l.children);
@@ -184,12 +173,10 @@ App.Tabs = {
       const geom = App.mergedThumbGeometry(fake);
       const lb = geom.lb;
       const bw = lb.w || 1, bh = lb.h || 1;
-      
       const boxEl = document.getElementById('tabThumb');
       const boxMax = Math.max(boxEl ? boxEl.clientWidth : 0, boxEl ? boxEl.clientHeight : 0) || 200;
       const dpr = window.devicePixelRatio || 1;
       const size = Math.min(1024, Math.max(Math.ceil(boxMax * dpr) + 8, Math.round(Math.max(bw, bh) * 0.5)));
-      
       const url = await App.mergedThumbUrl(fake, size, geom);
       return url || null;
     } catch (e) {
@@ -204,7 +191,6 @@ App.Tabs = {
     const bar = document.getElementById('tabBar');
     if (!bar) return;
     const t = (k) => (App.i18n ? App.i18n.t(k) : k);
-    
     const now = performance.now();
     const pend = bar.__flipPrevPending;
     const prev = (pend && now - pend.ts < 300) ? pend.map : (() => {
@@ -216,7 +202,6 @@ App.Tabs = {
       return m;
     })();
     const parts = [];
-    
     const homeActive = !!(App.Home && App.Home.shown) || !this.current;
     parts.push('<button id="tabHome" class="tab-pill' + (homeActive ? ' active' : '') + '"><span class="tab-label"></span></button>');
     this.docs.forEach(d => {
@@ -235,11 +220,10 @@ App.Tabs = {
     if (homeEl) {
       const v = t('tab.home');
       homeEl.textContent = v;
-      homeEl.setAttribute('textContent', v);   
+      homeEl.setAttribute('textContent', v);    
     }
     this.hideTabThumb();   
     this.updateCompression(bar);
-    
     if (prev.size) {
       bar.__flipPrevPending = { ts: now, map: prev };
       Array.from(bar.children).forEach(el => {
@@ -268,13 +252,12 @@ App.Tabs = {
     }
   },
 
-  
   updateCompression(bar) {
     const pills = Array.prototype.slice.call(bar.querySelectorAll('.tab-pill'));
     const plus = document.getElementById('tabNewDoc');
     const set = document.getElementById('btnSettings');
     const extras = (plus ? plus.offsetWidth : 0) + (set ? set.offsetWidth : 0);
-    const gaps = 4 * (pills.length + 1) + 20;   
+    const gaps = 4 * (pills.length + 1) + 20;    
     const avail = Math.max(0, bar.clientWidth - extras - gaps);
     const COMFORT = 140;
     const per = pills.length ? avail / pills.length : Infinity;
@@ -295,7 +278,6 @@ App.Tabs = {
     this.renderBar();
   },
 
-  
   stepTab(dir) {
     const atHome = !!(App.Home && App.Home.shown) || !this.current;
     if (atHome) {
@@ -319,14 +301,10 @@ App.Tabs = {
     return true;
   },
 
-  
   addDoc(opts) {
     opts = opts || {};
-    
     const d = { id: 'doc' + (this.nextId++), label: opts.label || null, bg: null, historyU: [], historyR: [], svgSource: opts.svgSource || null, workSource: null, dirty: false,
-      
       skewMode: 'v2',
-      
       contentRevision: 0 };
     if (this.current) this.captureDoc(this.current);
     this.docs.push(d);
@@ -334,24 +312,26 @@ App.Tabs = {
     this.loadDoc(d);
     if (!opts.silent) showToast(App.i18n.t('toast.tab.docCreated'));
     this.renderBar();
-    
     const bar = document.getElementById('tabBar');
     const el = bar && bar.querySelector('[data-tabid="' + d.id + '"]');
     if (el) el.classList.add('tab-enter');
     return d;
   },
 
-  
   captureDoc(d) {
-    if (App.state.edit) { try { App.exitEdit(false); } catch (e) {  } }
-    if (App.cancelColorPreview) { try { App.cancelColorPreview(); } catch (e) {  } }
+    if (App.state.edit) { try { App.exitEdit(false); } catch (e) {   } }
+    if (App.cancelColorPreview) { try { App.cancelColorPreview(); } catch (e) {   } }
     const b = App.state.bg.image;
     const selIndexes = Array.from(App.state.selected)
       .map(id => App.state.layers.findIndex(l => l.id === id)).filter(i => i >= 0);
+    App.ensureClipboardState();
     d.data = {
       layers: App.state.layers.map(l => App.snapshotSlim(l)),
       view: { x: App.state.view.x, y: App.state.view.y, scale: App.state.view.scale },
       clipboard: JSON.parse(JSON.stringify(App.state.clipboard || [])),
+      clipboardCurrent: App.cloneClipboardCurrent(),
+      clipboardHistory: App.cloneClipboardHistory(),
+      clipboardActiveId: App.state.clipboardActiveId,
       selIndexes,
       selectedByTab: !!App.state.selectedByTab,
       selBarDismissed: !!App.state.selBarDismissed,
@@ -362,25 +342,20 @@ App.Tabs = {
       bgHidden: !!App.state.bg.hidden,
       bgDisplayOpacity: App.state.bgDisplayOpacity ?? 1
     };
-    
     d.__thumbUrl = null;
-    
     this.prewarmDocThumb(d);
     d.bg = b;
-    
     d.skewMode = App.skewMode === '132' ? '132' : 'v2';
     d.historyU = App.history.undoStack;
     d.historyR = App.history.redoStack;
   },
 
   blankInto(d) {
-    
     if (!d.data) {
       d.data = {
-        
         layers: [], view: App.normalizeViewScale({ x: App.state.view.x, y: App.state.view.y, scale: App.state.view.scale }),
-        clipboard: [], selIndexes: [], selectedByTab: false, selBarDismissed: false,
-        
+        clipboard: [], clipboardCurrent: null, clipboardHistory: [], clipboardActiveId: null,
+        selIndexes: [], selectedByTab: false, selBarDismissed: false,
         lastColor: '#ffffff', histColors: [], layersHidden: false,
         layersDisplayOpacity: 1, bgHidden: false, bgDisplayOpacity: 1
       };
@@ -391,17 +366,13 @@ App.Tabs = {
     }
   },
 
-  
   loadDoc(d) {
-    
     App.skewMode = (d && d.skewMode === '132') ? '132' : 'v2';
-    
     if (App.speedEditor) App.speedEditor.cancel();
-    
     if (App.speedOverview) App.speedOverview.close();
     this.blankInto(d);
-    if (App.state.edit) { try { App.exitEdit(false); } catch (e) {  } }
-    if (App.cancelColorPreview) { try { App.cancelColorPreview(); } catch (e) {  } }
+    if (App.state.edit) { try { App.exitEdit(false); } catch (e) {   } }
+    if (App.cancelColorPreview) { try { App.cancelColorPreview(); } catch (e) {   } }
     if (App.invalidateEditStatic) App.invalidateEditStatic();
     App.clearAllLayers();
     App.bgSeq++;
@@ -410,7 +381,6 @@ App.Tabs = {
     }
     App.state.bg.image = null;
     const data = d.data;
-    
     App.state.bgDisplayOpacity = (typeof data.bgDisplayOpacity === 'number') ? data.bgDisplayOpacity : 1;
     if (d.bg && d.bg.el) {
       App.bgG.appendChild(d.bg.el);
@@ -423,7 +393,6 @@ App.Tabs = {
       App.state.bg.hidden = false;
       App.applyBgDisplayOpacity();
     }
-    
     (data.layers || []).forEach(slim => {
       const l = App.deserializeLayer(slim);
       App.relinkSymbolData(l);
@@ -438,9 +407,9 @@ App.Tabs = {
     if (App.updateBgOpacitySlider) App.updateBgOpacitySlider();
     if (App.updateLayersDisplaySlider) App.updateLayersDisplaySlider();
     App.state.lastColor = data.lastColor;
-    
     if (App.setPanelColor) App.setPanelColor(data.lastColor, false, false);
-    App.state.clipboard = JSON.parse(JSON.stringify(data.clipboard || []));
+    App.restoreClipboardState(data.clipboardHistory, data.clipboard, data.clipboardActiveId, data.clipboardCurrent);
+    if (App.closeClipboardHistory) App.closeClipboardHistory(true);
     App.histColors = Array.isArray(data.histColors) ? data.histColors.slice(0, 16) : [];
     if (App.renderHistGrid) App.renderHistGrid();
     App.state.layersHidden = !!data.layersHidden;
@@ -450,7 +419,6 @@ App.Tabs = {
     App.state.selected = new Set((data.selIndexes || []).map(i => (App.state.layers[i] ? App.state.layers[i].id : null)).filter(Boolean));
     App.state.selectedByTab = !!data.selectedByTab;
     App.state.selBarDismissed = !!data.selBarDismissed;
-    
     this.current = d;
     if (data.view && isFinite(data.view.x)) {
       App.state.view.x = data.view.x;
@@ -465,7 +433,6 @@ App.Tabs = {
     if (App.editHist) App.editHist.reset();
     App.editSession = null;
     App.state.edit = null;
-    
     App.state.groupEdit = [];
     App.state.hideOthers = false;
     App.state.keys.clear();
@@ -480,16 +447,15 @@ App.Tabs = {
     if (App.maybeBakeProxy) App.state.layers.forEach(l => { if (l.kind === 'merged') App.maybeBakeProxy(l); });
     if (App.requestFlashRefresh && App.state.selected.size) App.requestFlashRefresh();
     if (App.warmupSymbols) App.warmupSymbols();
-    this.flashCanvasIn();   
+    this.flashCanvasIn();    
   },
 
-  
   flashCanvasIn() {
     if (this._silentRender) return;
     const w = document.getElementById('canvasWrap');
     if (!w) return;
     w.classList.remove('sve-tab-in');
-    void w.offsetWidth;                  
+    void w.offsetWidth;                   
     w.classList.add('sve-tab-in');
     clearTimeout(this._tabInTimer);
     this._tabInTimer = setTimeout(() => w.classList.remove('sve-tab-in'), 400);
@@ -497,8 +463,7 @@ App.Tabs = {
 
   switchTo(id) {
     const d = this.docs.find(x => x.id === id);
-    if (!d || d === this.current) { if (App.Home) App.Home.hide(); this.renderBar(); return; }   
-    
+    if (!d || d === this.current) { if (App.Home) App.Home.hide(); this.renderBar(); return; }    
     App.state.quickClickOn = false;
     App.state.quickModDown = false;
     if (this.current) this.captureDoc(this.current);
@@ -507,13 +472,11 @@ App.Tabs = {
     this.renderBar();
   },
 
-  
   docFileName(doc) {
     const d = doc || this.current;
     if (!d) return App.i18n.t('tab.untitled');
     return d.svgSource || d.label || App.i18n.t('tab.untitled');
   },
-  
   markDirty() {
     const d = this.current;
     if (d) {
@@ -525,7 +488,6 @@ App.Tabs = {
     const d = id ? this.docs.find(x => x.id === id) : this.current;
     if (d) d.dirty = false;
   },
-  
   async saveWorkCopyForDoc(id) {
     const doc = this.docs.find(x => x.id === id);
     if (!doc || typeof App.buildWorkCopyStringForDoc !== 'function') return null;
@@ -535,13 +497,11 @@ App.Tabs = {
       if (!s) return null;
       const r = await window.sveApi.fileSaveWork(s, doc.workSource || null);
       if (!r || !r.ok) return r || { ok: false };
-      
       if (this.docs.includes(doc) && (doc.contentRevision || 0) === startRevision) doc.dirty = false;
       if (r.source) doc.workSource = r.source;
       return r;
     } catch (e) { return null; }
   },
-  
   async closeAllTabsGuard() {
     const dirtyDocs = this.docs.filter(d => d.dirty);
     if (!dirtyDocs.length) return true;
@@ -557,11 +517,10 @@ App.Tabs = {
     }
     return true;
   },
-  
   async closeDoc(id) {
     const doc = this.docs.find(x => x.id === id);
     if (!doc) return false;
-    if (doc.dirty && !this._silentRender) {   
+    if (doc.dirty && !this._silentRender) {    
       let act = 'dont';
       try {
         const r = await window.sveApi.confirmCloseDoc(this.docFileName(doc));
@@ -584,11 +543,9 @@ App.Tabs = {
     this.docs.splice(idx, 1);
     if (wasCurrent) {
       const next = this.docs[Math.max(0, idx - 1)] || null;
-      
       if (next) { this.loadDoc(next); if (!this._silentRender && App.Home) App.Home.hide(); }
       else {
-        
-        if (App.state.edit) { try { App.exitEdit(false); } catch (e) {  } }
+        if (App.state.edit) { try { App.exitEdit(false); } catch (e) {   } }
         App.clearAllLayers();
         App.bgSeq++;
         if (App.state.bg.image && App.state.bg.image.el && App.state.bg.image.el.parentNode) {
@@ -601,7 +558,7 @@ App.Tabs = {
         App.refreshPanel();
         App.refreshCount();
         App.updateView();
-        if (this._silentRender) {  }
+        if (this._silentRender) {   }
         else if (App.Home && !this.testMode) App.Home.show();
         else if (App.Home) App.Home.hide();
       }
@@ -611,7 +568,6 @@ App.Tabs = {
     this.renderBar();
   },
 
-  
   isEmptyActive() {
     return !this.current || (this.current.data && !this.current.data.layers.length);
   },
@@ -623,7 +579,6 @@ App.Tabs = {
     }
   },
 
-  
   setDocLabel(id, text) {
     const d = this.docs.find(x => x.id === id);
     if (!d) return false;
@@ -632,7 +587,6 @@ App.Tabs = {
     return true;
   },
 
-  
   prodNewSvg(content, label, sourceName) {
     const d = this.addDoc({ silent: true, label: label || App.i18n.t('name.untitled'), svgSource: sourceName || null });
     App.importSVGContent(content);
@@ -640,7 +594,6 @@ App.Tabs = {
     if (App.Home) App.Home.hide();
     return d;
   },
-  
   prodNewWork(content, name, source, mode) {
     const label = String(name || App.i18n.t('name.workcopy')).replace(/\.svework$/i, '') || App.i18n.t('name.workcopy');
     const d = this.addDoc({ silent: true, label });
@@ -652,8 +605,6 @@ App.Tabs = {
     return d;
   }
 };
-
-
 
 App.layoutFloatingBoxes = function () {
   const wrap = document.getElementById('canvasWrap');
@@ -673,8 +624,6 @@ App.layoutFloatingBoxes = function () {
     el.style.left = (align === 'right' ? Math.max(0, right - w - 10) : left + 10) + 'px';
     el.style.top = Math.max(0, bottom - h - 10) + 'px';
   };
-  place(document.getElementById('clipboardPanel'), 200, 122, 'right');
-  place(document.getElementById('origPreview'), 132, 170, 'left');
 };
 (function () {
   if (App.__floatBoxTimer) return;

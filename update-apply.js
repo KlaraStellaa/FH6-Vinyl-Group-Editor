@@ -1,16 +1,12 @@
 'use strict';
 
-
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 
-
 const DEFAULT_DELAY_PINGS = 4;
-
 const DEFAULT_RETRY = 300;
-
 
 function scheduleExeReplace(opts) {
   const o = opts || {};
@@ -21,10 +17,9 @@ function scheduleExeReplace(opts) {
   const delayPings = Number(o.delayPings || DEFAULT_DELAY_PINGS);
   const retry = Number(o.retry || DEFAULT_RETRY);
   const dir = String(o.batDir || os.tmpdir());
-  try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {  }
+  try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {   }
   const bat = path.join(dir, 'sve-replace-' + Date.now() + '-' + process.pid + '.cmd');
 
-  
   const script = [
     '@echo off',
     'setlocal',
@@ -35,7 +30,6 @@ function scheduleExeReplace(opts) {
     'set "RETRY=%~5"',
     'if "%DELAY%"=="" set "DELAY=4"',
     'if "%RETRY%"=="" set "RETRY=300"',
-    
     'ping -n %DELAY% 127.0.0.1 >nul 2>&1',
     'set /a N=0',
     ':MV',
@@ -59,13 +53,12 @@ function scheduleExeReplace(opts) {
   ].join('\r\n');
   fs.writeFileSync(bat, script, 'ascii');
 
-  
   const child = spawn('cmd.exe', ['/c', bat, targetExe, newExe, resultFile, String(delayPings), String(retry)], {
     detached: false,
     stdio: 'ignore',
     windowsHide: true
   });
-  child.on('error', function () {  });
+  child.on('error', function () {   });
   child.unref();
   return { bat: bat, resultFile: resultFile, delayPings: delayPings, retry: retry };
 }
@@ -93,9 +86,8 @@ function readState(file) {
 }
 
 function clearState(file) {
-  try { fs.unlinkSync(file); } catch (e) {  }
+  try { fs.unlinkSync(file); } catch (e) {   }
 }
-
 
 function isNewer(a, b) {
   const pa = String(a).replace(/^v/i, '').split('.');
