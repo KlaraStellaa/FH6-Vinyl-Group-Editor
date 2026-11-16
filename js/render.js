@@ -1,5 +1,4 @@
 'use strict';
-
 App.viewRevision = App.viewRevision || 0;
 App.renderPerfCounters = App.renderPerfCounters || {
   viewCommits: 0, autoVisibleScans: 0, autoVisibleLeaves: 0,
@@ -26,12 +25,16 @@ App.initRender = function () {
   App.handleG = $('#handleG');
   App.anchorG = $('#anchorG');
   App.flashG = $('#flashG');
-
   App.autoStaticFlashG = svgEl('g', { 'pointer-events': 'none' });
   App.flashG.parentNode.insertBefore(App.autoStaticFlashG, App.flashG);
-
-  try { App.flashG.style.setProperty('--sve-flash-color', 'rgb(255,250,1)'); }
+  try { App.flashG.style.setProperty('--sve-flash-color', 'rgb(235,234,58)'); }
   catch (e) { console.warn('[render] 闪动颜色初始化失败', e); }
+  try {
+    window.addEventListener('blur', function () { if (App.clearFlash) App.clearFlash(); });
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden' && App.clearFlash) App.clearFlash();
+    });
+  } catch (e) {   }
   App.overlayG = $('#overlayG');
   App.outlinePolys = [];
   App.handleEls = [];
@@ -44,9 +47,7 @@ App.initRender = function () {
 };
 
 App.buildGridPattern = function () {
-
   const g = App.GRID_STEP || 20;
-
   const N = 3;
   const P = g / N;                     
   const dash = P * 0.5, gap = P * 0.5; 
@@ -60,7 +61,6 @@ App.buildGridPattern = function () {
     'stroke-linecap': 'butt'
   };
   const p = svgEl('pattern', { id: 'sveGridP', width: g, height: g, patternUnits: 'userSpaceOnUse' });
-
   App.gridPathH = svgEl('path', Object.assign({}, base, { d: 'M ' + g + ' 0 L 0 0' }));
   App.gridPathV = svgEl('path', Object.assign({}, base, { d: 'M 0 0 L 0 ' + g }));
   p.appendChild(App.gridPathH);
@@ -79,15 +79,12 @@ App.updateGridStroke = function () {
   App.gridRect.setAttribute('y', v.y - 4);
   App.gridRect.setAttribute('width', w / v.scale + 8);
   App.gridRect.setAttribute('height', h / v.scale + 8);
-
   if (App.updateGridVisibility) App.updateGridVisibility();
 };
 App.updateView = function () {
   App.viewRevision = (App.viewRevision || 0) + 1;
   App.renderPerfCounters.viewCommits++;
-
   App._viewMutT = performance.now();
-
   if (App.layersRoot && App.layersRoot.style.display === 'none' && !(App.state && App.state.batching) &&
       !(App.state && App.state.layersHidden) && !(App.state && App.state.eyeMode === 'bg')) {
     App.layersRoot.style.display = '';
@@ -96,25 +93,18 @@ App.updateView = function () {
   const v = App.state.view;
   App.svg.setAttribute('viewBox', v.x + ' ' + v.y + ' ' + (r.width / v.scale) + ' ' + (r.height / v.scale));
   App.updateGridRect();
-
   if (App.updateEditStaticViewport) App.updateEditStaticViewport();
-
   if (App.maybeUpgradeProxyRes) App.maybeUpgradeProxyRes();
-
   if (App.autoStaticMaybe) App.autoStaticMaybe();
-
   try {
     if (App.Tabs && App.Tabs.current && App.Tabs.current.data) {
       App.Tabs.current.data.view = { x: App.state.view.x, y: App.state.view.y, scale: App.state.view.scale };
     }
   } catch (e) {   }
-
   const _am = App.state.editMode;
   if (App.drawAnchorIcon && (_am === 'size' || _am === 'rotate' || _am === 'skew')) App.drawAnchorIcon();
-
   if (App.scheduleLodRefresh) App.scheduleLodRefresh();
 };
-
 
 App.lod = {
   enabled: true,
@@ -122,10 +112,8 @@ App.lod = {
   minScale: 0.01,
   maxSide: 4096,               
   maxPixels: 8.4e6,            
-
   layerMaxSide: 768,           
   layerMaxPixels: 6e5,         
-
   minUpgrade: 1.5,
   debounceMs: 130,             
   maxLayersPerPass: 48,        
@@ -133,11 +121,9 @@ App.lod = {
   maxPixelsPerPass: 1.2e7,     
   unknownNativeSide: 1024,     
   flashLeafMax: 256,           
-
   flashTotalPixels: 1.6e7,
   stats: { passes: 0, rebuilt: 0, offscreen: 0, capped: 0, bucket: 0, bucketScale: 1, lastPassMs: 0, walkMs: 0, texMaxSide: 0 }
 };
-
 App._texNative = new Map();
 App.texNativeKey = function (uri) {
   if (!uri) return '';
@@ -149,7 +135,6 @@ App.noteTexNative = function (uri, w, h) {
 };
 App.lodNativeSide = function (layer) {
   if (!layer) return App.lod.unknownNativeSide;
-
   if (layer._texSide) return layer._texSide;
   const uri = layer.dataUri;
   if (!uri) return App.lod.unknownNativeSide;
@@ -157,7 +142,6 @@ App.lodNativeSide = function (layer) {
   if (v) { layer._texSide = v; return v; }
   return App.lod.unknownNativeSide;
 };
-
 App.lodBucketOf = function (scale) {
   const s = Math.max(App.lod.minScale, Number(scale) || 1);
   return Math.max(-24, Math.ceil(Math.log(s) / Math.log(App.lod.step) - 1e-9));
@@ -165,7 +149,6 @@ App.lodBucketOf = function (scale) {
 App.lodBucketScale = function (bucket) {
   return Math.pow(App.lod.step, Math.max(-24, bucket | 0));
 };
-
 App.lodTexPlan = function (layer, bucketOverride) {
   const dpr = window.devicePixelRatio || 1;
   const bucket = bucketOverride === undefined
@@ -178,10 +161,8 @@ App.lodTexPlan = function (layer, bucketOverride) {
   const bySide = App.lod.layerMaxSide / Math.max(w, h);
   const byPixels = Math.sqrt(App.lod.layerMaxPixels / (w * h));
   let k = Math.max(0.02, Math.min(want, byNative, bySide, byPixels));
-
   const held = k > 1 && k < App.lod.minUpgrade;
   if (held) k = 1;
-
   const cappedBy = (held || k >= want * 0.999) ? '' : (byNative <= bySide && byNative <= byPixels ? 'native' : 'texture');
   const px = Math.max(1, Math.round(w * k));
   const py = Math.max(1, Math.round(h * k));
@@ -190,11 +171,9 @@ App.lodTexPlan = function (layer, bucketOverride) {
     px: px, py: py,
     capped: !!cappedBy,
     cappedBy: cappedBy,
-
     key: px + 'x' + py + '@' + dpr
   };
 };
-
 App.layerLodKey = function (layer) {
   if (!layer || layer.kind !== 'symbol' || layer.isMask) return '';
   return App.lodTexPlan(layer).key;
@@ -206,9 +185,7 @@ App.layerLodUrl = function (layer) {
   const plan = App.lodTexPlan(layer);
   return App.symbolColorUrl(layer, { k: plan.k });
 };
-
 App._lodQueue = null;          
-
 App.lodGroupLocalView = function (group, cache) {
   if (cache.has(group)) return cache.get(group);
   let r = null;
@@ -216,7 +193,6 @@ App.lodGroupLocalView = function (group, cache) {
   cache.set(group, r);
   return r;
 };
-
 App.lodLeafNearRect = function (l, r) {
   if (!r) return true;
   const hw = Math.abs(Number(l.w) || 0) / 2, hh = Math.abs(Number(l.h) || 0) / 2;
@@ -225,19 +201,16 @@ App.lodLeafNearRect = function (l, r) {
   const cx = Number(l.x) || 0, cy = Number(l.y) || 0;
   return cx + rad >= r.minx && cx - rad <= r.maxx && cy + rad >= r.miny && cy - rad <= r.maxy;
 };
-
 App.lodKeyArea = function (key, l) {
   const m = key ? /^(\d+)x(\d+)@/.exec(key) : null;
   if (m) return (Number(m[1]) || 1) * (Number(m[2]) || 1);
   return Math.max(1, Math.round(Number(l && l.w) || 1)) * Math.max(1, Math.round(Number(l && l.h) || 1));
 };
-
 App.lodInstalledPx = function (l) {
   const m = l && l._lodKey ? /^(\d+)x(\d+)@/.exec(l._lodKey) : null;
   if (m) return Number(m[1]) || 1;
   return Math.max(1, Math.round(Number(l && l.w) || 1));
 };
-
 App.lodBuildQueue = function (bucket, force) {
   const layers = (App.state && App.state.layers) || [];
   const vp = App.autoStaticViewportRect ? App.autoStaticViewportRect(0.25) : null;
@@ -246,7 +219,6 @@ App.lodBuildQueue = function (bucket, force) {
   let offscreen = 0, capped = 0;
   const consider = (l, localRect) => {
     if (!l || l.kind !== 'symbol' || l.isMask || !l.imgEl) return;
-
     if (App.symbolVecPath && App.symbolVecPath(l)) return;
     const plan = App.lodTexPlan(l, bucket);
     if (plan.cappedBy === 'texture') capped++;
@@ -262,7 +234,6 @@ App.lodBuildQueue = function (bucket, force) {
     for (let i = 0; i < kids.length; i++) {
       const ch = kids[i];
       if (ch && ch.kind === 'merged') { walk(ch, ch); continue; }
-
       const local = group && ch.el && ch.el.parentNode === group.el
         ? App.lodGroupLocalView(group, groupCache) : null;
       consider(ch, local);
@@ -283,16 +254,13 @@ App.refreshLayerLod = function (opts) {
   if (!App.lod.enabled) return 0;
   const layers = App.state && App.state.layers;
   if (!layers || !layers.length) return 0;
-
   if (App.autoStatic && (App.autoStatic.active || App.autoStatic.baking)) { App._lodQueue = null; return 0; }
   if (App.editStatic && (App.editStatic.active || App.editStatic.baking)) { App._lodQueue = null; return 0; }
-
   if (App.autoStaticEligible && App.autoStaticEligible()) { App._lodQueue = null; return 0; }
   const t0 = performance.now();
   const bucket = App.lodBucketOf(App.state.view.scale || 1);
   let q = App._lodQueue;
   if (!q || q.bucket !== bucket) {
-
     if (App.refreshImpBitmaps) App.refreshImpBitmaps();
     q = App._lodQueue = { bucket: bucket, list: App.lodBuildQueue(bucket, opts.force), i: 0, done: 0 };
     App.lod.stats.walkMs = Math.round((performance.now() - t0) * 10) / 10;
@@ -302,7 +270,6 @@ App.refreshLayerLod = function (opts) {
   const limit = Math.max(1, opts.limit || App.lod.maxLayersPerPass);
   let px = 0, done = 0;
   while (q.i < list.length && done < limit) {
-
     if ((App._lodInflight || 0) >= App.lod.maxInflight) break;
     const entry = list[q.i];
     const cost = entry.plan.px * entry.plan.py;
@@ -334,7 +301,6 @@ App.refreshLayerLod = function (opts) {
       });
     } catch (e) {   }
   }
-
   if (q.i < list.length) {
     if (App._lodDrainTimer) clearTimeout(App._lodDrainTimer);
     App._lodDrainTimer = setTimeout(function () {
@@ -346,7 +312,6 @@ App.refreshLayerLod = function (opts) {
   }
   return done;
 };
-
 App._lodAppliedBucket = null;
 App._lodLastAt = 0;
 App._lodDirty = false;          
@@ -367,11 +332,9 @@ App.scheduleLodRefresh = function (delay) {
     App._lodLastAt = performance.now();
     App._lodAppliedBucket = App.lodBucketOf((App.state && App.state.view ? App.state.view.scale : 1) || 1);
     App.refreshLayerLod();
-
     if (App.refreshFlashLod) App.refreshFlashLod();
   }, wait);
 };
-
 
 App.screenToDoc = function (clientX, clientY) {
   const p = new DOMPoint(clientX, clientY).matrixTransform(App.svg.getScreenCTM().inverse());
@@ -382,9 +345,7 @@ App.docToScreen = function (x, y) {
   return { x: p.x, y: p.y };
 };
 
-
 App.getItemDocBBox = function (item) {
-
   if (item.kind === 'merged') {
     if (item._localBB === undefined) {
       const bb0 = item.el.getBBox();
@@ -398,7 +359,6 @@ App.getItemDocBBox = function (item) {
     }
     const loc = item._localBB;
     if (loc) {
-
       let m = null;
       try { m = App.transformChainMat(item); } catch (e) { m = null; }
       if (m) {
@@ -416,9 +376,7 @@ App.getItemDocBBox = function (item) {
       }
     }
   }
-
   if (item.kind === 'merged') {
-
     const lb = App.computeLocalBBox(item);
     const cs = [[lb.x, lb.y], [lb.x + lb.w, lb.y], [lb.x + lb.w, lb.y + lb.h], [lb.x, lb.y + lb.h]]
       .map(p => {
@@ -437,7 +395,6 @@ App.getItemDocBBox = function (item) {
   }
   return App.modelBBox(item);
 };
-
 
 App.modelBBox = function (item) {
   const hw = (item.w || 0) / 2, hh = (item.h || 0) / 2;
@@ -468,10 +425,8 @@ App.modelBBox = function (item) {
   };
 };
 
-
 App.editStatic = { active: false, baking: false, items: [], bit: null, view: null, failedTop: null };
 App.editStaticBgEl = null;
-
 
 App.editStaticViewportRect = function () {
   const v = App.state.view;
@@ -482,14 +437,12 @@ App.editStaticViewportRect = function () {
 };
 App.layerInRect = function (l, rc) {
   try {
-
     const b = l.kind === 'merged'
       ? App.getItemDocBBox(l)
       : (App.modelBBox ? App.modelBBox(l) : App.getItemDocBBox(l));
     return b.x < rc.x + rc.w && b.x + b.w > rc.x && b.y < rc.y + rc.h && b.y + b.h > rc.y;
   } catch (e) { return true; }
 };
-
 
 App.bakeLayerSourceKey = function (layer, size) {
   if (!layer) return 'none';
@@ -501,7 +454,6 @@ App.bakeLayerSourceKey = function (layer, size) {
     return 'mask:' + theme + ':' + layer.kind + ':' + symbol + ':' + (layer.patternKey || '') + ':' +
       (layer.w || 0) + 'x' + (layer.h || 0) + ':' + size;
   }
-
   if (layer.kind === 'symbol') {
     return 'symbol:' + symbol + ':' + (layer.color || '#ffffff') +
       ':' + Math.round(layer.w || 0) + 'x' + Math.round(layer.h || 0);
@@ -509,16 +461,11 @@ App.bakeLayerSourceKey = function (layer, size) {
   if (layer.kind === 'pattern') return 'pattern:' + (layer.patternKey || '') + ':' + (layer.color || '#ffffff') + ':' + size;
   return 'import:' + layer.id + ':' + size;
 };
-
-
 App._bakeVecRaster = new Map();
 App._bakeVecRasterSeq = 0;
 App._bakeVecRasterPx = 0;
-
 App._bakeVecRasterBudget = 3e8;
-
 App._bakeVecRasterMaxSide = 2048;
-
 App.BAKE_VEC_STEP = 1.5;
 App.bakeVecRasterSnap = function (needSide) {
   const st = App.BAKE_VEC_STEP;
@@ -529,7 +476,6 @@ App.bakeVecRasterDrop = function () {
   App._bakeVecRaster.clear();
   App._bakeVecRasterPx = 0;
 };
-
 App.BAKE_CULLED_URL = (function () {
   try {
     const c = document.createElement('canvas');
@@ -548,7 +494,6 @@ App.bakeVecRasterGet = function (key) {
 };
 App.bakeVecRasterPut = function (key, cv, px, side) {
   if (px > App._bakeVecRasterBudget) return;
-
   const old = App._bakeVecRaster.get(key);
   if (old) { App._bakeVecRasterPx -= old.px; App._bakeVecRaster.delete(key); }
   if (App._bakeVecRasterPx + px > App._bakeVecRasterBudget) {
@@ -564,27 +509,22 @@ App.bakeVecRasterPut = function (key, cv, px, side) {
 App.bakeLayerSource = function (layer, size, memo, opts) {
   size = size || 256;
   const drawable = !!(opts && opts.drawable);
-
   if (layer && layer.isMask && layer.kind !== 'import') size = Math.max(size, 512);
   const key = App.bakeLayerSourceKey(layer, size);
   if (memo && memo.has(key)) return memo.get(key);
   let source;
   try {
-
     if (layer.kind === 'symbol' && !layer.dataUri && layer.symbolKey && App.relinkSymbolData) App.relinkSymbolData(layer);
     if (layer.isMask && layer.kind !== 'import' && App.maskBakeUrl) source = App.maskBakeUrl(layer, size);
     else if (layer.kind === 'symbol') {
-
       const f = Number(opts && opts.f) || 0;
       const vurl = App.symbolVecUrl ? App.symbolVecUrl(layer) : '';
       if (vurl && f > 0) {
         const sym = App.symbolMap && App.symbolMap.get ? App.symbolMap.get(layer.symbolKey) : null;
         const sw0 = Math.max(1, (sym && sym.w) || layer.w || 1);
         const sh0 = Math.max(1, (sym && sym.h) || layer.h || 1);
-
         const want = App.bakeVecRasterSnap(Math.max(sw0, sh0) * f);
         const ck = 'v|' + (layer.symbolKey || '') + '|' + (layer.color || '#ffffff');
-
         const rc = opts && opts.pairCount ? (opts.pairCount.get(ck) || 0) : 2;
         if (rc < 2) source = Promise.resolve(vurl);
         else {
@@ -634,7 +574,6 @@ App.bakeLayerSource = function (layer, size, memo, opts) {
   return result;
 };
 
-
 App.resolveBakeLayerSources = function (leaves, size, concurrency, shouldContinue, opts) {
   leaves = leaves || [];
   size = size || 256;
@@ -645,7 +584,6 @@ App.resolveBakeLayerSources = function (leaves, size, concurrency, shouldContinu
     const finish = function (value) { if (!settled) { settled = true; resolve(value); } };
     const keys = new Array(leaves.length);
     const unique = new Map();
-
     const pairCount = new Map();
     const keep = (opts && opts.keep) || null;    
     let i = 0;
@@ -669,6 +607,10 @@ App.resolveBakeLayerSources = function (leaves, size, concurrency, shouldContinu
       if (App.noteBakeProgress) App.noteBakeProgress();
       if (i < leaves.length) { setTimeout(collect, 0); return; }
       const entries = Array.from(unique.entries());
+      if (App.autoStatic && App.autoStatic.baking && App.autoStatic._run) {
+        App.autoStatic._run.src = entries.length;
+        App.autoStatic._run.srcDone = 0;
+      }
       const srcOpts = Object.assign({}, opts || {}, { pairCount: pairCount });
       const byKey = new Map();
       const requestedLimit = Number(concurrency);
@@ -714,6 +656,7 @@ App.resolveBakeLayerSources = function (leaves, size, concurrency, shouldContinu
           }).then(function () {
             if (settled) return;
             sourceDone++;
+            if (App.autoStatic && App.autoStatic.baking && App.autoStatic._run) App.autoStatic._run.srcDone = sourceDone;
             if (sourceDone >= entries.length) expand();
             else pumpSources();
           });
@@ -726,13 +669,14 @@ App.resolveBakeLayerSources = function (leaves, size, concurrency, shouldContinu
   });
 };
 
-
 App.loadBakeImages = function (urls, warnLabel, shouldContinue) {
   const uniq = Array.from(new Set((urls || []).filter(Boolean)));
   if (!uniq.length) return Promise.resolve(new Map());
+  if (App.autoStatic && App.autoStatic.baking && App.autoStatic._run) {
+    App.autoStatic._run.dec = uniq.length;
+    App.autoStatic._run.decDone = 0;
+  }
   const limit = uniq.length > 32 ? 8 : uniq.length;
-
-
   const SVG_CAP = 2600;
   const cache = App._bakeSvgCache || (App._bakeSvgCache = new Map());
   return new Promise(function (resolve) {
@@ -763,7 +707,6 @@ App.loadBakeImages = function (urls, warnLabel, shouldContinue) {
           byUrl.set(url, img || null);
           if (isSvg && img && img.decode) {
             if (cache.size >= SVG_CAP) {
-
               let drop = Math.max(1, Math.round(SVG_CAP * 0.25));
               for (const k of cache.keys()) { cache.delete(k); if (--drop <= 0) break; }
             }
@@ -776,6 +719,8 @@ App.loadBakeImages = function (urls, warnLabel, shouldContinue) {
         }).then(function () {
           if (settled) return;
           active--; done++;
+          if (App.autoStatic && App.autoStatic.baking && App.autoStatic._run) App.autoStatic._run.decDone = done;
+          if (App.noteBakeProgress) App.noteBakeProgress();
           if (done >= uniq.length) finish(byUrl);
           else pump();
         });
@@ -785,7 +730,6 @@ App.loadBakeImages = function (urls, warnLabel, shouldContinue) {
     pump();
   });
 };
-
 
 App.bakeEditStatic = function (items, viewport, shouldContinue) {
   const vis = viewport ? items.filter(l => App.layerInRect(l, viewport)) : items;
@@ -803,13 +747,14 @@ App.bakeEditStatic = function (items, viewport, shouldContinue) {
     const finishResult = function (value) { if (!settled) { settled = true; resolve(value); } };
     let mi = 0;
     let i = 0;
+    const leafMat = App.bakeLeafMatFn();
     const matrixStep = () => {
       if (!alive()) { finishResult(null); return; }
       if (App.renderInteractionBusy && App.renderInteractionBusy()) { setTimeout(matrixStep, 60); return; }
       const t0 = performance.now();
       let n = 0;
       while (mi < leaves.length && (n < MIN_CHUNK || performance.now() - t0 < BUDGET)) {
-        mats[mi] = transformChainMat(leaves[mi]);
+        mats[mi] = leafMat(leaves[mi]);
         mi++; n++;
       }
       if (mi < leaves.length) { setTimeout(matrixStep, 0); return; }
@@ -829,14 +774,12 @@ App.bakeEditStatic = function (items, viewport, shouldContinue) {
       }
       if (i < leaves.length) { setTimeout(bboxStep, 0); return; }
       if (!isFinite(minx)) { finishResult(null); return; }
-
       const bx = viewport ? viewport.x : minx;
       const by = viewport ? viewport.y : miny;
       const bw = viewport ? viewport.w : Math.max(1, maxx - minx);
       const bh = viewport ? viewport.h : Math.max(1, maxy - miny);
       let f;
       if (viewport) {
-
         const dpr = window.devicePixelRatio || 1;
         const target = (App.state.view.scale || 1) * dpr;
         f = Math.min(target, 4096 / Math.max(bw, bh));
@@ -863,7 +806,6 @@ App.bakeEditStatic = function (items, viewport, shouldContinue) {
             rootRect: { x: bx, y: by, w: bw, h: bh }, shouldContinue: alive
           }).then(function (drawn) {
             if (!drawn || !alive()) { finishResult(null); return; }
-
             finishResult({ url: cv.toDataURL(), x: bx, y: by, w: bw, h: bh, f: f, failedTop: ready.failedTop });
           });
         }).catch(e => { console.warn('[bake] 编辑静态图源加载失败', String(e && e.message || e).slice(0, 160)); finishResult(null); });
@@ -876,14 +818,12 @@ App.beginEditStatic = function () {
   const s = App.state;
   if (!s.edit || s.edit.type === 'bg') return;
   if (App.state.eyeMode) return; 
-
   if (App.state.hideOthers) {
     if (App.editStatic.active || App.editStatic.baking) App.endEditStatic();
     return;
   }
   const targets = App.editTargets();
   if (App.editStatic.active) {
-
     const before = App.editStatic.items.length;
     App.editStatic.items = App.editStatic.items.filter(l => !targets.includes(l));
     if (App.editStatic.items.length !== before) {
@@ -897,19 +837,16 @@ App.beginEditStatic = function () {
       }
       App.rebakeEditStaticViewport();
     }
-
     targets.forEach(l => App.restoreEsVisibility(l));
     return;
   }
   if (App.editStatic.baking) return;
-
   targets.forEach(l => App.restoreEsVisibility(l));
   const items = s.layers.filter(l => !targets.includes(l));
   if (!items.length) return;
   App.editStatic.active = true;
   App.editStatic.items = items;
   App.editStatic.view = null;
-
   App.rebakeEditStaticViewport();
 };
 App.endEditStatic = function () {
@@ -930,10 +867,8 @@ App.endEditStatic = function () {
     if (App.editStaticStageEl.isConnected) App.editStaticStageEl.remove();
     App.editStaticStageEl = null;
   }
-
   try { (App.state.layers || []).forEach(l => App.restoreEsVisibility(l)); } catch (e) {   }
 };
-
 App.setEsHidden = function (l, hide) {
   if (!l || !l.el) return;
   if (hide) {
@@ -949,7 +884,6 @@ App.setEsHidden = function (l, hide) {
 };
 App.restoreEsVisibility = function (l) { App.setEsHidden(l, false); };
 
-
 App.setAutoStaticHidden = function (l, hide) {
   if (!l || !l.el) return;
   if (hide) {
@@ -963,13 +897,10 @@ App.setAutoStaticHidden = function (l, hide) {
 };
 App.restoreAutoStaticDisplay = function (l) { App.setAutoStaticHidden(l, false); };
 
-
 App.autoStatic = { active: false, baking: false, bit: null, view: null, token: 0, hiding: [], url: null, flashUrls: null, contentRevision: null, colorRev: 0 };
-
 App._colorRev = 0;
 App.autoStaticBgEl = null;
 App.autoStaticFlashPair = null;
-
 App._bakeCanvasSpare = null;
 App.takeBakeCanvas = function (w, h) {
   let cv = App._bakeCanvasSpare;
@@ -982,11 +913,9 @@ App.takeBakeCanvas = function (w, h) {
   return cv;
 };
 App.releaseBakeCanvas = function (cv) {
-
   if (cv) App._bakeCanvasSpare = cv;
 };
 App.autoStaticLayerThreshold = 300;
-
 App.renderPointerActive = false;
 App.renderInteractionUntil = 0;
 App.renderResizeUntil = 0;
@@ -1016,19 +945,15 @@ App.renderInteractionBusy = function () {
   const now = performance.now();
   return !!App.renderPointerActive || now < (App.renderInteractionUntil || 0) || now < (App.renderResizeUntil || 0);
 };
-
 App.bakeDeferBusy = function () {
   if (App._bakeUrgent) return false;
   if (!App.renderInteractionBusy || !App.renderInteractionBusy()) return false;
-
   if (App.autoStatic.baking && !App.autoStaticViewUpToDate()) return false;
   return true;
 };
-
 App.noteBakeProgress = function () {
   if (App.autoStatic && App.autoStatic.baking) App.autoStatic._progressAt = performance.now();
 };
-
 App.autoStaticViewUpToDate = function () {
   const st = App.autoStatic;
   if (!st || !st.active || !st.view) return false;
@@ -1040,22 +965,16 @@ App.autoStaticViewUpToDate = function () {
   const f = Number(v._f) || 0;
   return !(f > 0 && f < App.autoStaticNeedF() * 0.8);
 };
-
 App.autoStaticKeepStale = function () {
   if (!App.autoStatic || !App.autoStatic.active) return false;
   if (!(App.renderInteractionBusy && App.renderInteractionBusy())) return false;
-
   return App.autoStaticKeepOld();
 };
-
 App.autoStaticDeferStart = function () {
   if (!App.renderInteractionBusy || !App.renderInteractionBusy()) return false;
-
   return !!App.autoStatic.active;
 };
-
 App.autoStaticViewportPad = 1.0;
-
 App.autoStaticEnabled = true;        
 
 
@@ -1068,7 +987,6 @@ App.autoStaticLeafCount = function () {
   }
   return n;
 };
-
 App.autoStaticNeeded = function () {
   const layers = App.state.layers || [];
   const prof = App._proxyBake;
@@ -1080,7 +998,6 @@ App.autoStaticNeeded = function () {
   return false;
 };
 App.autoStaticEligible = function () {
-
   if (App.editStatic && App.editStatic.active) return false;
   if (!App.autoStaticEnabled) return false;    
   if (!App.state.layers || !App.state.layers.length) return false;
@@ -1093,7 +1010,6 @@ App.autoStaticEligible = function () {
   if (!App.autoStaticNeeded()) return false;
   return App.autoStaticVisibleLeafCount() >= App.autoStaticLayerThreshold;
 };
-
 App.autoStaticVisibleLeafCount = function () {
   const layers = App.state.layers || [];
   if (!layers.length) return 0;
@@ -1111,7 +1027,6 @@ App.autoStaticVisibleLeafCount = function () {
   App.renderPerfCounters.autoVisibleLeaves += n;
   return n;
 };
-
 App.autoStaticContentBBox = function () {
   const layers = App.state.layers || [];
   if (!layers.length) return null;
@@ -1145,10 +1060,8 @@ App.autoStaticViewportRect = function (pad) {
   return { x: x, y: y, w: w, h: h, scale: sc };
 };
 
-
 App.autoStaticRectF = function (rect) {
   const dpr = window.devicePixelRatio || 1;
-
   const byScreen = (App.state.view.scale || 1) * dpr;
   const byCap = 4096 / Math.max(rect.w, rect.h);
   return Math.min(byScreen, byCap);
@@ -1157,7 +1070,6 @@ App.bakeOpacity = function (layer) {
   const n = Number(layer && layer.opacity);
   return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 1;
 };
-
 
 App.prepareBakeTree = function (items, leaves, mats) {
   const leafIndex = new Map();
@@ -1265,7 +1177,6 @@ App.drawBakeTree = function (ctx, items, options) {
           target.globalAlpha = opacity;
           target.drawImage(scratch, (b.x - origin.x) * f, (b.y - origin.y) * f);
           target.restore();
-
           scratch.width = 1; scratch.height = 1;
         }
       } else {
@@ -1290,12 +1201,10 @@ App.drawBakeTree = function (ctx, items, options) {
   };
   return drawNodes(items || [], ctx, { x: root.x, y: root.y });
 };
-
 App.autoStaticNeedF = function () {
   const dpr = window.devicePixelRatio || 1;
   return (App.state.view.scale || 1) * dpr;
 };
-
 App.autoStaticViewSig = function () {
   const v = App.state.view;
   const r = App.wrap.getBoundingClientRect();
@@ -1319,15 +1228,11 @@ App.removeAutoStaticFlashPair = function (pair) {
   if (pair.g && pair.g.parentNode) pair.g.parentNode.removeChild(pair.g);
 };
 App.autoStaticRelease = function () {
-
   if (App.autoStatic && App.autoStatic.active) {
     try { App._asRelStack = String((new Error()).stack || '').split(String.fromCharCode(10)).slice(1, 6).join(' <- ').slice(0, 400); } catch (e) {   }
   }
-
   App._bakeUrgent = 0;
-
   App._autoStaticSig = null;
-
   App.autoStatic._finishing = 0;
   if (!App.autoStatic.active && !App.autoStatic.baking && !(App.autoStatic.hiding || []).length &&
       !App.autoStaticFlashPair && !App.autoStatic.flashUrls) return;
@@ -1335,7 +1240,6 @@ App.autoStaticRelease = function () {
   App.autoStatic.baking = false;
   App.autoStatic.token++;
   (App.autoStatic.hiding || []).forEach(function (l) { try { App.restoreAutoStaticDisplay(l); } catch (e) {   } });
-
   (App.autoStatic.vectorKeep || []).forEach(function (l) { try { App.restoreAutoStaticDisplay(l); } catch (e) {   } });
   App.autoStatic.vectorKeep = null;
 
@@ -1362,12 +1266,10 @@ App.autoStaticRelease = function () {
     App.autoStaticBgEl.removeAttribute('href');
   }
 };
-
 App.buildAutoStaticFlashUrls = function (source, shouldContinue) {
   if (!source || !source.width || !source.height) return Promise.resolve(null);
   const alive = typeof shouldContinue === 'function' ? shouldContinue : function () { return true; };
   if (!alive()) return Promise.resolve(null);
-
   const tw = Math.max(1, Math.round(source.width / 2));
   const th = Math.max(1, Math.round(source.height / 2));
   const tinted = document.createElement('canvas');
@@ -1396,14 +1298,14 @@ App.buildAutoStaticFlashUrls = function (source, shouldContinue) {
     });
   };
   let yellow = '';
-  return encode('#FFFA01', 'yellow').then(function (url) {
+  return encode('#EBEA3A', 'yellow').then(function (url) {
     yellow = url;
     if (!alive()) {
       App.revokeAutoStaticFlashUrls({ yellow: yellow });
       yellow = '';
       return '';
     }
-    return encode('#0402FF', 'blue');
+    return encode('#0A0AFC', 'blue');
   }).then(function (blue) {
     tinted.width = 1;
     tinted.height = 1;
@@ -1418,7 +1320,6 @@ App.buildAutoStaticFlashUrls = function (source, shouldContinue) {
     return null;
   });
 };
-
 App.bakeAutoStatic = function (items, viewport, shouldContinue) {
   const vis = viewport ? items.filter(function (l) { return App.layerInRect(l, viewport); }) : items;
   const leaves = [];
@@ -1427,7 +1328,7 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
   if (!leaves.length) return Promise.resolve(null);
   const alive = typeof shouldContinue === 'function' ? shouldContinue : function () { return true; };
   const mats = new Array(leaves.length);
-
+  App.autoStatic._run = { leaf: leaves.length, src: 0, srcDone: 0, dec: 0, decDone: 0 };
   const keep = viewport ? new Array(leaves.length) : null;
   const bxKeep = viewport ? viewport.x : 0;
   const byKeep = viewport ? viewport.y : 0;
@@ -1436,7 +1337,6 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
   let culled = 0;
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
   const BUDGET = 8, MIN_CHUNK = 8;
-
   const urgent = !App.autoStatic.active;
   if (urgent) App._bakeUrgent = (App._bakeUrgent || 0) + 1;
   const p = new Promise(function (resolve) {
@@ -1444,27 +1344,36 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
     const finishResult = function (value) { if (!settled) { settled = true; resolve(value); } };
     let mi = 0;
     let i = 0;
-    App.autoStatic._stage = 'matrix';
+    const leafMat = App.bakeLeafMatFn();
+    const SINGLE_PASS = leaves.length <= 12000;
     const matrixStep = function () {
       if (!alive()) { finishResult(null); return; }
       if (App.bakeDeferBusy()) { if (App.noteBakeProgress) App.noteBakeProgress(); setTimeout(matrixStep, 60); return; }
+      App.autoStatic._stage = 'matrix';
       const t0 = performance.now();
       let n = 0;
-      while (mi < leaves.length && (n < MIN_CHUNK || performance.now() - t0 < BUDGET)) {
-        mats[mi] = transformChainMat(leaves[mi]);
+      while (mi < leaves.length && (SINGLE_PASS || n < MIN_CHUNK || performance.now() - t0 < BUDGET)) {
+        mats[mi] = leafMat(leaves[mi]);
         mi++; n++;
+      }
+      if (App.autoStatic._run) {
+        App.autoStatic._run.mc = (App.autoStatic._run.mc || 0) + 1;
+        App.autoStatic._run.mi = mi;
+        App.autoStatic._run.mdur = Math.round(performance.now() - t0);
+        App.autoStatic._run.mgap = Math.round(performance.now() - (App.autoStatic._run.mlast || t0));
+        App.autoStatic._run.mlast = performance.now();
       }
       if (App.noteBakeProgress) App.noteBakeProgress();
       if (mi < leaves.length) { setTimeout(matrixStep, 0); return; }
       bboxStep();
     };
-    App.autoStatic._stage = 'bbox';
     const bboxStep = function () {
       if (!alive()) { finishResult(null); return; }
       if (App.bakeDeferBusy()) { if (App.noteBakeProgress) App.noteBakeProgress(); setTimeout(bboxStep, 60); return; }
+      App.autoStatic._stage = 'bbox';
       const t0 = performance.now();
       let n = 0;
-      while (i < leaves.length && (n < MIN_CHUNK || performance.now() - t0 < BUDGET)) {
+      while (i < leaves.length && (SINGLE_PASS || n < MIN_CHUNK || performance.now() - t0 < BUDGET)) {
         const hw = (leaves[i].w || 0) / 2, hh = (leaves[i].h || 0) / 2;
         let lminx = Infinity, lminy = Infinity, lmaxx = -Infinity, lmaxy = -Infinity;
         [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].forEach(function (p) {
@@ -1476,7 +1385,6 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
           if (r.y < lminy) lminy = r.y;
           if (r.y > lmaxy) lmaxy = r.y;
         });
-
         if (keep) {
           keep[i] = (lmaxx + 1 >= bxKeep && lminx - 1 <= bxKeep + bwKeep &&
                      lmaxy + 1 >= byKeep && lminy - 1 <= byKeep + bhKeep);
@@ -1494,7 +1402,6 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
       let f;
       if (viewport) {
         const dpr2 = window.devicePixelRatio || 1;
-
         const fGiven = Number(viewport._f);
         f = (fGiven > 0) ? fGiven : Math.min((App.state.view.scale || 1) * dpr2, 4096 / Math.max(bw, bh));
       } else {
@@ -1505,7 +1412,6 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
       const cw = Math.max(1, Math.round(bw * f)), ch = Math.max(1, Math.round(bh * f));
       const cv = App.takeBakeCanvas(cw, ch);
       const cx = cv.getContext('2d');
-
       let maxLeafSide = 1;
       for (let i = 0; i < leaves.length; i++) {
         const l = leaves[i];
@@ -1517,7 +1423,6 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
       App.autoStatic._stage = 'sources';
       App.resolveBakeLayerSources(leaves, srcSize, undefined, alive, { drawable: true, f: f, keep: keep }).then(function (urls) {
         if (!alive() || urls.length !== leaves.length) { finishResult(null); return; }
-
         const uniq = Array.from(new Set(urls.filter(function (u) { return typeof u === 'string' && u; })));
         App.autoStatic._stage = 'decode';
         App.loadBakeImages(uniq, '[bake] 自动静态图源解码失败', alive).then(function (byUrl) {
@@ -1533,7 +1438,6 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
             rootRect: { x: bx, y: by, w: bw, h: bh }, shouldContinue: alive
           }).then(function (drawn) {
             if (!drawn || !alive()) { finishResult(null); return; }
-
             App.autoStatic._finishing = performance.now();
             if (App.noteBakeProgress) App.noteBakeProgress();
             const finish = function (url) {
@@ -1578,7 +1482,6 @@ App.bakeAutoStatic = function (items, viewport, shouldContinue) {
   const release = function () { App._bakeUrgent = Math.max(0, (App._bakeUrgent || 1) - 1); };
   return p.then(function (v) { release(); return v; }, function (e) { release(); throw e; });
 };
-
 App.autoStaticStructSig = function () {
   const L = App.state.layers || [];
   let s = String(L.length) + ':';
@@ -1634,7 +1537,6 @@ App.autoStaticInstall = function (bit, token) {
       if (settled) return;
       settled = true;
       clear();
-
       requestAnimationFrame(function () { requestAnimationFrame(function () {
         if (token !== App.autoStatic.token || !stage.isConnected || App.autoStaticStageEl !== stage) {
           if (stage.isConnected) stage.remove();
@@ -1648,7 +1550,6 @@ App.autoStaticInstall = function (bit, token) {
         const hidingIds = new Set(hiding.map(function (l) { return l.id; }));
         stage.style.visibility = '';
         stage.style.display = '';
-
         if (oldEl && oldEl !== stage) oldEl.remove();
         if (oldFlashPair && oldFlashPair !== flashPair) App.removeAutoStaticFlashPair(oldFlashPair);
         App.autoStaticBgEl = stage;
@@ -1657,12 +1558,10 @@ App.autoStaticInstall = function (bit, token) {
         App.autoStaticStageEl = null;
         App.autoStatic.url = bit.url.indexOf('blob:') === 0 ? bit.url : null;
         App.autoStatic.flashUrls = bit.flashUrls || null;
-
         (App.autoStatic.hiding || []).forEach(function (l) {
           if (!hidingIds.has(l.id)) { try { App.restoreAutoStaticDisplay(l); } catch (e) { console.warn('[bake] 恢复矢量层失败', l && l.id, String(e && e.message || e).slice(0, 120)); } }
         });
         hiding.forEach(function (l) { try { App.setAutoStaticHidden(l, true); } catch (e) { console.warn('[bake] 隐藏矢量层失败', l && l.id, String(e && e.message || e).slice(0, 120)); } });
-
         const keepVec = App.autoStatic.vectorKeep || [];
         keepVec.forEach(function (l) {
           if (failedTop.has(l.id)) return;    
@@ -1677,7 +1576,6 @@ App.autoStaticInstall = function (bit, token) {
           delete bit._view;
         }
         App.autoStatic.active = true;
-
         if (App.refreshLayerThumbs) {
           setTimeout(function () { try { App.refreshLayerThumbs(); } catch (e) {   } }, 80);
         }
@@ -1685,7 +1583,6 @@ App.autoStaticInstall = function (bit, token) {
         if (oldFlashUrls && oldFlashUrls !== bit.flashUrls) {
           setTimeout(function () { App.revokeAutoStaticFlashUrls(oldFlashUrls); }, 0);
         }
-
         if (flashPair) {
           flashPair.yellow.style.opacity = '0.001';
           flashPair.blue.style.opacity = '0.001';
@@ -1702,7 +1599,6 @@ App.autoStaticInstall = function (bit, token) {
     stage.setAttribute('href', bit.url);
   });
 };
-
 App.autoStaticKeepOld = function () {
   const v = (App.autoStatic && App.autoStatic.active) ? App.autoStatic.view : null;
   if (!v) return false;
@@ -1710,11 +1606,9 @@ App.autoStaticKeepOld = function () {
   const covered = v.x <= want.x && v.y <= want.y &&
     (v.x + v.w) >= (want.x + want.w) && (v.y + v.h) >= (want.y + want.h);
   if (covered) return true;
-
   if (App.renderPointerActive) return true;
   return !!(App.renderInteractionBusy && App.renderInteractionBusy());
 };
-
 App.autoStaticRectStillUseful = function (rect) {
   if (!rect) return true;
   const want = App.autoStaticViewportRect(0);
@@ -1727,10 +1621,8 @@ App.autoStaticRectStillUseful = function (rect) {
 };
 App.autoStaticRebake = function () {
   if (App.autoStatic.baking) return;
-
   if (App.autoStaticDeferStart()) { App.autoStaticSchedule(120); return; }
   if (!App.autoStaticEligible()) { App.autoStaticRelease(); return; }
-
   const needF = App.autoStaticNeedF();
   let rect = App.autoStaticViewportRect(0.5);
   let rectPad = 0.5;
@@ -1763,13 +1655,11 @@ App.autoStaticRebake = function () {
   let lastGeomAt = 0;
   const shouldContinue = function () {
     const currentDocId = App.Tabs && App.Tabs.current ? App.Tabs.current.id : null;
-
     if (token !== App.autoStatic.token || contentRevision !== (App.contentRevision || 0) ||
         currentDocId !== docId) return false;
     const now = performance.now();
     if (now - lastGeomAt > 60) {
       lastGeomAt = now;
-
       if (structSig !== App.autoStaticStructSig()) return false;
       if (!App.autoStaticRectStillUseful(rect)) return false;
     }
@@ -1785,7 +1675,6 @@ App.autoStaticRebake = function () {
         catch (e) { console.warn('[bake] 回收废弃位图失败', String(e && e.message || e).slice(0, 120)); }
       }
       if (bit && bit.flashUrls) App.revokeAutoStaticFlashUrls(bit.flashUrls);
-
       if (App.autoStatic.baking && App.autoStatic.bakingToken === token) {
         App.autoStatic.baking = false;
         App.autoStatic.bakingToken = 0;
@@ -1803,27 +1692,20 @@ App.autoStaticRebake = function () {
     };
     if (token !== App.autoStatic.token) { drop('superseded', false); return; }
     if (!bit) {
-
       drop('bake-aborted', !(App.autoStaticKeepOld() || App.autoStaticKeepStale()));
       if (App.autoStaticEligible && App.autoStaticEligible()) App.autoStaticSchedule(80);
       return;
     }
-
     const install = function () {
       if (token !== App.autoStatic.token) { drop('superseded', false); return; }
-
-
       if (App.autoStaticDeferStart()) { if (App.noteBakeProgress) App.noteBakeProgress(); setTimeout(install, 60); return; }
       if (contentRevision !== (App.contentRevision || 0)) { drop('stale-content', true); App.autoStaticSchedule(); return; }
       if (structSig !== App.autoStaticStructSig()) { drop('stale-struct', true); App.autoStaticSchedule(); return; }
-
       if (!App.autoStaticEligible()) { drop('stale-ineligible', true); return; }
-
       const want = App.autoStaticViewportRect(0);
       const covered = rect.x <= want.x && rect.y <= want.y &&
         (rect.x + rect.w) >= (want.x + want.w) && (rect.y + rect.h) >= (want.y + want.h);
       if (!covered) {
-
         drop('stale-cover', !(App.autoStaticKeepOld() || App.autoStaticKeepStale()));
         App.autoStaticSchedule();
         return;
@@ -1835,12 +1717,10 @@ App.autoStaticRebake = function () {
       }
       if (typeof bit.f === 'number' && bit.f > 0) rect._f = bit.f;
       bit._view = rect;
-
       App.autoStaticInstall(bit, token).then(function (installed) {
         App.autoStatic._finishing = 0;
         if (!installed) { drop('stage-failed', false); return; }
         if (token === App.autoStatic.token) {
-
           App.autoStatic.contentRevision = contentRevision;
           App.autoStatic.colorRev = App._colorRev || 0;
           App.autoStatic.baking = false;
@@ -1856,7 +1736,6 @@ App.autoStaticRebake = function () {
         drop('stage-throw', false);
       });
     };
-
     App.autoStatic._stage = 'install';
     App.autoStatic._finishing = performance.now();    
     const preload = [loadImage(bit.url)];
@@ -1872,19 +1751,15 @@ App.autoStaticRebake = function () {
   }).catch(function (e) { App.autoStatic.baking = false; App.autoStatic._finishing = 0; App.autoStatic.lastErr = 'bake-throw: ' + String(e && e.message || e).slice(0, 120); });
 };
 
-
 App.autoStaticSchedule = function (delay) {
   if (App._autoStaticTimer) clearTimeout(App._autoStaticTimer);
   App._autoStaticTimer = setTimeout(function () {
     App._autoStaticTimer = null;
-
     if (App.autoStaticDeferStart()) { App.autoStaticSchedule(120); return; }
     App.autoStaticRebake();
   }, typeof delay === 'number' ? delay
-
      : 280);
 };
-
 App.logBakeStatus = function (force) {
   const now = performance.now();
   if (!force && now - (App._bakeLogAt || 0) < 10000) return;
@@ -1894,6 +1769,8 @@ App.logBakeStatus = function (force) {
   try {
     App.log('perf', '烘焙状态', {
       active: !!st.active, baking: !!st.baking,
+      stage: st._stage || '',
+      run: st._run ? { leaf: st._run.leaf, src: [st._run.srcDone, st._run.src], dec: [st._run.decDone, st._run.dec] } : null,
       age: st.bakingSince ? Math.round(now - st.bakingSince) : 0,
       idle: st._progressAt ? Math.round(now - st._progressAt) : -1,
       starts: rc.autoBakeStarts || 0, installs: rc.autoBakeInstalls || 0,
@@ -1910,7 +1787,6 @@ App.logBakeStatus = function (force) {
 };
 App.autoStaticMaybe = function () {
   if (!App.autoStaticEnabled) return;
-
   App.logBakeStatus();
   if (App.autoStatic.baking && !App._bakeStatusTimer) {
     App._bakeStatusTimer = setTimeout(function () {
@@ -1919,15 +1795,11 @@ App.autoStaticMaybe = function () {
       if (App.autoStaticMaybe) App.autoStaticMaybe();
     }, 10000);
   }
-
   if (App.autoStatic.baking) {
     const last = App.autoStatic._progressAt || App.autoStatic.bakingSince;
-
     const finishing = Number(App.autoStatic._finishing) || 0;
     const finishingWarm = finishing && (performance.now() - finishing < 120000);
-
     if (last && !finishingWarm && performance.now() - last > 45000) {
-
       try {
         const st = App.autoStatic;
         App.log('perf', '烘焙复位(45s无进度)', {
@@ -1952,7 +1824,6 @@ App.autoStaticMaybe = function () {
   const nowTs = Date.now();
   const gap = nowTs - (App.autoStaticLastCheck || 0);
   if (gap < 60) {
-
     if (!App._autoStaticTrailTimer) {
       App._autoStaticTrailTimer = setTimeout(function () {
         App._autoStaticTrailTimer = null;
@@ -1963,57 +1834,44 @@ App.autoStaticMaybe = function () {
   }
   App.autoStaticLastCheck = nowTs;
   if (App.autoStatic.baking) {
-
     if (!App.autoStaticEligible()) { App.autoStaticRelease(); return; }
     return;
   }
   if (!App.autoStaticEligible()) { if (App.autoStatic.active) App.autoStaticRelease(); return; }
   if (!App.autoStatic.active || !App.autoStatic.view) { App.autoStaticRebake(); return; }
-
   if (App.autoStatic.colorRev !== (App._colorRev || 0)) { App.autoStaticSchedule(0); return; }
-
   const v = App.autoStatic.view;
-
   const pad = (v && v._pad !== undefined) ? v._pad : 0.5;
   const rect = App.autoStaticViewportRect(pad);
   const covered = v.x <= rect.x && v.y <= rect.y && (v.x + v.w) >= (rect.x + rect.w) && (v.y + v.h) >= (rect.y + rect.h);
   const enoughRes = !!(v._f && v._f >= App.autoStaticNeedF() * 0.8);
   if (covered && enoughRes) return;
   if (!covered && App.autoStatic.active) {
-
     App.autoStaticSchedule(0);
     return;
   }
   App.autoStaticSchedule();
 };
 
-
 App.invalidateEditStatic = function () {
   if (App.editStatic && App.editStatic.active && App.endEditStatic) App.endEditStatic();
-
   if (App.autoStaticRelease) App.autoStaticRelease();
-
   if (App.autoStaticMaybe) App.autoStaticMaybe();
 };
-
 App.contentChanged = function (options) {
   if (App.state.batching) return;    
   App.contentRevision = (App.contentRevision || 0) + 1;
-
   App._lodQueue = null;
   App._lodDirty = true;
   if (App._lodDrainTimer) { clearTimeout(App._lodDrainTimer); App._lodDrainTimer = null; }
-
   if (App.scheduleLodRefresh) App.scheduleLodRefresh();
   const preserveRequested = !options || options.preserveAutoStatic !== false;
   const preserve = !!(preserveRequested && App.autoStatic && App.autoStatic.active &&
     App.autoStaticEligible && App.autoStaticEligible());
   if (preserve) {
-
     App._autoStaticSig = null;
     if (App.autoStatic.baking) { App.autoStatic.token++; App.autoStatic.baking = false; }
     const current = App.state.layers || [];
-
     const keepVec = new Set();
     const sel = App.state.selected;
     if (sel && typeof sel.forEach === 'function') {
@@ -2023,7 +1881,6 @@ App.contentChanged = function (options) {
         }
       });
     }
-
     const prevHiding = new Set();
     (App.autoStatic.hiding || []).forEach(function (l) { if (l) prevHiding.add(l.id); });
     if (App.autoStatic.active && prevHiding.size > 0) {
@@ -2033,17 +1890,14 @@ App.contentChanged = function (options) {
     App.autoStatic.vectorKeep = Array.from(keepVec);
     App.autoStatic.hiding = Array.from(new Set((App.autoStatic.hiding || []).concat(current)))
       .filter(function (l) { return !keepVec.has(l); });
-
     if (App.autoStaticSchedule) App.autoStaticSchedule(110);
     else if (App.autoStaticRebake) App.autoStaticRebake();
   } else {
     if (App.autoStaticRelease) App.autoStaticRelease();
     if (App.autoStaticMaybe) App.autoStaticMaybe();
   }
-
   if (App.requestFlashRefresh) App.requestFlashRefresh(false);
 };
-
 App.rebakeEditStaticViewport = function () {
   if (!App.editStatic || !App.editStatic.active) return;
   if (App._editStaticViewTimer) clearTimeout(App._editStaticViewTimer);
@@ -2055,7 +1909,6 @@ App.rebakeEditStaticViewport = function () {
       if (App.renderInteractionBusy && App.renderInteractionBusy()) { App.rebakeEditStaticViewport(); return; }
       const vp = App.editStaticViewportRect();
       let items = App.editStatic.items.filter(l => App.layerInRect(l, vp));
-
       const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
       const editItems = (App.state.edit && App.editTargets) ? App.editTargets() : [];
       let interMin = -1;
@@ -2066,7 +1919,6 @@ App.rebakeEditStaticViewport = function () {
       if (interMin >= 0) items = items.filter(l => App.state.layers.indexOf(l) < interMin);
       else items = [];
       if (!items.length) {
-
         App.editStatic.view = vp;
         App.editStatic.bit = null;
         App.editStatic.failedTop = null;
@@ -2112,7 +1964,6 @@ App.rebakeEditStaticViewport = function () {
       App.bakeEditStatic(items, vp, shouldContinue).then(bit => {
         if (!App.editStatic.active || token !== App._editStaticToken) return; 
         if (!bit) {
-
           failCurrent('bake-returned-null');
           return;
         }
@@ -2121,7 +1972,6 @@ App.rebakeEditStaticViewport = function () {
           App.rebakeEditStaticViewport();
           return;
         }
-
         if (App.editStaticStageEl && App.editStaticStageEl.isConnected) App.editStaticStageEl.remove();
         const stage = svgEl('image', { 'pointer-events': 'none', preserveAspectRatio: 'none', class: 'sve-edit-static' });
         App.editStaticStageEl = stage;
@@ -2161,7 +2011,6 @@ App.rebakeEditStaticViewport = function () {
             App.editStatic._bakedInterMin = interMin;
             App.editStatic.baking = false;
             if (old && old !== stage && old.isConnected) old.remove();
-
             App.updateEditStaticViewport();
             App.traceRenderTask('editStatic', 'install', {
               docId: docId, contentRevision: contentRevision, viewRevision: viewRevision,
@@ -2179,7 +2028,6 @@ App.rebakeEditStaticViewport = function () {
     } catch (e) {   }
   }, 300);
 };
-
 App.updateEditStaticViewport = function () {
   if (!App.editStatic || !App.editStatic.active) return;
   const s = App.state;
@@ -2187,10 +2035,8 @@ App.updateEditStaticViewport = function () {
   const es = App.editStatic;
   let interMinNow = -1;
   if (es.view && es.bit) {
-
     const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
     const editItems = (s.edit && App.editTargets) ? App.editTargets() : [];
-
     for (let i = 0; i < s.layers.length; i++) {
       const l = s.layers[i];
       if (l === box || s.selected.has(l.id) || editItems.includes(l)) { interMinNow = i; break; }
@@ -2202,39 +2048,31 @@ App.updateEditStaticViewport = function () {
       const inter = l === box || s.selected.has(l.id) || editItems.includes(l);
       const inItems = es.items.includes(l);
       const inView = App.layerInRect(l, es.view);
-
       const hide = !inter && inItems && inView && (interMin < 0 || i < interMin) &&
         !(es.failedTop && es.failedTop.has(l.id));
       App.setEsHidden(l, hide);
     }
   }
-
   if (es.view && es._bakedInterMin !== undefined && es._bakedInterMin !== interMinNow) {
     App.rebakeEditStaticViewport();
   }
-
   const vpNow = App.editStaticViewportRect();
   if (!es.view || Math.abs(es.view.x - vpNow.x) > 5 || Math.abs(es.view.y - vpNow.y) > 5 ||
       Math.abs(es.view.scale - (App.state.view.scale || 1)) > 0.05) {
     App.rebakeEditStaticViewport();
   }
 };
-
 App.dropEditStaticItem = function (layer) {
   if (!App.editStatic || !App.editStatic.active || !layer) return;
   const idx = App.editStatic.items.indexOf(layer);
   if (idx >= 0) {
     App.editStatic.items.splice(idx, 1);
-
     App.restoreEsVisibility(layer);
-
     if (App.editStaticBgEl) App.editStaticBgEl.style.display = 'none';
     App.rebakeEditStaticViewport();
   }
 };
-
 App.drawOutlines = function () {
-
   if (!App.state.edit && !App.outlineG.firstChild && !App.handleG.firstChild) {
     App.outlinePolys = [];
     if (App.anchorIconEl) App.anchorIconEl.style.display = 'none';
@@ -2244,16 +2082,12 @@ App.drawOutlines = function () {
   App.outlineG.setAttribute('pointer-events', 'none');
   App.handleG.setAttribute('pointer-events', 'none');
   App.outlinePolys = [];
-
   App.handleG.innerHTML = '';
-
   if (App.state.edit && App.state.editMode === 'size' && !App.state.eyeMode) {
     if (App.state.showHandles !== false && !App.state.anchorPlacing) App.drawHandles();
     if (App.state.axisHint) App.drawAxisArrows();
   }
-
   if (App.drawAnchorIcon) App.drawAnchorIcon();
-
   if (App.state.edit && App.syncFlashForEdit) App.syncFlashForEdit();
 };
 
@@ -2273,7 +2107,6 @@ App.editTargetBox = function () {
   });
   return { x: minx, y: miny, w: maxx - minx, h: maxy - miny, cx: (minx + maxx) / 2, cy: (miny + maxy) / 2, corners };
 };
-
 
 App.handleGeometry = function () {
   const items = App.editTargets();
@@ -2299,17 +2132,13 @@ App.handleGeometry = function () {
   };
 };
 
-
 App.handleSizePx = function (box) {
   if (!box || !(box.w > 0) || !(box.h > 0)) return 9;
   const short = Math.min(box.w, box.h) * (App.state.view.scale || 1);
   return Math.max(1, Math.min(9, short / 4));
 };
 
-
-
 App.handleArrowSpec = function (S) {
-
   const L = S * 1.7;
   return {
     S: S,
@@ -2317,16 +2146,13 @@ App.handleArrowSpec = function (S) {
     thick: Math.max(0.8, L * 0.5),
     shaft: Math.max(0.5, L * 0.25),
     gap: S * 0.4,
-
     arm: L,
     rthick: Math.max(0.7, L * 0.25)
   };
 };
 
-
 App.handleArrowPath = function (len, thick, shaft) {
   const h = len / 2, t = thick / 2, s = shaft / 2;
-
   const hl = len / 4;
   const x1 = h - hl;
   return 'M' + (-h) + ',0' +
@@ -2337,21 +2163,16 @@ App.handleArrowPath = function (len, thick, shaft) {
     ' L' + (-x1) + ',' + s + ' L' + (-x1) + ',' + t + ' Z';
 };
 
-
 App.handleRotPath = function (arm, thick) {
-
   const r = arm * 0.25;
   const hl = arm * 0.25;
   return 'M' + (arm - hl) + ',0 L' + r + ',0 Q0,0 0,' + r + ' L0,' + (arm - hl);
 };
 
-
 App.quickModActive = function () {
   if (App.settings && App.settings.quickClick) return !!App.state.quickClickOn;
-
   return !!(App.state.quickModDown || App.state.shiftDown);
 };
-
 
 App.handleHitAt = function (clientX, clientY) {
   const rects = App.handleHitGeom || [];
@@ -2367,7 +2188,6 @@ App.handleHitAt = function (clientX, clientY) {
   return null;
 };
 
-
 App.handleHitPx = function (box) {
   return App.handleArrowSpec(App.handleSizePx(box)).len;
 };
@@ -2382,11 +2202,8 @@ App.drawHandles = function () {
   const S = App.handleSizePx(g.box);
   const a = App.handleArrowSpec(S);
   const quick = !!App.quickModActive();
-
   const L = a.len / sc, T = a.thick / sc, SH = a.shaft / sc, GAP = a.gap / sc,
     ARM = a.arm / sc, RTH = a.rthick / sc;
-
-
 
 
   const norm = (x, y) => { const m = Math.hypot(x, y) || 1; return { x: x / m, y: y / m }; };
@@ -2395,7 +2212,6 @@ App.drawHandles = function () {
   const outOf = p => norm(p.x - ctr.x, p.y - ctr.y);
   const midN = mid(g.nw, g.ne), midS = mid(g.se, g.sw), midE = mid(g.ne, g.se), midW = mid(g.nw, g.sw);
   const D = GAP + L / 2;               
-
 
   const addStraight = function (key, at, dir, cursor, axisDir) {
     const n = norm(dir.x, dir.y);
@@ -2406,7 +2222,6 @@ App.drawHandles = function () {
     const hit = svgEl('rect', {
       x: -L / 2, y: -T / 2, width: L, height: T,
       class: 'sve-handle-hit', 'data-h': key, fill: 'transparent',
-
       'pointer-events': 'fill', 'stroke-width': 0, cursor: cursor
     });
     gg.appendChild(hit);
@@ -2415,10 +2230,8 @@ App.drawHandles = function () {
     }));
     App.handleG.appendChild(gg);
     App.handleEls.push({ key: key, el: hit });
-
     App.handleHitGeom.push({ key: key, cx: cx, cy: cy, ux: a.x, uy: a.y, vx: -a.y, vy: a.x, w: L, h: T });
   };
-
 
   const addRot = function (key, corner, u, v, cursor) {
     const G2 = GAP + RTH * 0.9;
@@ -2444,7 +2257,6 @@ App.drawHandles = function () {
       d: 'M0,' + ARM + ' L' + (-hw) + ',' + (ARM - hl) + ' L' + hw + ',' + (ARM - hl) + ' Z',
       class: 'sve-harrow', 'pointer-events': 'none'
     }));
-
     const mkHit = function (lx0, ly0, lx1, ly1) {
       const w = Math.abs(lx1 - lx0), h = Math.abs(ly1 - ly0);
       const x0 = Math.min(lx0, lx1), y0 = Math.min(ly0, ly1);
@@ -2471,7 +2283,6 @@ App.drawHandles = function () {
   };
 
   if (!quick) {
-
     addStraight('nw', g.nw, outOf(g.nw), 'nwse-resize');
     addStraight('ne', g.ne, outOf(g.ne), 'nesw-resize');
     addStraight('se', g.se, outOf(g.se), 'nwse-resize');
@@ -2481,7 +2292,6 @@ App.drawHandles = function () {
     addStraight('w', midW, outOf(midW), 'ew-resize');
     addStraight('e', midE, outOf(midE), 'ew-resize');
   } else {
-
     const edgeU = {
       nw: norm(g.ne.x - g.nw.x, g.ne.y - g.nw.y),
       ne: norm(g.nw.x - g.ne.x, g.nw.y - g.ne.y),
@@ -2498,14 +2308,12 @@ App.drawHandles = function () {
     addRot('ne', g.ne, edgeU.ne, edgeV.ne, 'nesw-resize');
     addRot('se', g.se, edgeU.se, edgeV.se, 'nwse-resize');
     addRot('sw', g.sw, edgeU.sw, edgeV.sw, 'nesw-resize');
-
     const tangN = norm(g.ne.x - g.nw.x, g.ne.y - g.nw.y);
     const tangS = norm(g.sw.x - g.se.x, g.sw.y - g.se.y);
     addStraight('n', midN, outOf(midN), 'ns-resize', tangN);
     addStraight('s', midS, outOf(midS), 'ns-resize', tangS);
   }
 };
-
 
 App.drawAxisArrows = function () {
   const g = App.handleGeometry();
@@ -2553,19 +2361,31 @@ App.drawAxisArrows = function () {
   });
 };
 
-
 App.flashTimers = [];
 App.flashSeq = 0;
 App.flashColor = null;
 App.flashOverlayMap = new Map(); 
-App.flashIntervalMs = 5000;
-App.flashDurationMs = 300;
+App.flashIntervalMs = 3000;
+App.flashDurationMs = 400;
 App.restoreDirectFlash = function (rec) {
   if (!rec || rec.kind !== 'auto-static-direct') return;
   const pair = rec.pair;
   if (pair && pair.yellow) pair.yellow.style.opacity = '0';
   if (pair && pair.blue) pair.blue.style.opacity = '0';
+  const cur = App.autoStaticFlashPair;
+  if (cur && cur !== pair) {
+    if (cur.yellow) cur.yellow.style.opacity = '0';
+    if (cur.blue) cur.blue.style.opacity = '0';
+  }
   rec.active = false;
+};
+App.hideAutoStaticFlashPair = function () {
+  const p = App.autoStaticFlashPair;
+  if (!p) return;
+  try {
+    if (p.yellow) p.yellow.style.opacity = '0';
+    if (p.blue) p.blue.style.opacity = '0';
+  } catch (e) {   }
 };
 App.applyDirectFlashColor = function (rec, color) {
   const pair = rec && rec.pair;
@@ -2578,7 +2398,6 @@ App.applyDirectFlashColor = function (rec, color) {
   rec.active = true;
   return true;
 };
-
 App.releaseFlashOverlay = function (rec) {
   if (rec && rec.kind === 'auto-static-direct') {
     App.restoreDirectFlash(rec);
@@ -2596,7 +2415,6 @@ App.releaseFlashOverlay = function (rec) {
 };
 
 App.ensureFlashRunning = function (reset) {
-
   const sig = Array.from(App.state.selected).sort((a, b) => a - b).join(',') + '|' + (App.state.edit ? 'E' : '-');
   const changed = sig !== App._flashRunSig;
   App._flashRunSig = sig;
@@ -2609,7 +2427,6 @@ App.ensureFlashRunning = function (reset) {
   }
 };
 App.startFlash = function () {
-
   App.ensureFlashRunning(true);
   App.updateFlashOverlays();
 };
@@ -2620,7 +2437,6 @@ App.stopFlash = function () {
   App.flashTimers = [];
   App.flashSeq++;
   App.compFlashToken++; 
-
   App.compBuildSig = null;
   App.compBuildAnimate = false;
   App.compAlignCheckToken++; 
@@ -2631,25 +2447,21 @@ App.stopFlash = function () {
   App.flashOverlayMap.clear();
 };
 
-
 App.buildFlashOverlayFor = function (layer) {
   const t = layer.el.getAttribute('transform');
   const op = layer.el.getAttribute('opacity');
   if (layer.kind === 'symbol') {
     const g = svgEl('g', { transform: t, opacity: op, 'pointer-events': 'none' });
-
     const m = svgEl('mask', {
       id: 'sveFM' + layer.id, maskUnits: 'userSpaceOnUse',
       x: -layer.w / 2, y: -layer.h / 2, width: layer.w, height: layer.h
     });
     if (layer.dataUri) {
-
       const vnode = App.symbolVecMaskNode
         ? App.symbolVecMaskNode(layer, -layer.w / 2, -layer.h / 2, layer.w, layer.h) : null;
       if (vnode) {
         m.appendChild(vnode);
       } else {
-
       m.appendChild(svgEl('image', {
         href: layer.dataUri,
         x: -layer.w / 2, y: -layer.h / 2,
@@ -2674,7 +2486,6 @@ App.buildFlashOverlayFor = function (layer) {
     return g;
   }
   if (layer.kind === 'merged') {
-
     const g = svgEl('g', { transform: t, opacity: op, 'pointer-events': 'none' });
     (layer.children || []).forEach(ch => {
       const sub = App.buildFlashOverlayFor(ch);
@@ -2694,9 +2505,7 @@ App.buildFlashOverlayFor = function (layer) {
   return clone;
 };
 
-
 App.compFlashToken = 0;
-
 function parseTransformAttr(s) {
   const m = new DOMMatrix();
   if (!s) return m;
@@ -2719,7 +2528,6 @@ function parseTransformAttr(s) {
   }
   return m;
 }
-
 function transformChainMat(l) {
   const chain = [];
   let el = l.el;
@@ -2732,10 +2540,31 @@ function transformChainMat(l) {
   return m;
 }
 App.transformChainMat = transformChainMat; 
+App.bakeLeafMatFn = function () {
+  const cache = new Map();
+  const ancestor = function (node) {
+    if (!node || node.nodeType !== 1 || node === App.layersRoot || node === App.svg) return new DOMMatrix();
+    const hit = cache.get(node);
+    if (hit) return hit;
+    const chain = [];
+    let el = node;
+    while (el && el.nodeType === 1 && el !== App.layersRoot && el !== App.svg) {
+      chain.push(el.getAttribute('transform'));
+      el = el.parentNode;
+    }
+    let m = new DOMMatrix();
+    for (let i = chain.length - 1; i >= 0; i--) m = m.multiply(parseTransformAttr(chain[i]));
+    cache.set(node, m);
+    return m;
+  };
+  return function (l) {
+    if (!l || !l.el || !l.el.parentNode) return transformChainMat(l);
+    return ancestor(l.el.parentNode).multiply(parseTransformAttr(l.el.getAttribute('transform')));
+  };
+};
 App.buildCompositeFlash = function (items) {
   App.__compBuildT0 = performance.now();
   const isMerged = items.length === 1 && items[0].kind === 'merged';
-
   if (isMerged) {
     const g0 = items[0];
     const prec = App._proxyBake && App._proxyBake.get(g0.id);
@@ -2753,8 +2582,11 @@ App.buildCompositeFlash = function (items) {
   const walk = l => { if (l.kind === 'merged') (l.children || []).forEach(walk); else leaves.push(l); };
   if (isMerged) walk(items[0]); else items.forEach(walk);
   if (!leaves.length) return Promise.resolve(null);
+  if (leaves.length > (App.compFlashMaxLeaves || 800)) {
+    try { App.log('perf', '合成闪动跳过', { leaves: leaves.length, ms: Math.round(performance.now() - App.__compBuildT0) }); } catch (e) {   }
+    return Promise.resolve(null);
+  }
   return new Promise(resolve => {
-
     const rootM = isMerged && items[0].el ? transformChainMat(items[0]) : null;
     const mats = leaves.map(l => {
       const m = transformChainMat(l);
@@ -2763,12 +2595,10 @@ App.buildCompositeFlash = function (items) {
       }
       return m;
     });
-
     const BUDGET = 8, MIN_CHUNK = 8;
     const token = App.compFlashToken;
     let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
     let bi = 0, di = 0, bw = 0, bh = 0, f = 1, cv = null, cx = null;
-
     let leafScale = 1;
     {
       let sum = 0;
@@ -2799,7 +2629,6 @@ App.buildCompositeFlash = function (items) {
       if (bi < leaves.length) { setTimeout(bboxStep, 0); return; }
       if (!isFinite(minx)) return resolve(null);
       bw = Math.max(1, maxx - minx); bh = Math.max(1, maxy - miny);
-
       const dpr = window.devicePixelRatio || 1;
       const bucket = App.lodBucketOf(App.state.view.scale || 1);
       const wantF = App.lodBucketScale(bucket) * dpr;
@@ -2807,7 +2636,6 @@ App.buildCompositeFlash = function (items) {
         Math.sqrt(App.lod.maxPixels / (bw * bh))));
       const srcs = leaves.map(l => {
         if (l.kind === 'symbol' && l.dataUri) {
-
           const vd = App.symbolVecPathOf && l.symbolKey ? App.symbolVecPathOf(l.symbolKey) : null;
           if (vd && App.libVec && App.libVec.ready && App.symbolVecPath2D) {
             const p2 = App.symbolVecPath2D(l.symbolKey);
@@ -2845,14 +2673,12 @@ App.buildCompositeFlash = function (items) {
         const entry = canvases[di];
         if (entry && entry.canvas) {
           cx.save();
-
           const T = new DOMMatrix().translate(-minx * f, -miny * f).scale(f).multiply(mats[di]);
           cx.setTransform(T.a, T.b, T.c, T.d, T.e, T.f);
           cx.drawImage(entry.canvas, entry.rect.x, entry.rect.y, entry.rect.w, entry.rect.h,
             -(l.w || 0) / 2, -(l.h || 0) / 2, l.w || 0, l.h || 0);
           cx.restore();
         } else if (entry && entry.path) {
-
           const sym = App.symbolMap.get(entry.key);
           const u = App.libVec.unit;
           const sw = Math.max(1e-6, (sym && sym.w) || l.w || 1);
@@ -2869,7 +2695,6 @@ App.buildCompositeFlash = function (items) {
         di++; n++;
       }
       if (di < leaves.length) { setTimeout(() => drawStep(canvases), 0); return; }
-
       const finish = href => {
         if (App.compFlashToken !== token || !href) {
           if (href && href.indexOf('blob:') === 0) {
@@ -2883,7 +2708,6 @@ App.buildCompositeFlash = function (items) {
           'pointer-events': 'none'
         });
         if (href.indexOf('blob:') === 0) g._sveFlashBlobUrl = href;
-
         const m = svgEl('mask', { id: 'sveFComp', maskUnits: 'userSpaceOnUse', x: minx, y: miny, width: bw, height: bh });
         m.appendChild(svgEl('image', { href, x: minx, y: miny, width: bw, height: bh, preserveAspectRatio: 'none' }));
         g.appendChild(m);
@@ -2894,7 +2718,6 @@ App.buildCompositeFlash = function (items) {
         } catch (e) {   }
         resolve(g);
       };
-
       if (cv.toBlob) {
         cv.toBlob(blob => {
           if (!blob) { console.warn('[flash] 合成剪影编码返回空'); resolve(null); return; }
@@ -2914,7 +2737,6 @@ App.buildCompositeFlash = function (items) {
   });
 };
 
-
 App.compAlignCheckAt = 0;
 App.compAlignDrift = 0;
 App.compAlignCheckToken = 0;
@@ -2925,7 +2747,6 @@ App.checkCompositeAlign = function (items, rec, sig, animate) {
   if (!items.length || !rec) return false;
   const rect = rec.el.querySelector('rect');
   if (!rect) return false;
-
   const leaves = [];
   const walk = l => { if (l.kind === 'merged') (l.children || []).forEach(walk); else leaves.push(l); };
   items.forEach(walk);
@@ -2949,7 +2770,6 @@ App.checkCompositeAlign = function (items, rec, sig, animate) {
     } while (i < leaves.length && performance.now() - t0 < 6);
     if (i < leaves.length) { setTimeout(step, 0); return; }
     if (!isFinite(minx)) return;
-
     const gM = parseTransformAttr(rec.el.getAttribute('transform') || '');
     const rx = parseFloat(rect.getAttribute('x')), ry = parseFloat(rect.getAttribute('y'));
     const rw = parseFloat(rect.getAttribute('width')), rh = parseFloat(rect.getAttribute('height'));
@@ -2960,7 +2780,6 @@ App.checkCompositeAlign = function (items, rec, sig, animate) {
     const dx2 = Math.max(...corners.map(p => p.x)) - maxx;
     const dy2 = Math.max(...corners.map(p => p.y)) - maxy;
     if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(dx2) < 1 && Math.abs(dy2) < 1) return;
-
     App.compAlignDrift++;
     rec.sig = '__stale__';
     App.flashG.style.display = 'none';
@@ -2969,7 +2788,7 @@ App.checkCompositeAlign = function (items, rec, sig, animate) {
       App.compRebuildTimer = null;
       const buildToken = ++App.compFlashToken;
       App.buildCompositeFlash(items).then(g => {
-        if (buildToken !== App.compFlashToken || !g) { if (g) App.releaseFlashOverlay(g); return; }
+        if (buildToken !== App.compFlashToken || !g) { if (g) App.releaseFlashOverlay(g); App.hideAutoStaticFlashPair(); return; }
         const old = App.flashOverlayMap.get('__composite__');
         if (old) App.releaseFlashOverlay(old);
         App.flashG.appendChild(g);
@@ -2981,7 +2800,6 @@ App.checkCompositeAlign = function (items, rec, sig, animate) {
   setTimeout(step, 0);
   return true;
 };
-
 
 App.layerFlashContentSig = function (layer) {
   if (!layer) return '';
@@ -2996,7 +2814,6 @@ App.directAutoStaticFlashTarget = function (items) {
   const cache = App.autoStatic;
   const target = App.autoStaticBgEl;
   const pair = App.autoStaticFlashPair;
-
   if (!cache || !cache.active) return null;
   if (!target || !target.isConnected || !target.getAttribute('href')) return null;
   if (!pair || pair.target !== target || !pair.g || !pair.g.isConnected) return null;
@@ -3007,11 +2824,9 @@ App.directAutoStaticFlashTarget = function (items) {
   return target;
 };
 App.largeFlashSig = function (items) {
-
   return (App.contentRevision || 0) + ':' + (items || []).map(layer => layer.id).join(',') +
     ':lod' + (App.lodBucketOf ? App.lodBucketOf(App.state.view.scale || 1) : 0);
 };
-
 
 App.flashTargetLayers = function () {
   const items = [];
@@ -3025,7 +2840,6 @@ App.flashTargetLayers = function () {
   }
   return items;
 };
-
 
 App.syncFlashForEdit = function () {
   const map = App.flashOverlayMap;
@@ -3048,11 +2862,8 @@ App.syncFlashForEdit = function () {
   });
 };
 
-
 App.updateFlashOverlays = function (animate) {
-
   if (App.refreshImpBitmaps) App.refreshImpBitmaps();
-
   if (App.updateEditStaticViewport) App.updateEditStaticViewport();
   const items = App.flashTargetLayers();
   const total = items.reduce((acc, l) => acc + App.countInLayer(l), 0);
@@ -3065,7 +2876,6 @@ App.updateFlashOverlays = function (animate) {
       App.releaseFlashOverlay(App.flashOverlayMap.get(key));
       App.flashOverlayMap.delete(key);
     });
-
 
     if (directTarget) {
       if (App.compBuildSig) {
@@ -3087,7 +2897,6 @@ App.updateFlashOverlays = function (animate) {
       return;
     }
 
-
     if (composite && composite.kind === 'composite' && composite.sig === sig) {
       if (items.length === 1 && items[0].kind === 'merged' && composite.el) {
         composite.el.setAttribute('transform', items[0].el.getAttribute('transform') || '');
@@ -3107,16 +2916,17 @@ App.updateFlashOverlays = function (animate) {
     const buildToken = ++App.compFlashToken;
     App.compBuildSig = sig;
     App.compBuildAnimate = animate !== false;
-    App.buildCompositeFlash(items).then(g => {
-      const shouldAnimate = App.compBuildAnimate;
-      if (buildToken !== App.compFlashToken || App.compBuildSig !== sig || !g) {
-        if (g) App.releaseFlashOverlay(g);
-        if (buildToken === App.compFlashToken && App.compBuildSig === sig) {
-          App.compBuildSig = null;
-          App.compBuildAnimate = false;
+      App.buildCompositeFlash(items).then(g => {
+        const shouldAnimate = App.compBuildAnimate;
+        if (buildToken !== App.compFlashToken || App.compBuildSig !== sig || !g) {
+          if (g) App.releaseFlashOverlay(g);
+          if (buildToken === App.compFlashToken && App.compBuildSig === sig) {
+            App.compBuildSig = null;
+            App.compBuildAnimate = false;
+          }
+          App.hideAutoStaticFlashPair();
+          return;
         }
-        return;
-      }
       App.compBuildSig = null;
       App.compBuildAnimate = false;
       const old = App.flashOverlayMap.get('__composite__');
@@ -3138,7 +2948,6 @@ App.updateFlashOverlays = function (animate) {
     App.compBuildSig = null;
     App.compBuildAnimate = false;
   }
-
   const wanted = new Set(items.map(l => 'L' + l.id));
   Array.from(App.flashOverlayMap.keys()).forEach(k => {
     if (!wanted.has(k)) {
@@ -3149,7 +2958,6 @@ App.updateFlashOverlays = function (animate) {
   items.forEach(layer => {
     const rec = App.flashOverlayMap.get('L' + layer.id);
     if (rec && rec.kind === layer.kind && rec.contentSig === App.layerFlashContentSig(layer)) {
-
       rec.el.setAttribute('transform', layer.el.getAttribute('transform') || '');
       rec.el.setAttribute('opacity', layer.el.getAttribute('opacity') || '1');
       return;
@@ -3167,7 +2975,6 @@ App.updateFlashOverlays = function (animate) {
   if (animate !== false) App.animateFlash();
 };
 
-
 App._flashLodBucket = -1;
 App.refreshFlashLod = function () {
   if (!App.flashOverlayMap || !App.flashOverlayMap.size) return;
@@ -3176,7 +2983,6 @@ App.refreshFlashLod = function () {
   const bucket = App.lodBucketOf(App.state.view.scale || 1);
   if (bucket === App._flashLodBucket) return;
   App._flashLodBucket = bucket;
-
   const n = (composite.items || []).reduce((acc, l) => acc + (App.countInLayer ? App.countInLayer(l) : 1), 0);
   if (n > 400) return;
   try { App.updateFlashOverlays(false); }
@@ -3185,13 +2991,37 @@ App.refreshFlashLod = function () {
 
 App.applyFlashColor = function (c) {
   App.flashColor = c;
-
   App.flashG.style.setProperty('--sve-flash-color', c);
   const direct = App.flashOverlayMap.get('__composite__');
   if (direct && direct.kind === 'auto-static-direct') App.applyDirectFlashColor(direct, c);
 };
+App.resetFlashColorVar = function () {
+  App.flashColor = null;
+  try { App.flashG.style.setProperty('--sve-flash-color', 'rgb(' + App.flashColors.yellow.join(',') + ')'); }
+  catch (e) {   }
+};
+App.clearFlash = function () {
+  try {
+    if (App._flashSafetyTimer) { clearTimeout(App._flashSafetyTimer); App._flashSafetyTimer = null; }
+    if (App.flashTimers) {
+      App.flashTimers.forEach(function (t) { try { cancelAnimationFrame(t); } catch (e) {   } });
+      App.flashTimers = [];
+    }
+    App.flashSeq++;                        
+    const cur = App.flashOverlayMap.get('__composite__');
+    if (cur && cur.kind === 'auto-static-direct') App.restoreDirectFlash(cur);
+    App.hideAutoStaticFlashPair();
+    if (App.flashG) App.flashG.style.display = 'none';
+    App.setFlashOpacity(1);
+    App.resetFlashColorVar();
+  } catch (e) {   }
+};
+App.setFlashOpacity = function (v) {
+  const s = String(Math.max(0, Math.min(1, Number(v) || 0)));
+  App.flashG.style.opacity = s;
+  if (App.autoStaticFlashG) App.autoStaticFlashG.style.opacity = s;
+};
 function mixRGB(a, b, p) {
-
   const t = p < 0 ? 0 : (p > 1 ? 1 : p);
   return 'rgb(' + Math.round(a[0] + (b[0] - a[0]) * t) + ',' +
     Math.round(a[1] + (b[1] - a[1]) * t) + ',' +
@@ -3200,13 +3030,20 @@ function mixRGB(a, b, p) {
 App.flashNow = function () {
   App.updateFlashOverlays();
 };
-
+App.flashColors = { yellow: [235, 234, 58], blue: [10, 10, 252] };
+App.flashCurve = function (t) {
+  const D = App.flashDurationMs || 400;
+  const Y = App.flashColors.yellow, B = App.flashColors.blue;
+  const tY = D * 0.325, tB = D * 0.575;
+  if (!(t >= 0)) t = 0;
+  if (t >= D) return null;
+  if (t < tY) return { color: 'rgb(' + Y.join(',') + ')', opacity: t / tY };
+  if (t < tB) return { color: mixRGB(Y, B, (t - tY) / (tB - tY)), opacity: 1 };
+  return { color: 'rgb(' + B.join(',') + ')', opacity: 1 - (t - tB) / (D - tB) };
+};
 App.animateFlash = function (opts) {
-
   if (App.state && App.state.layersHidden) { App.flashG.style.display = 'none'; return; }
-
   if (!(opts && opts.periodic)) App.ensureFlashRunning(true);
-
   try {
     const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
     if (box && App._flashBoxId !== box.id) {
@@ -3223,42 +3060,55 @@ App.animateFlash = function (opts) {
   }
   if (!App.flashOverlayMap.size) {
     App.flashG.style.display = 'none';
-
     const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
     if (box && !App.compRebuildTimer) setTimeout(function () { App.updateFlashOverlays(true); }, 0);
     return;
   }
-
   const crec = App.flashOverlayMap.get('__composite__');
   if (crec && crec.kind === 'composite' && crec.items) App.checkCompositeAlign(crec.items, crec, crec.sig);
   App.flashG.style.display = crec && crec.kind === 'auto-static-direct' ? 'none' : '';
-  const colors = [[255, 250, 1], [4, 2, 255]]; 
   const seq = ++App.flashSeq;
   App.flashTimers.forEach(t => { cancelAnimationFrame(t); clearTimeout(t); });
   App.flashTimers = [];
-  App.applyFlashColor('rgb(' + colors[0].join(',') + ')'); 
+  App.applyFlashColor('rgb(' + App.flashColors.yellow.join(',') + ')');
+  App.setFlashOpacity(0);
   const t0 = performance.now();
-  const duration = App.flashDurationMs || 300;
-  const seg1 = t0 + duration; 
   const step = now => {
     if (seq !== App.flashSeq) return;
-    if (now < seg1) {
-      App.applyFlashColor(mixRGB(colors[0], colors[1], (now - t0) / duration));
+    const f = App.flashCurve(now - t0);
+    if (f) {
+      App.setFlashOpacity(f.opacity);
+      App.applyFlashColor(f.color);
       App.flashTimers.push(requestAnimationFrame(step));
-    } else {
-      const current = App.flashOverlayMap.get('__composite__');
-      if (current && current.kind === 'auto-static-direct') App.restoreDirectFlash(current);
-      App.flashG.style.display = 'none'; 
-      App.flashColor = null;
+      return;
     }
+    const current = App.flashOverlayMap.get('__composite__');
+    if (current && current.kind === 'auto-static-direct') App.restoreDirectFlash(current);
+    App.hideAutoStaticFlashPair();
+    App.flashG.style.display = 'none'; 
+    App.setFlashOpacity(1);            
+    App.resetFlashColorVar();
+    App.flashTimers = [];
   };
   App.flashTimers.push(requestAnimationFrame(step));
+  if (App._flashSafetyTimer) clearTimeout(App._flashSafetyTimer);
+  App._flashSafetyTimer = setTimeout(function () {
+    App._flashSafetyTimer = null;
+    if (seq !== App.flashSeq) return;
+    try {
+      const cur = App.flashOverlayMap.get('__composite__');
+      if (cur && cur.kind === 'auto-static-direct') App.restoreDirectFlash(cur);
+      App.hideAutoStaticFlashPair();
+      App.flashG.style.display = 'none';
+      App.setFlashOpacity(1);
+      App.resetFlashColorVar();
+      App.flashTimers = [];
+    } catch (e) {   }
+  }, (App.flashDurationMs || 400));
 };
-
 
 const imgCache = new Map();
 const silhouetteCache = new Map();
-
 function dataUrlToBlob(uri) {
   const comma = uri.indexOf(',');
   const mime = (uri.slice(5, comma).split(';')[0]) || 'image/png';
@@ -3267,19 +3117,16 @@ function dataUrlToBlob(uri) {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return new Blob([bytes], { type: mime });
 }
-
 App.decodedImage = function (uri) {
   if (!imgCache.has(uri)) {
     const p = (window.createImageBitmap
       ? Promise.resolve().then(() => createImageBitmap(dataUrlToBlob(uri))).catch(() => loadImage(uri).catch(() => null))
       : loadImage(uri).catch(() => null))
-
       .then(img => { if (img && App.noteTexNative) App.noteTexNative(uri, img.width, img.height); return img; });
     imgCache.set(uri, p);
   }
   return imgCache.get(uri);
 };
-
 App._warmupTimer = null;
 App.warmupSymbols = function () {
   if (App._warmupTimer) clearTimeout(App._warmupTimer);
@@ -3295,25 +3142,21 @@ function fitDrawRect(img, size) {
   cx.drawImage(img, x, y, w, h);
   return { canvas: c, ctx: cx, rect: { x, y, w, h } };
 }
-
 function tfPoint(x, y, f) {
   const sx = f.sx * (f.flipH ? -1 : 1);
   const sy = f.sy * (f.flipV ? -1 : 1);
   const py0 = y * sy;
   const t = Math.tan(f.skew * D2R);
-
   const px = App.skewMode === '132' ? (x + t * y) * sx : x * sx + t * py0;
   const a = f.rot * D2R, c = Math.cos(a), s = Math.sin(a);
   return [px * c - py0 * s, px * s + py0 * c];
 }
-
 App.computeLocalBBox = function (layer) {
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
   const addCorners = l => {
     if (l.kind === 'merged') { (l.children || []).forEach(addCorners); return; }
     const hw = (l.w || 0) / 2, hh = (l.h || 0) / 2;
     [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].forEach(p => {
-
       const sx = l.sx * (l.flipH ? -1 : 1);
       const py = p[1] * (l.sy * (l.flipV ? -1 : 1));
       const tt = Math.tan(l.skew * D2R);
@@ -3329,7 +3172,6 @@ App.computeLocalBBox = function (layer) {
   if (!isFinite(minx)) return { x: 0, y: 0, w: 0, h: 0 };
   return { x: minx, y: miny, w: maxx - minx, h: maxy - miny };
 };
-
 App.renderTransformedThumb = function (base, rect, f) {
   const c = document.createElement('canvas');
   c.width = 48; c.height = 48;
@@ -3347,16 +3189,13 @@ App.renderTransformedThumb = function (base, rect, f) {
   cx.translate(24, 24);
   cx.scale(s, s);
   cx.rotate(f.rot * D2R);
-
   const _sk = () => cx.transform(1, 0, Math.tan(f.skew * D2R), 1, 0, 0);
   const _sc = () => cx.scale(f.sx * (f.flipH ? -1 : 1), f.sy * (f.flipV ? -1 : 1));
   if (App.skewMode === '132') { _sc(); _sk(); } else { _sk(); _sc(); }
   cx.drawImage(base, -(rect.x + rect.w / 2), -(rect.y + rect.h / 2));
   return c;
 };
-
 App.silhouettePending = new Map();
-
 App.silhouetteCanvas = function (uri, color, size, ident) {
   const key = App.silhouetteCacheKey(uri, color, size, ident);
   if (silhouetteCache.has(key)) return Promise.resolve(silhouetteCache.get(key));
@@ -3367,7 +3206,6 @@ App.silhouetteCanvas = function (uri, color, size, ident) {
     const d = ctx.getImageData(0, 0, size, size);
     const p2 = d.data;
     const rgb = hexToRgb(color) || { r: 255, g: 255, b: 255 };
-
     return tintPixels(p2, rgb).then(() => {
       ctx.putImageData(d, 0, 0);
       const entry = { canvas, rect };
@@ -3378,9 +3216,7 @@ App.silhouetteCanvas = function (uri, color, size, ident) {
   App.silhouettePending.set(key, p);
   return p;
 };
-
 const MASK_INDICATOR_TRANSPARENT = false;
-
 App.maskIndicatorCanvas = function (size) {
   const themeKey = App.maskThemeKey();
   const key = 'ind:' + themeKey + ':' + size + (MASK_INDICATOR_TRANSPARENT ? ':t' : '');
@@ -3410,7 +3246,6 @@ App.maskIndicatorCanvas = function (size) {
   silhouetteCache.set(key, c);
   return c;
 };
-
 App.maskBakeIndicatorCanvas = function (layer, size) {
   const themeKey = App.maskThemeKey();
   const w = Math.max(0.0001, Math.abs(Number(layer && layer.w) || 0));
@@ -3445,7 +3280,6 @@ App.maskBakeIndicatorCanvas = function (layer, size) {
   const maxCol = Math.ceil((w / 2) / pw) + 1;
   const minRow = Math.floor((-h / 2) / ph) - 1;
   const maxRow = Math.ceil((h / 2) / ph) + 1;
-
   const tx = 0.5, ty = 0.5;
   cx.beginPath();
   for (let row = minRow; row <= maxRow; row++) {
@@ -3468,9 +3302,6 @@ App.maskBakeIndicatorCanvas = function (layer, size) {
   silhouetteCache.set(key, c);
   return c;
 };
-
-
-
 App.maskThumbEntry = async function (layer, size) {
   size = size || 96;
   const ind = App.maskIndicatorCanvas(size);
@@ -3528,7 +3359,6 @@ App.maskBakeUrl = function (layer, size) {
     const ind = App.maskBakeIndicatorCanvas(layer, size);
     if (!ind) return "";
     if (layer.kind !== "symbol" || !layer.dataUri) return App.canvasPngUrl(ind, 'mask-indicator');
-
     return App.symbolColorCanvas(layer.dataUri, "#ffffff", size, size, App.symbolColorIdent(layer)).then(function (maskCanvas) {
       if (!maskCanvas) return App.canvasPngUrl(ind, 'mask-indicator');
       const c = document.createElement("canvas");
@@ -3576,7 +3406,6 @@ App.maskSilhouetteCanvas = function (uri, size) {
     return entry;
   });
 };
-
 App.patternThumbCanvas = function (key, color, size) {
   const src = (App.patterns || []).find(p => p.key === key);
   const base = color || (src ? src.fill : '#888888');
@@ -3602,28 +3431,23 @@ App.patternThumb = function (key, color) {
   return App.patternThumbCanvas(key, color, 64).toDataURL();
 };
 
-
 App.libThumb = function (symbol) {
   if (symbol.thumb) return Promise.resolve(symbol.thumb);
-
   if (App.libThumbPreUrl) {
     const pre = App.libThumbPreUrl(symbol);
     if (pre) return Promise.resolve(pre);
   }
   const identity = App.libThumbIdentity(symbol);
-
   const diskOk = !!(identity && typeof App.thumbCacheLookup === 'function' &&
     window.sveApi && typeof window.sveApi.thumbCachePut === 'function');
   if (diskOk) return App.libThumbResolve(symbol, identity);
   return App.libThumbBuild(symbol);
 };
 
-
 App.libThumbIdentity = function (symbol) {
   if (!symbol || !symbol.key) return '';
   return 'lib\0' + String(symbol.key) + '\0' + String(App.libAssetVer || '0');
 };
-
 
 App.libThumbResolve = function (symbol, identity) {
   const cache = App.__libThumbDiskCache || (App.__libThumbDiskCache = new Map());
@@ -3632,7 +3456,6 @@ App.libThumbResolve = function (symbol, identity) {
     const hits = await App.thumbCacheLookup(App.LIB_THUMB_NS, [identity]);
     let url = hits.get(identity) || '';
     if (url) {
-
       const ok = await App.probeImageUrl(url);
       if (!ok) {
         await App.thumbCacheDrop(App.LIB_THUMB_NS, [identity]);
@@ -3653,7 +3476,6 @@ App.libThumbResolve = function (symbol, identity) {
   return p;
 };
 
-
 App.libThumbBuild = function (symbol, wantDataUrl) {
   return App.silhouetteCanvas(App.symbolUri(symbol), '#ffffff', 64,
     { key: symbol.key, group: App.symbolGroupOfKey(symbol.key) }).then(entry => {
@@ -3664,7 +3486,6 @@ App.libThumbBuild = function (symbol, wantDataUrl) {
   });
 };
 
-
 App.probeImageUrl = function (url) {
   return new Promise(function (resolve) {
     const img = new Image();
@@ -3674,9 +3495,6 @@ App.probeImageUrl = function (url) {
     img.src = url;
   });
 };
-
-
-
 
 App.thumbKnockoutMasks = function (svgText) {
   try { return window.SveThumbRenderer ? SveThumbRenderer.knockoutMasks(svgText) : svgText; }
@@ -3690,7 +3508,6 @@ App.thumbKnockoutRaster = async function (svgText) {
   try { return window.SveThumbRenderer ? await SveThumbRenderer.rasterizeKnockout(svgText, 1920) : ''; }
   catch (e) { console.warn('[thumb] thumbKnockoutRaster 失败', String(e && e.message || e).slice(0, 160)); return ''; }
 };
-
 App.mergedThumbGeometry = function (layer) {
   const leaves = [], mats = [];
   const modelMatrix = function (l) {
@@ -3698,7 +3515,6 @@ App.mergedThumbGeometry = function (layer) {
     const sy = (Number.isFinite(Number(l.sy)) ? Number(l.sy) : 1) * (l.flipV ? -1 : 1);
     const base = new DOMMatrix().translate(Number(l.x) || 0, Number(l.y) || 0)
       .rotate(Number(l.rot) || 0);
-
     return App.skewMode === '132'
       ? base.scale(sx, sy).skewX(Number(l.skew) || 0)
       : base.skewX(Number(l.skew) || 0).scale(sx, sy);
@@ -3730,7 +3546,6 @@ App.mergedThumbGeometry = function (layer) {
   return { leaves: leaves, mats: mats, lb: lb };
 };
 
-
 App._thumbBitmapCache = new Map();
 App.bitmapImageFor = function (url) {
   const hit = App._thumbBitmapCache.get(url);
@@ -3744,6 +3559,24 @@ App.bitmapImageFor = function (url) {
   }
   return p;
 };
+App.mergedThumbRectExclusive = function (layer, bb) {
+  if (!bb || !(bb.w > 0) || !(bb.h > 0)) return false;
+  const layers = App.state.layers || [];
+  const bx2 = bb.x + bb.w, by2 = bb.y + bb.h;
+  for (let i = 0; i < layers.length; i++) {
+    const o = layers[i];
+    if (!o || o === layer) continue;
+    if (o.kind === 'import') return false;
+    let ob = null;
+    try { ob = App.getItemDocBBox(o); } catch (e) { ob = null; }
+    if (!ob || !(ob.w > 0) || !(ob.h > 0)) {
+      if (o.kind === 'merged') return false;
+      continue;
+    }
+    if (ob.x < bx2 && ob.x + ob.w > bb.x && ob.y < by2 && ob.y + ob.h > bb.y) return false;
+  }
+  return true;
+};
 App.mergedThumbFromBitmap = function (layer, size) {
   const st = App.autoStatic;
   const bit = st && st.active ? st.bit : null;
@@ -3756,6 +3589,7 @@ App.mergedThumbFromBitmap = function (layer, size) {
   let bb = null;
   try { bb = App.getItemDocBBox(layer); } catch (e) { return null; }
   if (!bb || !(bb.w > 0) || !(bb.h > 0)) return null;
+  if (!App.mergedThumbRectExclusive(layer, bb)) return null;
   const eps = 0.5;    
   if (bb.x < bit.x - eps || bb.y < bit.y - eps ||
       bb.x + bb.w > bit.x + bit.w + eps || bb.y + bb.h > bit.y + bit.h + eps) return null;
@@ -3775,16 +3609,13 @@ App.mergedThumbFromBitmap = function (layer, size) {
     return cv.toDataURL();
   });
 };
-
 App.thumbWorkShouldWait = function (layer) {
   const st = App.autoStatic || {};
   if (st.active) return false;                         
-
   if (st.baking) return true;
   if (App.autoStaticEligible && App.autoStaticEligible()) return true;    
   return false;
 };
-
 App._mergedThumbChain = Promise.resolve();
 App.mergedThumbSerial = function (layer, size) {
   const run = function () { return App.mergedThumbUrl(layer, size); };
@@ -3803,9 +3634,7 @@ App.mergedThumbUrl = async function (layer, size, preparedGeometry) {
     const lb = geom.lb;
     if (!(lb.w > 0) || !(lb.h > 0)) return "";
     const mats = geom.mats;
-
     const urls = await App.resolveBakeLayerSources(leaves, 256, 24, undefined, { drawable: true, f: 1 });
-
     const urlOnly = Array.from(new Set(urls.filter(s => typeof s === 'string' && s)));
     const byUrl = await App.loadBakeImages(urlOnly, '[thumb] 分组图源解码失败');
     const sourceOf = s => (typeof s === 'string' ? (byUrl.get(s) || null) : (s || null));
@@ -3824,7 +3653,6 @@ App.mergedThumbUrl = async function (layer, size, preparedGeometry) {
       const M = mats[i];
       if (!img || !M) continue;
       const l = leaves[i];
-
       const sw = img.naturalWidth || img.width;
       const sh = img.naturalHeight || img.height;
       if (!(sw > 0) || !(sh > 0)) continue;
@@ -3832,7 +3660,6 @@ App.mergedThumbUrl = async function (layer, size, preparedGeometry) {
       const T = new DOMMatrix().translate(offx, offy).scale(f).multiply(M);
       cx.setTransform(T.a, T.b, T.c, T.d, T.e, T.f);
       cx.globalAlpha = (l && l.opacity >= 0 && l.opacity <= 1) ? l.opacity : 1;
-
       cx.globalCompositeOperation = l.isMask ? 'destination-out' : 'source-over';
       cx.drawImage(img, 0, 0, sw, sh, -(l.w || 0) / 2, -(l.h || 0) / 2, l.w || 0, l.h || 0);
       cx.restore();
@@ -3841,7 +3668,6 @@ App.mergedThumbUrl = async function (layer, size, preparedGeometry) {
         sliceStart = performance.now();
       }
     }
-
     if (layer.flipH || layer.flipV) {
       const c2 = document.createElement('canvas');
       c2.width = size; c2.height = size;
@@ -3866,11 +3692,8 @@ App.svgRasterThumb = async function (layer, size) {
     clone.removeAttribute('data-layer');
     clone.removeAttribute('data-kind');
     clone.removeAttribute('opacity');
-
     $$('[style]', clone).forEach(el => { if (el.style && el.style.display === 'none') el.style.display = ''; });
-
     $$('[data-layer]', clone).forEach(el => el.removeAttribute('visibility'));
-
     const pendingFills = [];
     $$('[data-layer]', clone).forEach(el => {
       const id = parseInt(el.getAttribute('data-layer'), 10);
@@ -3883,7 +3706,6 @@ App.svgRasterThumb = async function (layer, size) {
     });
     if (pendingFills.length) await Promise.all(pendingFills);
     let lb = App.computeLocalBBox(layer);
-
     if (layer.kind === "merged" && layer.el) {
       try { const bb = layer.el.getBBox(); if (bb && bb.width > 0 && bb.height > 0) lb = { x: bb.x, y: bb.y, w: bb.width, h: bb.height }; }
       catch (e) { console.warn('[thumb] 分组 DOM 包围盒读取失败', layer && layer.id, String(e && e.message || e).slice(0, 160)); }
@@ -3906,7 +3728,6 @@ App.svgRasterThumb = async function (layer, size) {
         : 'skewX(' + f.skew + ') scale(' + (f.sx * sfx) + ' ' + (f.sy * sfy) + ')'));
     const host = svgEl('svg');
     host.setAttribute('viewBox', (minx - pad) + ' ' + (miny - pad) + ' ' + (w + 2 * pad) + ' ' + (h + 2 * pad));
-
     let defsHost = null;
     const addDefs = () => {
       if (defsHost) return defsHost;
@@ -3918,21 +3739,18 @@ App.svgRasterThumb = async function (layer, size) {
       const ind = $('#sveMaskInd', App.defs);
       if (ind) addDefs().appendChild(ind.cloneNode(true));
     }
-
     $$('use', clone).forEach(u => {
       const h = (u.getAttribute('href') || '').replace(/^#/, '');
       if (h.indexOf('sveImg') !== 0) return;
       const d = $('#' + h, App.defs);
       if (d) addDefs().appendChild(d.cloneNode(true));
     });
-
     $$('[fill]', clone).forEach(el => {
       const m = /url\(#(svePat\d+)\)/.exec(el.getAttribute('fill') || '');
       if (!m) return;
       const d = $('#' + m[1], App.defs);
       if (!d) return;
       const host = addDefs();
-
       if (!$('#' + m[1], host)) host.appendChild(d.cloneNode(true));
     });
     host.appendChild(clone);
@@ -3956,18 +3774,14 @@ App.svgRasterThumb = async function (layer, size) {
   }
 };
 
-
 App.getLayerThumb = function (layer) {
   if (layer.thumbCache && !layer.thumbDirty) return Promise.resolve(layer.thumbCache);
-
   if (layer.isMask) return Promise.resolve('');
-
   const done = url => { layer.thumbCache = url; if (url) layer.thumbDirty = false; return url; };
   let p;
   if (layer.kind === 'symbol') {
     if (!layer.dataUri) p = Promise.resolve('');
     else if (layer.isMask) {
-
       p = App.maskThumbEntry(layer, 96).then(entry => {
         const out = App.renderTransformedThumb(entry.canvas, entry.rect, layer);
         return out ? out.toDataURL() : '';
@@ -3984,7 +3798,6 @@ App.getLayerThumb = function (layer) {
     const out = App.renderTransformedThumb(base, { x: 0, y: 0, w: 96, h: 96 }, layer);
     p = Promise.resolve(out ? out.toDataURL() : '');
   } else if (layer.kind === 'merged') {
-
     const viaBit = App.mergedThumbFromBitmap(layer, 96);
     if (viaBit) p = viaBit;
     else if (App.thumbWorkShouldWait(layer)) return Promise.resolve('');    
@@ -3996,28 +3809,22 @@ App.getLayerThumb = function (layer) {
 };
 
 App.doRefreshLayerThumbs = function () {
-
   App.fillVisibleThumbs();
 };
-
 App.refreshLayerThumbs = function () {
   if (App.thumbTimer) clearTimeout(App.thumbTimer);
   App.thumbTimer = setTimeout(() => { App.thumbTimer = null; App.doRefreshLayerThumbs(); }, 60);
 };
 
-
 App.proxyEnabled = false;
 App.proxyThreshold = 400;
 App._proxyBake = new Map();
-
 App._proxyTryHideChildren = function (merged, from) {
   if (!merged || !merged.el) return false;
   const rec = App._proxyBake.get(merged.id);
   if (!rec) return false;
-
   const cropOk = !!rec.url;
   const baseOk = !!rec.baseUrl;
-
   const fullBox = rec.full;
   const cropCoversAll = !!(fullBox && rec.cropToken !== undefined &&
     Math.abs(rec.minx - fullBox.minx) < 0.5 && Math.abs(rec.miny - fullBox.miny) < 0.5 &&
@@ -4040,13 +3847,11 @@ App.maybeBakeProxy = function (merged) {
   if (App._proxyBake.has(merged.id)) return;
   App._enqueueProxyBake(merged);
 };
-
 App.markProxyDirty = function (merged) {
   if (merged && merged.kind === 'merged' && App._proxyBake.has(merged.id)) {
     App._enqueueProxyBake(merged);
   }
 };
-
 App.unbakeProxy = function (merged) {
   if (!merged) return;
   merged.__proxyEpoch = (merged.__proxyEpoch || 0) + 1;    
@@ -4063,7 +3868,6 @@ App.unbakeProxy = function (merged) {
   }
   (merged.children || []).forEach(ch => { if (ch.kind === 'merged') App.unbakeProxy(ch); });
 };
-
 App.impBitmapThreshold = 300;
 App.impBitmapMaxSide = 512; 
 App.impBakeQueue = [];
@@ -4076,7 +3880,6 @@ App.impBitmapActive = function () {
   }
   return false;
 };
-
 App.impIsInteractive = function (layer) {
   if (!layer || layer.kind !== 'import') return false;
   if (App.state.selected.has(layer.id)) return true;
@@ -4088,7 +3891,6 @@ App.impIsInteractive = function (layer) {
   }
   return false;
 };
-
 App.impEnsureEl = function (layer) {
   if (!layer.el || layer.bitmapEl) return;
   const img = svgEl('image', {
@@ -4098,17 +3900,14 @@ App.impEnsureEl = function (layer) {
   layer.el.insertBefore(img, layer.el.firstChild);
   layer.bitmapEl = img;
 };
-
 App.impBakeLayer = function (layer) {
   if (!layer || layer.kind !== 'import' || layer.isMask) return;
   if (layer.w > App.impBitmapMaxSide || layer.h > App.impBitmapMaxSide) return;
   const plan = App.lodTexPlan ? App.lodTexPlan(layer) : null;
   const lodKey = plan ? plan.key : '';
   if (layer.impBaking || (layer.impBitmapUrl && !layer.impBitmapDirty && layer.impLodKey === lodKey)) return;
-
   if (/url\(#/.test(layer.importMarkup || '')) return;
   layer.impBaking = true;
-
   const k = plan ? plan.k : 1;
   const bw = Math.max(1, Math.min(2048, Math.round(layer.w * k)));
   const bh = Math.max(1, Math.min(2048, Math.round(layer.h * k)));
@@ -4143,12 +3942,10 @@ App.impQueueBake = function (layer) {
     if (!App.impBakeQueue.length) { clearInterval(App.impBakeTimer); App.impBakeTimer = null; }
   }, 50);
 };
-
 App.updateImpDisplay = function (layer) {
   if (!layer || layer.kind !== 'import') return;
   if (!App.impBitmapActive()) return;
   const interactive = App.impIsInteractive(layer);
-
   const lodKey = App.lodTexPlan ? App.lodTexPlan(layer).key : '';
   const fresh = !!(layer.impBitmapUrl && !layer.impBitmapDirty && layer.impLodKey === lodKey);
   if (interactive) {
@@ -4165,20 +3962,17 @@ App.updateImpDisplay = function (layer) {
     App.impQueueBake(layer);
   }
 };
-
 App.refreshImpBitmaps = function () {
   if (!App.impBitmapActive()) return;
   for (let i = 0; i < App.state.layers.length; i++) {
     if (App.state.layers[i].kind === 'import') App.updateImpDisplay(App.state.layers[i]);
   }
 };
-
 App.impMarkDirty = function (layer) {
   if (!layer || layer.kind !== 'import') return;
   layer.impBitmapDirty = true;
   App.updateImpDisplay(layer);
 };
-
 App.impCleanup = function (layer) {
   if (!layer) return;
   if (layer.impBitmapUrl) { try { URL.revokeObjectURL(layer.impBitmapUrl); } catch (e) {   } }
@@ -4205,12 +3999,9 @@ App._enqueueProxyBake = function (merged) {
   if (App._proxyTimer) return;
   App._proxyTimer = setTimeout(App._drainProxyBakeQueue, 80);
 };
-
 App._bakeProxyAsync = function (merged) {
   if (!merged || merged.kind !== 'merged' || !merged.el) return;
-
   const bakeToken = (merged.__proxyEpoch = (merged.__proxyEpoch || 0) + 1);
-
   App._proxyBaking = App._proxyBaking || {};
   App._proxyBaking[merged.id] = true;
   merged.__bakeT0 = performance.now();
@@ -4218,7 +4009,6 @@ App._bakeProxyAsync = function (merged) {
   const walk = l => { if (l.kind === 'merged') (l.children || []).forEach(walk); else leaves.push(l); };
   (merged.children || []).forEach(walk);
   if (!leaves.length) return;
-
   const chainToGroup = el => {
     const chain = [];
     let e = el;
@@ -4230,7 +4020,6 @@ App._bakeProxyAsync = function (merged) {
     for (let i = chain.length - 1; i >= 0; i--) m = m.multiply(parseTransformAttr(chain[i]));
     return m;
   };
-
   const mats = leaves.map(l => chainToGroup(l.el));
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
   const SLICE_MS = 8;   
@@ -4250,7 +4039,6 @@ App._bakeProxyAsync = function (merged) {
     if (i < leaves.length) { setTimeout(bboxStep, 0); return; }
     if (!isFinite(minx)) return;
     const bw = Math.max(1, maxx - minx), bh = Math.max(1, maxy - miny);
-
     const needF = App.proxyNeedF(merged);
     const fWant = Math.max(0.2, needF * 1.15);
     const CROP_PX_BUDGET = 6.0e6;                        
@@ -4258,7 +4046,6 @@ App._bakeProxyAsync = function (merged) {
     let cx0 = minx, cy0 = miny, cw0 = bw, ch0 = bh;
     const vrect = App.proxyLocalViewRect(merged, 0);
     if (vrect) {
-
       const ix0 = Math.max(minx, vrect.minx), iy0 = Math.max(miny, vrect.miny);
       const ix1 = Math.min(maxx, vrect.maxx), iy1 = Math.min(maxy, vrect.maxy);
       if (ix1 > ix0 && iy1 > iy0) {
@@ -4269,24 +4056,18 @@ App._bakeProxyAsync = function (merged) {
         if (gx1 > gx0 && gy1 > gy0) { cx0 = gx0; cy0 = gy0; cw0 = gx1 - gx0; ch0 = gy1 - gy0; }
       }
     }
-
     const screenScale = App.state.view.scale || 1;
     const dpr = window.devicePixelRatio || 1;
     const target = Math.max(2048, Math.ceil(Math.max(bw, bh) * screenScale * dpr));
-
-
     const f = Math.max(0.2, Math.min(fWant, 4096 / Math.max(cw0, ch0)));
     const cw = Math.max(1, Math.round(cw0 * f)), ch = Math.max(1, Math.round(ch0 * f));
     const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
     const cx = cv.getContext('2d');
-
     Promise.all(leaves.map(l => App.symbolColorUrl(l).catch(() => ''))).then(urls => {
-
       const uniq = Array.from(new Set(urls.filter(Boolean)));
       const tLoad = performance.now();
       return App.loadBakeImages(uniq, '[proxy-bake] 图片加载异常').then(byUrl => {
         const imgs = urls.map(u => (u ? (byUrl.get(u) || null) : null));
-
         const drawLeaf = (ctx2, di2, f2, ox, oy) => {
           const img = imgs[di2];
           if (!img) return;
@@ -4298,7 +4079,6 @@ App._bakeProxyAsync = function (merged) {
           ctx2.drawImage(img, 0, 0, img.width, img.height, -(l.w || 0) / 2, -(l.h || 0) / 2, l.w || 0, l.h || 0);
           ctx2.restore();
         };
-
         const bakeBase = () => {
           const fBase = Math.max(0.05, Math.min(2, 2048 / Math.max(bw, bh)));
           const bcv = document.createElement('canvas');
@@ -4342,14 +4122,11 @@ App._bakeProxyAsync = function (merged) {
   };
   bboxStep();
 };
-
 App._installProxy = function (merged, cv, minx, miny, bw, bh, f, stat) {
   if (!merged.el) return;
-
   if (stat && stat.token !== undefined && stat.token !== merged.__proxyEpoch) return;
   if (!App.state || !App.state.layers || App.state.layers.indexOf(merged) < 0) return;
   const rec0 = App._proxyBake.get(merged.id);
-
   const tEnc = performance.now();
   cv.toBlob(blob => {
     let url = null;
@@ -4373,7 +4150,6 @@ App._installProxy = function (merged, cv, minx, miny, bw, bh, f, stat) {
       if (current && current.parentNode === merged.el) merged.el.insertBefore(fresh, current);
       else merged.el.appendChild(fresh);
       if (current) current.remove();
-
       const prev = App._proxyBake.get(merged.id) || rec0;
       App._proxyBake.set(merged.id, Object.assign({}, prev || {}, {
         canvas: cv, minx, miny, bw, bh, f, url: url.indexOf('blob:') === 0 ? url : null,
@@ -4383,7 +4159,6 @@ App._installProxy = function (merged, cv, minx, miny, bw, bh, f, stat) {
       App._proxyTryHideChildren(merged, 'crop');
       if (prev && prev.url && prev.url !== url) { try { URL.revokeObjectURL(prev.url); } catch (e) {   } }
       merged._localBB = undefined;
-
       try {
         const t0 = merged.__bakeT0 || 0;
         App.log('perf', '分组烘焙阶段', { merged: merged.id, totalMs: Math.round(performance.now() - t0),
@@ -4398,12 +4173,10 @@ App._installProxy = function (merged, cv, minx, miny, bw, bh, f, stat) {
     if (warm.decode) warm.decode().then(done, fail); else setTimeout(done, 400);
   }, 'image/png');
 };
-
 App._installProxyBase = function (merged, cv, minx, miny, bw, bh, fBase, token) {
   if (!merged || !merged.el) return;
   if (token !== undefined && token !== merged.__proxyEpoch) return;    
   if (!App.state || !App.state.layers || App.state.layers.indexOf(merged) < 0) return;
-
   const maskCanvas = document.createElement('canvas');
   maskCanvas.width = cv.width; maskCanvas.height = cv.height;
   const maskCtx = maskCanvas.getContext('2d');
@@ -4436,7 +4209,6 @@ App._installProxyBase = function (merged, cv, minx, miny, bw, bh, fBase, token) 
         return;
       }
       const cur = App._proxyBake.get(merged.id);
-
       if (!cur) {
         if (++installAttempts < 100) { setTimeout(done, 20); return; }
         try { URL.revokeObjectURL(url); } catch (e) {   }
@@ -4462,7 +4234,6 @@ App._installProxyBase = function (merged, cv, minx, miny, bw, bh, fBase, token) 
         baseMinx: minx, baseMiny: miny, baseBw: bw, baseBh: bh,
         baseToken: token
       }));
-
       App._proxyTryHideChildren(merged, 'base');
       try { App.log('perf', '底图烘焙', { merged: merged.id, w: cv.width, h: cv.height, f: fBase, encodeMs: Math.round(performance.now() - tEnc) }); } catch (e) {   }
     };
@@ -4474,8 +4245,6 @@ App._installProxyBase = function (merged, cv, minx, miny, bw, bh, fBase, token) 
     Promise.all([loadImage(url), loadImage(maskUrl)]).then(done, fail);
   }).catch(e => console.warn('[proxy-bake] 底图编码异常', merged.id, String(e && e.message || e).slice(0, 160)));
 };
-
-
 App.proxyLocalViewRect = function (merged, pad) {
   try {
     const r = App.wrap.getBoundingClientRect();
@@ -4497,7 +4266,6 @@ App.proxyLocalViewRect = function (merged, pad) {
     return { minx: minx, miny: miny, maxx: maxx, maxy: maxy };
   } catch (e) { return null; }
 };
-
 App.proxyGroupScale = function (merged) {
   try {
     const m = App.transformChainMat ? App.transformChainMat(merged) : null;
@@ -4510,8 +4278,6 @@ App.proxyNeedF = function (merged) {
   const dpr = window.devicePixelRatio || 1;
   return (App.state.view.scale || 1) * dpr * App.proxyGroupScale(merged);
 };
-
-
 App.proxyViewHasContent = function (merged) {
   const vr = App.proxyLocalViewRect(merged, 0);
   if (!vr || !merged || !merged.el) return true;       
@@ -4526,7 +4292,6 @@ App.proxyViewHasContent = function (merged) {
 App.proxyCropCoversView = function (merged, rec) {
   const vr = App.proxyLocalViewRect(merged, 0);
   if (!vr || !rec || !rec.full) return true;         
-
   const fx0 = rec.full.minx, fy0 = rec.full.miny;
   const fx1 = fx0 + rec.full.bw, fy1 = fy0 + rec.full.bh;
   const ix0 = Math.max(vr.minx, fx0), iy0 = Math.max(vr.miny, fy0);
@@ -4549,7 +4314,6 @@ App.maybeUpgradeProxyRes = function () {
       if (App._proxyQueue.has(id)) return;           
       if (App._proxyBaking && App._proxyBaking[id]) return;    
       if (!App.proxyViewHasContent(m)) return;                 
-
       const needF = App.proxyNeedF(m);
       const resShort = rec.f < needF * 0.85;                  
       const resFat = rec.f > needF * 1.15 * 2.2;              
@@ -4560,7 +4324,6 @@ App.maybeUpgradeProxyRes = function () {
     } catch (e) {   }
   });
 };
-
 App.proxySampleColor = function (merged, clientX, clientY) {
   const rec = App._proxyBake.get(merged && merged.id);
   if (!rec || !rec.canvas) return null;
