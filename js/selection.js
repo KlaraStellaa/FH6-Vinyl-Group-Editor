@@ -353,17 +353,17 @@ App.updateSelToolbar = function () {
   }
   App.syncGroupBackBtn();
   if (App.syncColorPanelToTargets) App.syncColorPanelToTargets();
-  if (!App.state.selected.size || inEdit || App.state.plusAnchorActive) { App.setSelToolbarVisible(false); return; }
-  const items = App.operationTargets();
+  const items = App.operationTargets() || [];
   const single = items.length === 1;
   const canReplace = single && items[0].kind !== 'merged';
   $('#btnReplace').disabled = !canReplace;
   $('#btnMerge').disabled = items.length < 2;
   $('#btnSplit').disabled = !App.splitTarget();
-  const allMask = items.every(l => !!l.isMask);
+  const allMask = items.length > 0 && items.every(l => !!l.isMask);
   const anyMask = items.some(l => !!l.isMask);
   $('#btnToMask').disabled = allMask;
   $('#btnToLayer').disabled = !anyMask;
+  if (!App.state.selected.size || inEdit || App.state.plusAnchorActive) { App.setSelToolbarVisible(false); return; }
   const show = !App.state.selBarDismissed;
   App.setSelToolbarVisible(!!show);
 };

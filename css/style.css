@@ -177,7 +177,7 @@ html[data-scheme="light"] {
 @keyframes sveflash { 0% { stroke: #ffffff; } 100% { stroke: var(--accent); } }
 .sve-handle { fill: #ffffff; stroke: #2f7fd4; stroke-width: 1.5; vector-effect: non-scaling-stroke; opacity: 0.4; }
 .sve-handle-hit { fill: transparent; }
-.sve-flash-fill { fill: var(--sve-flash-color, #FFFA01); }
+.sve-flash-fill { fill: var(--sve-flash-color, #EBEA3A); }
 
 #selToolbar { position: absolute; left: 108px; top: 2px; display: flex; flex-direction: row; align-items: flex-start; gap: 6px; max-height: calc(100vh - var(--titlebar-h) - 100px); overflow-y: auto; overflow-x: hidden; background: var(--overlay-bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 6px; z-index: 6; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
 #selToolbar .st-col { display: flex; flex-direction: column; gap: 6px; align-items: stretch; flex: none; }
@@ -195,6 +195,11 @@ html[data-scheme="light"] {
 .edit-modes button { display: flex; align-items: center; gap: 5px; }
 #btnFinish { margin-left: auto; }
 #editRow2 { display: flex; align-items: center; gap: 8px; }
+#sizeReadout { position: absolute; left: 0; top: 100%; margin-top: 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; pointer-events: none; z-index: 6; }
+#sizeReadout.hidden { display: none; }
+.sz-chip { display: inline-flex; align-items: center; gap: 7px; min-width: 72px; padding: 5px 11px 5px 9px; border-radius: 9px; background: var(--overlay-bg); border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,.28); }
+.sz-chip .sz-ico { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: .7; }
+.sz-chip span { font-size: 12px; line-height: 1; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: .2px; }
 #btnPropMode { margin-left: auto; }
 #btnRemoveBg { margin-left: auto; }
 #editValueBox { display: flex; align-items: center; gap: 6px; }
@@ -1674,6 +1679,7 @@ html[data-theme="sakura"] {
 
 body.sve-xpick #canvas { pointer-events: none; }
 body.sve-xpick { cursor: crosshair; }
+body.sve-xpick [data-xpick-disabled] { opacity: .5; }
 
 #xbindHint {
   position: fixed; left: 50%; bottom: 16px; z-index: 400;
@@ -1685,13 +1691,7 @@ body.sve-xpick { cursor: crosshair; }
 }
 #xbindHint.sve-show { opacity: 1; transform: translateX(-50%); }
 
-.settings-box .km-more-row { padding: 0 0 8px; }
-.settings-box .km-more {
-  width: 100%; padding: 8px 12px; border-radius: 10px;
-  border: 1px dashed var(--btn-border); background: transparent; color: var(--text);
-  font-size: 12px; cursor: pointer; transition: border-color .15s, background .15s;
-}
-.settings-box .km-more:hover { border-color: var(--accent); background: var(--accent-sel-bg); }
+.settings-box .anchor-btns .km-more { margin-right: auto; }
 
 .settings-box .km-unbind { margin-left: 8px; }
 .settings-box .km-unbind.active {

@@ -536,6 +536,14 @@ App.refreshPanel = function () {
   if (App.syncGroupBackBtn) App.syncGroupBackBtn();
 };
 
+App._thumbRetryTimer = null;
+App.scheduleThumbRetry = function (delay) {
+  if (App._thumbRetryTimer) return;
+  App._thumbRetryTimer = setTimeout(function () {
+    App._thumbRetryTimer = null;
+    try { App.fillVisibleThumbs(); } catch (e) {   }
+  }, Math.max(80, delay || 300));
+};
 App.fillVisibleThumbs = function (opts) {
   const list = App.layerListEl;
   if (!list) return;
@@ -567,7 +575,21 @@ App.fillVisibleThumbs = function (opts) {
     const thumb = $('.layer-thumb', item);
     const loader = App.startThumbLoading(thumb);
     App.getLayerThumb(layer).then(async url => {
-      if (!img || !img.isConnected || !url) return;
+      if (!img || !img.isConnected) return;
+      if (!url) {
+        if (item.isConnected && !layer.isMask) {
+          const waiting = !!(App.thumbWorkShouldWait && App.thumbWorkShouldWait(layer));
+          const n = (parseInt(item.dataset.thumbRetry || '0', 10) || 0) + 1;
+          if (n <= 90) {
+            item.dataset.thumbRetry = String(n);
+            App.scheduleThumbRetry(waiting ? 800 : Math.min(2000, 120 * n));
+          } else {
+            delete item.dataset.thumbRetry;
+          }
+        }
+        return;
+      }
+      delete item.dataset.thumbRetry;
       await App.showThumbImage(thumb, img, url, loader);
     }).catch(e => {
       console.warn('[thumb] 图层栏缩略图生成失败', layer && layer.id, String(e && e.message || e).slice(0, 160));

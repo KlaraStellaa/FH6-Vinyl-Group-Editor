@@ -422,7 +422,6 @@ App.keymapUI = {
         '<label class="sve-switch"><input type="checkbox" id="kmQuickClick">' +
           '<span class="sve-switch-track" aria-hidden="true"></span></label>' +
       '</div>' +
-      '<div class="km-more-row"><button type="button" class="km-more" data-i18n="km.moreKeys"></button></div>' +
       '<div class="km-mode-row">' +
         '<div class="ev-tabs"><div class="ev-tabs-track">' +
           '<input type="radio" id="kmModeKey" name="kmMode" value="key" checked>' +
@@ -441,6 +440,7 @@ App.keymapUI = {
         '<button class="speed-reset km-unbind" data-i18n="km.unbind"></button>' +
       '</div>' +
       '<div class="anchor-btns">' +
+        '<button type="button" class="km-more" data-i18n="km.moreKeys"></button>' +
         '<button class="km-cancel" data-i18n="speed.cancel"></button>' +
         '<button class="km-ok" data-i18n="speed.ok"></button>' +
       '</div>';

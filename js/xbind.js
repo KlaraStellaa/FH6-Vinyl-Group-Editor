@@ -62,7 +62,8 @@ App.xbind = {
     btnFinish: 'editFinish',
     btnPlaceAnchor: 'anchor',
     btnPropMode: 'sizeMode',
-    btnInsertBelow: 'insertBelow'
+    btnInsertBelow: 'insertBelow',
+    cpMain: 'paste'
   },
   map: {},           
   names: {},         
@@ -163,21 +164,30 @@ App.xbind = {
   },
   bindable(target) {
     if (!target || !target.closest) return null;
-    const el = target.closest('button, label[data-tab], #layerPlusRow');
+    const el = target.closest('button, label[data-tab], #layerPlusRow, #cpMain');
     if (!el) return null;
     if (this.excludes(el)) return null;
     if (!this.keyOf(el)) return null;                  
     return el;
   },
 
+  allowHiddenLayerPanel(el) {
+    if (!el || !el.closest) return false;
+    if (!el.closest('#leftPanel, #selToolbar')) return false;
+    if (App.state && (App.state.edit || App.state.eyeMode)) return false;
+    if (App.Home && App.Home.shown) return false;
+    return true;
+  },
   canFire(el) {
     if (!el || !el.isConnected) return false;
     if (el.disabled) return false;
-    if (el.closest('.hidden')) return false;
+    if (el.closest('.hidden')) return this.allowHiddenLayerPanel(el);
     const r = el.getBoundingClientRect();
-    if (!r || !r.width || !r.height) return false;
+    if (!r || !r.width || !r.height) return this.allowHiddenLayerPanel(el);
     const cs = getComputedStyle(el);
-    if (cs.display === 'none' || cs.visibility === 'hidden' || cs.pointerEvents === 'none') return false;
+    if (cs.display === 'none' || cs.visibility === 'hidden' || cs.pointerEvents === 'none') {
+      return this.allowHiddenLayerPanel(el);
+    }
     return true;
   },
   matchEntry(e, mouse) {
@@ -194,7 +204,7 @@ App.xbind = {
     return null;
   },
   blocked() {
-    if (this.picking || (this.dlg && !this.dlg.el.classList.contains('hidden'))) return true;
+    if (this.picking || this.dlgOpen()) return true;
     if (App.Home && App.Home.shown) return true;
     if (App.keymapUI && (App.keymapUI.isOpen() || App.keymapUI.capturing)) return true;
     return false;
@@ -239,6 +249,14 @@ App.xbind = {
     if (this.wasRef && App.RefWindow) App.RefWindow.hide();
     if (App.setSelToolbarVisible) App.setSelToolbarVisible(true);
     document.body.classList.add('sve-xpick');
+    this.frozenDisabled = [];
+    try {
+      Array.prototype.forEach.call(document.querySelectorAll('button:disabled'), b => {
+        b.dataset.xpickDisabled = '1';
+        b.disabled = false;
+        this.frozenDisabled.push(b);
+      });
+    } catch (e) { this.frozenDisabled = []; }
     this.showHint();
     this.bindPickEvents(true);
     App.log && App.log('info', 'xbind.pick.start', {});
@@ -263,6 +281,10 @@ App.xbind = {
     this.picking = false;
     this.bindPickEvents(false);
     document.body.classList.remove('sve-xpick');
+    if (this.frozenDisabled) {
+      this.frozenDisabled.forEach(b => { try { b.disabled = true; delete b.dataset.xpickDisabled; } catch (e) {   } });
+      this.frozenDisabled = null;
+    }
     this.hideHint();
     if (this.wasRef && App.RefWindow && App.RefWindow.el) {
       App.RefWindow.el.classList.remove('hidden');
@@ -323,7 +345,13 @@ App.xbind = {
       this._pick = null; this._pickKey = null; this._pickUp = null;
     }
   },
-  dlgOpen() { return !!(this.dlg && !this.dlg.el.classList.contains('hidden')); },
+  dlgOpen() {
+    const el = this.dlg && this.dlg.el;
+    if (!el) return false;
+    if (el.classList.contains('hidden')) return false;
+    if (el.classList.contains('sve-closing')) return false;
+    return true;
+  },
   onPick(e) {
     if (!this.picking) return;
     if (this.dlgOpen()) {
