@@ -195,9 +195,10 @@ html[data-scheme="light"] {
 .edit-modes button { display: flex; align-items: center; gap: 5px; }
 #btnFinish { margin-left: auto; }
 #editRow2 { display: flex; align-items: center; gap: 8px; }
-#sizeReadout { position: absolute; left: 0; top: 100%; margin-top: 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; pointer-events: none; z-index: 6; }
-#sizeReadout.hidden { display: none; }
+#sizeReadout, #skewReadout { position: absolute; left: 0; top: 100%; margin-top: 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; pointer-events: none; z-index: 6; }
+#sizeReadout.hidden, #skewReadout.hidden { display: none; }
 .sz-chip { display: inline-flex; align-items: center; gap: 7px; min-width: 72px; padding: 5px 11px 5px 9px; border-radius: 9px; background: var(--overlay-bg); border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,.28); }
+.sz-chip.sz-chip-plain { padding-left: 11px; min-width: 56px; }
 .sz-chip .sz-ico { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: .7; }
 .sz-chip span { font-size: 12px; line-height: 1; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: .2px; }
 #btnPropMode { margin-left: auto; }

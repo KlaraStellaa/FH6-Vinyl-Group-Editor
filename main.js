@@ -64,6 +64,22 @@ function recoverUpdateState() {
   if (!sf) return;
   const st = updateApply.readState(sf);
   if (!st || !st.at) return;
+
+  try {
+    const tgt = String(st.target || '');
+    if (tgt) {
+      const r = updateApply.recoverTarget(tgt, st.pkg, { check: checkExePackage });
+      if (r.action === 'restored-backup') {
+        appendLog('warn', '自动更新：上次替换中断，已用备份恢复 exe', { target: tgt });
+      } else if (r.action === 'copied-pkg') {
+        appendLog('warn', '自动更新：目标 exe 缺失，已用安装包补回', { target: tgt, size: r.size });
+      } else if (r.action === 'missing') {
+        appendLog('warn', '自动更新：目标 exe 缺失且无法恢复（请重新下载完整版）', { target: tgt, error: r.error });
+      }
+    }
+  } catch (e) {
+    appendLog('warn', '自动更新：exe 自愈检查失败（已忽略）', { message: String(e && e.message || e).slice(0, 160) });
+  }
   const cur = app.getVersion();
   const to = String(st.to || '');
   const result = updateApply.readResult(updateResultPath());
@@ -103,40 +119,8 @@ function recoverUpdateState() {
   }
 }
 
-const EXE_MIN_BYTES = 20 * 1024 * 1024;
-
-function checkExePackage(file) {
-  let st;
-  try { st = fs.statSync(file); } catch (e) { return { ok: false, error: 'not-found' }; }
-  if (!st.isFile()) return { ok: false, error: 'not-exe' };
-  if (st.size < EXE_MIN_BYTES) return { ok: false, error: 'too-small', size: st.size };
-  let fd = null;
-  try {
-    fd = fs.openSync(file, 'r');
-    const head = Buffer.alloc(2);
-    fs.readSync(fd, head, 0, 2, 0);
-    if (head[0] !== 0x4d || head[1] !== 0x5a) return { ok: false, error: 'not-exe' };   
-    const needle = Buffer.from('FH6 Vinyl Group Editor', 'utf16le');
-    const chunk = Buffer.alloc(1 << 20);
-    const tail = Buffer.alloc(needle.length - 1);
-    let pos = 0, found = false;
-    while (!found && pos < st.size) {
-      const n = fs.readSync(fd, chunk, 0, chunk.length, pos);
-      if (n <= 0) break;
-      const hay = pos === 0 ? chunk.subarray(0, n) : Buffer.concat([tail, chunk.subarray(0, n)]);
-      if (hay.indexOf(needle) >= 0) found = true;
-      hay.copy(tail, 0, Math.max(0, hay.length - tail.length));
-      pos += n;
-    }
-    const nameOk = found || /(fh6|vinyl).*(editor|group)/i.test(path.basename(file));
-    if (!nameOk) return { ok: false, error: 'wrong-app' };
-    return { ok: true, size: st.size, name: path.basename(file), byContent: found };
-  } catch (e) {
-    return { ok: false, error: 'unreadable', message: String(e && e.message || e).slice(0, 120) };
-  } finally {
-    try { if (fd !== null) fs.closeSync(fd); } catch (e) {   }
-  }
-}
+const EXE_MIN_BYTES = updateApply.EXE_MIN_BYTES;
+function checkExePackage(file) { return updateApply.checkExePackage(file, { minBytes: EXE_MIN_BYTES }); }
 
 function moveIntoPlace(src, dst) {
   try {
@@ -153,14 +137,24 @@ function moveIntoPlace(src, dst) {
 
 function scheduleExeReplace(newExe, targetExe, meta) {
   const m = meta || {};
-  return updateApply.scheduleExeReplace({
-    targetExe: targetExe,
-    newExe: newExe,
-    resultFile: updateResultPath(),
-    batDir: os.tmpdir(),
-    delayPings: m.delayPings,
-    retry: m.retry
-  });
+  let batDir = '';
+  try { batDir = path.dirname(targetExe); } catch (e) { batDir = ''; }
+  let script = null;
+  if (batDir) {
+    try { script = updateApply.scheduleExeReplace({ targetExe: targetExe, newExe: newExe, resultFile: updateResultPath(), batDir: batDir, delayPings: m.delayPings, retry: m.retry }); }
+    catch (e) { script = null; }
+  }
+  if (!script) {
+    script = updateApply.scheduleExeReplace({
+      targetExe: targetExe,
+      newExe: newExe,
+      resultFile: updateResultPath(),
+      batDir: os.tmpdir(),
+      delayPings: m.delayPings,
+      retry: m.retry
+    });
+  }
+  return script;
 }
 
 const STALE_TMP_MS = 10 * 60 * 1000;
@@ -853,12 +847,20 @@ app.whenReady().then(() => {
       const dir = path.dirname(exePath);
       const pend = pendingUpdateInfo();
       const keep = (pend && pend.pkg) ? path.resolve(pend.pkg).toLowerCase() : '';
+      const now = Date.now();
+      const targetAlive = fs.existsSync(exePath);
       fs.readdirSync(dir).forEach(n => {
-        if (/\.old\.exe$/i.test(n) || /^update-(manual-)?\d+\.exe$/i.test(n)) {
-          const fp = path.join(dir, n);
-          if (keep && path.resolve(fp).toLowerCase() === keep) return;
-          try { fs.unlinkSync(fp); } catch (e) {   }
+        const isBak = /\.old\.exe$/i.test(n);
+        const isUpd = /^update-(manual-)?\d+\.exe$/i.test(n);
+        const isScript = /^sve-(replace|update-restart)-[\d-]+\.(bat|cmd)$/i.test(n);
+        if (!isBak && !isUpd && !isScript) return;
+        if (isBak && !targetAlive) return;
+        const fp = path.join(dir, n);
+        if (keep && path.resolve(fp).toLowerCase() === keep) return;
+        if (isScript) {
+          try { if (now - fs.statSync(fp).mtimeMs < 10 * 60 * 1000) return; } catch (e) { return; }
         }
+        try { fs.unlinkSync(fp); } catch (e) {   }
       });
     }
   } catch (e) {   }
