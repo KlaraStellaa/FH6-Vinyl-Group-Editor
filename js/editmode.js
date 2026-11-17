@@ -400,6 +400,7 @@ App.updateEditBar = function () {
     !$('#btnRemoveBg').classList.contains('hidden');
   $('#editRow2').classList.toggle('hidden', !any2);
   App.updateSizeReadout();
+  App.updateSkewReadout();
   if (isSize) {
     App.layersRoot.style.pointerEvents = 'none';
   } else if (mode === 'move') {
@@ -411,6 +412,7 @@ App.updateEditBar = function () {
 
 App.updateEditValue = function () {
   App.updateSizeReadout();
+  App.updateSkewReadout();
   const items = App.editTargets();
   if (!items.length) return;
   const it = items[0];
@@ -440,6 +442,19 @@ App.updateSizeReadout = function () {
   if (!show) return;
   $('#szValX').textContent = fmtNum(Number(it.sx) || 0, 2);
   $('#szValY').textContent = fmtNum(Number(it.sy) || 0, 2);
+};
+
+App.updateSkewReadout = function () {
+  const box = $('#skewReadout');
+  if (!box) return;
+  const e = App.state && App.state.edit;
+  const items = (e && e.type !== 'bg') ? App.editTargets() : [];
+  const it = items.length === 1 ? items[0] : null;
+  const show = !!(e && e.type === 'layer' && App.state.editMode === 'skew' && it && it.kind !== 'merged');
+  box.classList.toggle('hidden', !show);
+  if (!show) return;
+  const deg = Number(it.skew) || 0;
+  $('#szValK').textContent = fmtNum(-Math.tan(deg * Math.PI / 180), 2);
 };
 
 App.editValueCommit = function () {
