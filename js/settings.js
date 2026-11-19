@@ -382,10 +382,11 @@ App.settings = {
     if (App.refreshShortcutPanel) App.refreshShortcutPanel();    
   },
 
-  save() {
+  save(opts) {
+    const st = App.state || null;
     const payload = {
       lang: this.lang, theme: this.theme,
-      customTheme: this.theme === App.theme.CUSTOM_ID ? Object.assign({}, this.customTheme) : undefined,
+      customTheme: this.customTheme ? Object.assign({}, this.customTheme) : undefined,
       panNeedsSpace: this.panNeedsSpace !== false,
       quickClick: this.quickClick === true,
       autoSave: {
@@ -393,14 +394,14 @@ App.settings = {
         intervalMin: this.autoSave.intervalMin,
         limit: this.autoSave.limit
       },
-      editSpeeds: Object.assign({}, App.state.editSpeeds),
-      nudgeSpeeds: Object.assign({}, App.state.nudgeSpeeds),
-      dragSpeeds: Object.assign({}, App.state.dragSpeeds),
+      editSpeeds: st ? Object.assign({}, st.editSpeeds) : undefined,
+      nudgeSpeeds: st ? Object.assign({}, st.nudgeSpeeds) : undefined,
+      dragSpeeds: st ? Object.assign({}, st.dragSpeeds) : undefined,
       keymap: App.keymap ? App.keymap.payload() : undefined,
       gpmap: App.gpmap ? App.gpmap.payload() : undefined,
       xbind: App.xbind ? App.xbind.payload() : undefined,
-      favorites: App.Favorites ? App.Favorites.payload() : [],
-      libFav: App.LibFav ? App.LibFav.payload() : [],
+      favorites: App.Favorites ? App.Favorites.payload() : undefined,
+      libFav: App.LibFav ? App.LibFav.payload() : undefined,
       helpHintAck: this.helpHintAck === true,
       legacyHintAck: this.legacyHintAck === true,
       font: App.fonts ? App.fonts.payload() : undefined
@@ -408,22 +409,28 @@ App.settings = {
     try { localStorage.setItem('sve-settings', JSON.stringify(payload)); } catch (e) {   }
     try {
       if (window.sveApi && window.sveApi.settingsSet) {
+        const onFail = err => {
+          console.warn('[settings] 保存失败', err);
+          if (!(opts && opts.silent)) this.warnSaveFail(String(err || ''));
+          return { ok: false, error: String(err || 'unknown') };
+        };
         return Promise.resolve(window.sveApi.settingsSet(payload)).then(r => {
-          if (r && r.ok === false) {
-            console.warn('[settings] 保存失败', r.error);
-            return { ok: false, error: String(r.error || 'unknown') };
-          }
+          if (r && r.ok === false) return onFail(r.error);
           return { ok: true };
-        }).catch(e => {
-          console.warn('[settings] 保存异常', e);
-          return { ok: false, error: String((e && e.message) || e) };
-        });
+        }).catch(e => onFail((e && e.message) || e));
       }
     } catch (e) {
       console.warn('[settings] 保存异常', e);
+      if (!(opts && opts.silent)) this.warnSaveFail(String((e && e.message) || e));
       return Promise.resolve({ ok: false, error: String((e && e.message) || e) });
     }
     return Promise.resolve({ ok: true });
+  },
+
+  warnSaveFail(err) {
+    if (this._saveWarned) return;
+    this._saveWarned = true;
+    try { showToast(App.i18n.tf('toast.settings.saveFail', { v: err || '' })); } catch (e) {   }
   }
 };
 
@@ -570,7 +577,7 @@ App.speedEditor = {
     const back = (opts && opts.back) ? this.backTo : null;
     this.backTo = null;
     if (back && App.speedOverview) App.speedOverview.open();
-    const p = App.settings.save();
+    const p = App.settings.save({ silent: true });    
     if (p && p.then) {
       p.then(r => {
         if (r && r.ok === false) showToast(App.i18n.tf('toast.speed.saveFail', { v: r.error || '' }));
@@ -780,7 +787,7 @@ App.autoSaveEditor = {
     App.settings.autoSave = { enabled: enabled, intervalMin: f.intervalMin, limit: f.limit };
     if (this.el) App.hideOverlay(this.el);
     if (App.restartHistAnchors) App.restartHistAnchors();
-    const p = App.settings.save();
+    const p = App.settings.save({ silent: true });    
     if (p && p.then) {
       p.then(r => {
         if (r && r.ok === false) {

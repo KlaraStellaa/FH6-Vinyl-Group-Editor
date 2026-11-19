@@ -764,7 +764,7 @@ App.keymapUI = {
     if (box) App.hideOverlay(box);
     if (App.refreshShortcutPanel) App.refreshShortcutPanel();
     if (App.refreshEditBarKeys) App.refreshEditBarKeys();
-    const p = App.settings.save();
+    const p = App.settings.save({ silent: true });    
     if (p && p.then) {
       p.then(r => {
         if (r && r.ok === false) showToast(App.i18n.tf('km.saveFail', { v: r.error || '' }));

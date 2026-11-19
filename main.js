@@ -14,7 +14,7 @@ const updateMirror = require('./update-mirror');
 
 function uiLang() {
   try {
-    const s = JSON.parse(fs.readFileSync(settingsPath(), 'utf8'));
+    const s = readSettings();
     return DLG.dicts[s && s.lang] ? s.lang : 'zh-CN';
   } catch (e) { return 'zh-CN'; }
 }
@@ -470,6 +470,51 @@ const LOG_MAX = 12000;
 const logBuf = [];
 let logSavedPath = null;
 function settingsPath() { return path.join(appDataDir(), 'settings.json'); }
+
+let _settingsWarned = false;
+function readJsonQuiet(fp) {
+  try {
+    const o = JSON.parse(fs.readFileSync(fp, 'utf8'));
+    return (o && typeof o === 'object' && !Array.isArray(o)) ? o : null;
+  } catch (e) { return null; }
+}
+function readSettings() {
+  const p = settingsPath();
+  const cur = readJsonQuiet(p);
+  if (cur) return cur;
+  const bak = readJsonQuiet(p + '.bak');
+  if (bak) {
+    if (!_settingsWarned) {
+      _settingsWarned = true;
+      try { appendLog('warn', 'settings.json 已损坏，已回退到 .bak 备份并修复主文件', { path: p }); } catch (e) {   }
+    }
+    try { writeSettingsFile(bak, false); } catch (e) {   }
+    return bak;
+  }
+  return {};
+}
+function writeSettingsFile(obj, keepBak) {
+  const p = settingsPath();
+  const text = JSON.stringify(obj || {}, null, 2);
+  const tmp = p + '.tmp';
+  const fd = fs.openSync(tmp, 'w');
+  try { fs.writeSync(fd, text); fs.fsyncSync(fd); } finally { try { fs.closeSync(fd); } catch (e) {   } }
+  try {
+    fs.renameSync(tmp, p);           
+  } catch (e) {
+    fs.writeFileSync(p, text, 'utf8');
+    try { fs.unlinkSync(tmp); } catch (e2) {   }
+  }
+  if (keepBak !== false) {
+    try { fs.copyFileSync(p, p + '.bak'); } catch (e) {   }
+  }
+  return p;
+}
+function mergeSettings(incoming) {
+  const prev = readSettings();
+  const next = Object.assign({}, prev, (incoming && typeof incoming === 'object') ? incoming : {});
+  return next;
+}
 const DATA_DIRS = {
   svg: 'SVGImages',
   workcopy: 'WorkCopies',
@@ -519,7 +564,7 @@ let autoPending = [];
 let autoFlushTimer = null;
 function autoLogEnabled() {
   try {
-    const s = JSON.parse(fs.readFileSync(settingsPath(), 'utf8'));
+    const s = readSettings();
     return !(s && s.diag && s.diag.autoWrite === false);
   } catch (e) { return true; }    
 }
@@ -992,7 +1037,7 @@ app.whenReady().then(() => {
   }
   function histAnchorLimit() {
     try {
-      const s = JSON.parse(fs.readFileSync(settingsPath(), 'utf8'));
+      const s = readSettings();
       const n = Number(s && s.autoSave && s.autoSave.limit);
       if (isFinite(n) && n >= 1 && n <= 1000) return Math.round(n);
     } catch (err) {   }
@@ -1066,17 +1111,16 @@ app.whenReady().then(() => {
   }));
   ipcMain.handle('settings-get', async () => {
     try {
-      const p = settingsPath();
-      return { ok: true, settings: JSON.parse(fs.readFileSync(p, 'utf8')) };
+      return { ok: true, settings: readSettings() };
     } catch (err) {
       return { ok: true, settings: {} };
     }
   });
   ipcMain.handle('settings-set', async (e, s) => {
     try {
-      const p = settingsPath();
-      fs.writeFileSync(p, JSON.stringify(s || {}, null, 2), 'utf8');
-      return { ok: true, settings: s || {} };
+      const next = mergeSettings(s);
+      writeSettingsFile(next);
+      return { ok: true, settings: next };
     } catch (err) {
       return { ok: false, error: String(err && err.message || err) };
     }
@@ -1277,7 +1321,7 @@ app.whenReady().then(() => {
       const dir = ensureDataDir(dirName);
 
       let uiLang = null;
-      try { uiLang = JSON.parse(fs.readFileSync(settingsPath(), 'utf8')).lang || null; } catch (err3) {   }
+      try { uiLang = readSettings().lang || null; } catch (err3) {   }
       const name = resolveAutoSaveName(kind, payload && payload.fileName, n => fs.existsSync(path.join(dir, n)), undefined, uiLang);
       const fp = path.join(dir, name);
       let prevStat = null;
