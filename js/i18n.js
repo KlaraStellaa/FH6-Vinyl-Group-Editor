@@ -1,22 +1,27 @@
 'use strict';
+
 App.i18n = {
   lang: 'zh-CN',
   dicts: {
     'zh-CN': {
+
       'legacy.title': '读取图案出现问题？点更改切换旧版读取机制',
       'legacy.sub': '可以在主页中鼠标右键点击工作进程更改该工作进程的读取规则',
       'legacy.change': '更改', 'legacy.noPrompt': '不再提示', 'legacy.close': '关闭',
       'legacy.confirm.title': '读取规则', 'legacy.confirm.msg': '确定使用1.3.2版本的读取规则吗？', 'legacy.confirm.ok': '确定',
       'refwin.close': '关闭参考窗',
+
       'home.sort.recent': '最近使用', 'home.sort.name': '名称', 'home.sort.size': '大小',
       'tab.home': '主页', 'tab.new': '新建文档', 'tab.settings': '设置',
       'edit.finish': '完成',
       'home.new': '新建', 'home.open': '打开…', 'home.tab.all': '全部',
       'home.tab.workcopy': '最近工作进程', 'home.tab.svg': 'SVG图像', 'home.tab.favorites': '收藏',
+
       'fav.add': '收藏', 'fav.remove': '取消收藏', 'fav.added': '已收藏 {name}', 'fav.removed': '已取消收藏 {name}', 'fav.empty': '还没有收藏的 SVG 文件',
       'home.head': '最近使用项', 'home.search': '搜索文件名…', 'home.empty': '暂无文件',
       'home.openBtn': '打开', 'home.rename': '重命名', 'home.import': '导入', 'home.refresh': '刷新', 'home.openFolder': '打开文件夹', 'home.exportAs': '另存为…', 'home.delete': '删除',
       'lp.title': '此处的图层', 'lp.close': '关闭', 'lp.unnamed': '未命名图层', 'lp.mask': '蒙版',
+
       'win.minimize': '最小化', 'win.maximize': '最大化', 'win.restore': '还原', 'win.close': '关闭窗口',
       'tab.untitled': '未命名', 'panel.plusTip': '注入 SVG（同「将 SVG 导入存档」的选择窗口）',
       'app.title': 'FH6 Vinyl Group Editor',
@@ -34,9 +39,12 @@ App.i18n = {
       'theme.seed.bg': '底色', 'theme.seed.panel': '面板', 'theme.seed.accent': '强调色', 'theme.seed.text': '正文色',
       'theme.custom.apply': '应用自定义', 'theme.custom.reset': '恢复默认',
       'theme.warn': '对比度不足（{v}），文字可能看不清',
+
       'render.gate': '正在渲染图案…',
       'render.gate.open': '正在打开工程…',
+
       'settings.speedWasm': '更改编辑速率', 'settings.speedNudge': '更改微调编辑速率', 'settings.change': '更改',
+
       'settings.speedAll': '调整编辑速率',
       'speed.overview.title': '调整编辑速率', 'speed.overview.base': '基础速率',
       'speed.overview.nudge': '微调速率', 'speed.overview.drag': '拖动速率',
@@ -47,6 +55,7 @@ App.i18n = {
       'toast.speed.saved': '已保存速率设置', 'toast.speed.saveFail': '速率设置保存失败：{v}',
       'toast.speed.badValue': '速率必须是有限数字且在允许范围内',
       'toast.settings.saveFail': '设置保存失败：{v}',
+
       'settings.autosave': '自动保存工作进程',
       'autosave.title': '自动保存设置',
       'autosave.enabled': '启用自动保存',
@@ -61,12 +70,14 @@ App.i18n = {
       'toolbar.openWork': '导入工作进程文件',
       'toolbar.histAnchor': '恢复工作进程', 'toolbar.log': '日志',
       'panel.lib': '彩绘纹饰形状', 'panel.color': '颜色', 'panel.sub.saved': '已保存的彩绘',
+
       'toolbar.baseLight': '背景：灰白', 'toolbar.baseDark': '背景：灰黑',
       'toolbar.gridOn': '网格：开', 'toolbar.gridOff': '网格：关',
       'toolbar.zoomOn': '滚轮缩放：开', 'toolbar.zoomOff': '滚轮缩放：关',
       'toolbar.insertBelowOn': '新图层插入：选中层下', 'toolbar.insertBelowOff': '新图层插入：最上层',
       'toolbar.openImage': '打开背景图片文件', 'toolbar.refWin': '打开悬浮窗参考图', 'toolbar.bgNone': '背景图片：未设置',
       'toolbar.bgSet': '背景图片：已设置', 'toolbar.shortcuts': '快捷键', 'toolbar.shortcutsAria': '查看快捷键', 'toolbar.tip': 'QuQ',
+
       'edit.mode.move': '移动', 'edit.mode.size': '大小', 'edit.mode.rotate': '旋转',
       'edit.mode.skew': '倾斜', 'edit.mode.opacity': '透明度',
       'edit.handlesOn': '手柄显示：开', 'edit.handlesOff': '手柄显示：关',
@@ -75,11 +86,14 @@ App.i18n = {
       'edit.propRatio': '等比', 'edit.propFree': '自由',
       'edit.label.rotate': '旋转角度', 'edit.label.skew': '倾斜角度', 'edit.label.opacity': '透明度',
       'edit.removeBg': '移除背景',
+
       'canvas.hideLayers': '隐藏图层', 'canvas.showLayers': '显示图层',
       'canvas.hideOthers': '隐藏其他图层', 'canvas.showOthers': '显示其他图层',
       'canvas.hideBg': '隐藏背景', 'canvas.showBg': '显示背景',
       'canvas.opLayers': '图层', 'canvas.opBg': '背景',
+
       'panel.layers': '图层', 'panel.totalPrefix': '图案总数：', 'panel.totalPair': '{in}（{all}）',
+
       'sel.editPos': '编辑图层', 'sel.editColor': '改变颜色', 'sel.replace': '更换图案',
       'sel.toMask': '切换为蒙版', 'sel.toLayer': '切换为图层',
       'sel.flipH': '水平翻转', 'sel.flipV': '垂直翻转',
@@ -87,24 +101,32 @@ App.i18n = {
       'sel.cut': '剪切', 'sel.copy': '复制', 'sel.delete': '删除',
       'sel.selectAll': '高亮所有图层', 'sel.clearSel': '取消高亮所有图层', 'sel.locateLayer': '定位图层位置', 'sel.groupEdit': '分组内编辑', 'sel.groupBack': '返回',
       'sel.savePalette': '保存', 'sel.deleteAll': '删除所有图层',
+
       'color.eyeLayer': '图层取色', 'color.eyeBg': '背景取色',
       'color.applySection': '应用颜色', 'color.apply': '应用',
       'color.histSection': '历史使用过的颜色', 'color.favSection': '收藏颜色',
       'color.favAdd': '+ 收藏当前', 'color.noHist': '暂无历史颜色', 'color.noFav': '还没有收藏颜色',
+
       'home.account': '账户', 'home.accountTitle': '当前账户（存档操作作用于该账户）',
       'fza.geo': '从 Geometrize JSON 生成', 'fza.vinyl': '从 Vinylizer JSON 生成',
       'fza.backup': '备份当前账户存档', 'fza.inject': '将 SVG 导入存档', 'fza.export': '从存档导出 SVG',
+
       'fza.pickGroup': '选择彩绘纹饰分组', 'fza.pickSvgOpen': '选择要打开的 SVG',
       'fza.pickSvgInject': '选择要注入的 SVG', 'fza.importFile': '导入 SVG 文件…',
       'fza.pickGroupNth': '选择第 {n}/{total} 个 SVG 要注入的分组', 'fza.batchTitle': '即将覆盖以下 {n} 个彩绘纹饰分组', 'fza.batchMsg': '注入会覆盖这些分组原有的内容。', 'fza.needExact': '请选择 {n} 个分组（当前已选 {got} 个）', 'fza.pickGroupExactPrompt': '本次需要勾选正好 {n} 个分组：逐个点击分组勾选，勾满 {n} 个「确定」才会亮起；已达上限再点会提示。', 'fza.maxPicked': '最多只能选 {n} 个分组（已选满 {n} 个），请先取消一个再选其他分组', 'fza.multi': '多选', 'fza.multiCount': '（已选 {n} 项）', 'fza.undo': '撤销注入', 'fza.undoPickTitle': '选择要撤销的注入记录', 'fza.undoRec': '{time} · {count} 个分组', 'fza.undoGroupsTitle': '即将恢复以下 {n} 个分组', 'fza.undoMsg': '{time} 那次注入覆盖了这些分组。恢复会把它们还原成注入前的内容，当前内容会被覆盖，此操作不可撤销。', 'fza.undoOk': '恢复', 'fza.undoMissingTitle': '原位置已不存在', 'fza.undoMissingMsg': '以下 {n} 个分组在游戏内已被删除，无法恢复：{list}。是否把它们注入前的原内容导出为 SVG 文件？', 'fza.undoExportOk': '导出', 'fza.backupFailTitle': '备份失败', 'fza.backupFailMsg': '注入前的备份失败：{why}。取消注入可保住当前存档内容；直接注入会跳过备份，这次注入将无法撤销。', 'fza.backupFailCancel': '取消注入', 'fza.backupFailGo': '直接注入', 'fza.ok': '确定', 'fza.cancel': '取消', 'fza.cont': '继续', 'fza.empty': '没有可选项', 'fza.emptyNoSvg': 'SVG图像目录暂无文件，可点上方「{v}…」选择本地文件', 'fza.emptyNoAccount': '未找到游戏账户（GameSave/pgs 下没有 u_*_16D460 账户）', 'fza.pickGroupPrompt': '请选择要操作的彩绘纹饰分组（缩略图不一定正确，以游戏内为准）', 'fza.pickGroupMultiPrompt': '可多选：点「多选」进入多选，再点各分组切换勾选；确定后一次性导出全部分组', 'fza.scanNote': '已读取分组：扫描 {n} 个 / 可用 {m} 个', 'fza.scanSkipped': '（{k} 个无法解析，可能来自其他版本或已损坏）',  'fza.softLabel': '软件内彩绘', 'fza.gameLabel': '游戏内彩绘', 'fza.opInject': '注入', 'fza.opExport': '导出', 'fza.opBackup': '备份', 'fza.thumbGenFail': '缩略图生成失败', 'fza.svgReadFail': 'SVG 读取失败',
+
       'log.title': '日志', 'log.copy': '复制最近日志', 'log.open': '保存日志', 'log.close': '关闭',
+      'log.export5': '导出最近 5 分钟', 'log.export10': '导出最近 10 分钟', 'log.exportAll': '导出日志',
+      'log.markIssue': '标记显示问题', 'log.exportRender': '导出渲染诊断',
+      'toast.log.renderExported': '诊断包已导出（{n} 条事件）：{v}',
       'log.view': '查看日志', 'log.savedPath': '已保存：{v}',
-      'log.copyFlip': '复制翻转诊断', 'log.autoPath': '正在自动记录日志：{v}',
+      'log.copyFlip': '复制翻转诊断', 'log.autoPath': '正在自动记录日志（关闭软件后自动删除，需要留存请点「导出日志」）：{v}',
       'log.inMemory': '（日志在内存中，共 {n} 条；点「保存日志」才写入文件）',
       'log.pathUnavailable': '（日志路径不可用）',
       'loading.lib': '正在加载图案库…'
     },
     'zh-TW': {
+
       'legacy.title': '讀取圖案出現問題？點更改切換舊版讀取機制',
       'legacy.sub': '可以在主頁中滑鼠右鍵點擊工作進程更改該工作進程的讀取規則',
       'legacy.change': '更改', 'legacy.noPrompt': '不再提示', 'legacy.close': '關閉',
@@ -119,6 +141,7 @@ App.i18n = {
       'home.head': '最近使用項', 'home.search': '搜尋檔名…', 'home.empty': '暫無檔案',
       'home.openBtn': '開啟', 'home.rename': '重新命名', 'home.import': '匯入', 'home.refresh': '重新整理', 'home.openFolder': '開啟資料夾', 'home.exportAs': '另存為…', 'home.delete': '刪除',
       'lp.title': '此處的圖層', 'lp.close': '關閉', 'lp.unnamed': '未命名圖層', 'lp.mask': '遮色片',
+
       'win.minimize': '最小化', 'win.maximize': '最大化', 'win.restore': '還原', 'win.close': '關閉視窗',
       'tab.untitled': '未命名', 'panel.plusTip': '注入 SVG（同「將 SVG 匯入存檔」的選擇視窗）',
       'app.title': 'FH6 Vinyl Group Editor',
@@ -149,6 +172,7 @@ App.i18n = {
       'toast.speed.saved': '已儲存速率設定', 'toast.speed.saveFail': '速率設定儲存失敗：{v}',
       'toast.speed.badValue': '速率必須是有限數字且在允許範圍內',
       'toast.settings.saveFail': '設定儲存失敗：{v}',
+
       'settings.autosave': '自動儲存工作進程',
       'autosave.title': '自動儲存設定',
       'autosave.enabled': '啟用自動儲存',
@@ -200,13 +224,17 @@ App.i18n = {
       'fza.pickSvgInject': '選擇要匯入的 SVG', 'fza.importFile': '匯入 SVG 檔案…',
       'fza.pickGroupNth': '選擇第 {n}/{total} 個 SVG 要注入的分組', 'fza.batchTitle': '即將覆蓋以下 {n} 個彩繪紋飾分組', 'fza.batchMsg': '注入會覆蓋這些分組原有的內容。', 'fza.needExact': '請選擇 {n} 個分組（目前已選 {got} 個）', 'fza.pickGroupExactPrompt': '本次需要勾選正好 {n} 個分組：逐個點擊分組勾選，勾滿 {n} 個「確定」才會亮起；已達上限再點會提示。', 'fza.maxPicked': '最多只能選 {n} 個分組（已選滿 {n} 個），請先取消一個再選其他分組', 'fza.multi': '多選', 'fza.multiCount': '（已選 {n} 項）', 'fza.undo': '撤銷注入', 'fza.undoPickTitle': '選擇要撤銷的注入記錄', 'fza.undoRec': '{time} · {count} 個分組', 'fza.undoGroupsTitle': '即將還原以下 {n} 個分組', 'fza.undoMsg': '{time} 那次注入覆蓋了這些分組。還原會把它們回復成注入前的內容，目前內容會被覆蓋，此操作不可撤銷。', 'fza.undoOk': '還原', 'fza.undoMissingTitle': '原位置已不存在', 'fza.undoMissingMsg': '以下 {n} 個分組在遊戲內已被刪除，無法還原：{list}。是否將它們注入前的原內容匯出為 SVG 檔案？', 'fza.undoExportOk': '匯出', 'fza.backupFailTitle': '備份失敗', 'fza.backupFailMsg': '注入前的備份失敗：{why}。取消注入可保住目前存檔內容；直接注入會跳過備份，這次注入將無法撤銷。', 'fza.backupFailCancel': '取消注入', 'fza.backupFailGo': '直接注入', 'fza.ok': '確定', 'fza.cancel': '取消', 'fza.cont': '繼續', 'fza.empty': '沒有可選項', 'fza.emptyNoSvg': 'SVG圖像目錄暫無檔案，可點上方「{v}…」選擇本機檔案', 'fza.emptyNoAccount': '未找到遊戲帳戶（GameSave/pgs 下沒有 u_*_16D460 帳戶）', 'fza.pickGroupPrompt': '請選擇要操作的彩繪紋飾分組（縮圖不一定正確，以遊戲內為準）', 'fza.pickGroupMultiPrompt': '可多選：點「多選」進入多選，再點各分組切換勾選；確定後一次匯出全部分組', 'fza.scanNote': '已讀取分組：掃描 {n} 個 / 可用 {m} 個', 'fza.scanSkipped': '（{k} 個無法解析，可能來自其他版本或已損壞）',  'fza.softLabel': '軟體內彩繪', 'fza.gameLabel': '遊戲內彩繪', 'fza.opInject': '注入', 'fza.opExport': '匯出', 'fza.opBackup': '備份', 'fza.thumbGenFail': '縮圖產生失敗', 'fza.svgReadFail': 'SVG 讀取失敗',
       'log.title': '日誌', 'log.copy': '複製最近日誌', 'log.open': '儲存日誌', 'log.close': '關閉',
+      'log.export5': '匯出最近 5 分鐘', 'log.export10': '匯出最近 10 分鐘', 'log.exportAll': '匯出日誌',
+      'log.markIssue': '標記顯示問題', 'log.exportRender': '匯出渲染診斷',
+      'toast.log.renderExported': '診斷包已匯出（{n} 條事件）：{v}',
       'log.view': '檢視日誌', 'log.savedPath': '已儲存：{v}',
-      'log.copyFlip': '複製翻轉診斷', 'log.autoPath': '正在自動記錄日誌：{v}',
+      'log.copyFlip': '複製翻轉診斷', 'log.autoPath': '正在自動記錄日誌（關閉程式後自動刪除，需要留存請點「匯出日誌」）：{v}',
       'log.inMemory': '（日誌在記憶體中，共 {n} 筆；點「儲存日誌」才寫入檔案）',
       'log.pathUnavailable': '（日誌路徑無法使用）',
       'loading.lib': '正在載入圖案庫…'
     },
     'en': {
+
       'legacy.title': 'Pattern looks wrong? Click Change to switch to the legacy reading rule',
       'legacy.sub': 'You can also right-click a work copy on the home page to change its reading rule',
       'legacy.change': 'Change', 'legacy.noPrompt': "Don't show again", 'legacy.close': 'Close',
@@ -221,6 +249,7 @@ App.i18n = {
       'home.head': 'Recent files', 'home.search': 'Search files…', 'home.empty': 'No files yet',
       'home.openBtn': 'Open', 'home.rename': 'Rename', 'home.import': 'Import', 'home.refresh': 'Refresh', 'home.openFolder': 'Open folder', 'home.exportAs': 'Save as…', 'home.delete': 'Delete',
       'lp.title': 'Layers here', 'lp.close': 'Close', 'lp.unnamed': 'Unnamed layer', 'lp.mask': 'Mask',
+
       'win.minimize': 'Minimize', 'win.maximize': 'Maximize', 'win.restore': 'Restore', 'win.close': 'Close window',
       'tab.untitled': 'Untitled', 'panel.plusTip': 'Inject SVG (same picker as "Import SVG into save")',
       'app.title': 'FH6 Vinyl Group Editor',
@@ -251,6 +280,7 @@ App.i18n = {
       'toast.speed.saved': 'Speed settings saved', 'toast.speed.saveFail': 'Failed to save speed settings: {v}',
       'toast.speed.badValue': 'Speed must be a finite number within the allowed range',
       'toast.settings.saveFail': 'Failed to save settings: {v}',
+
       'settings.autosave': 'Auto-save work session',
       'autosave.title': 'Auto-save settings',
       'autosave.enabled': 'Enable auto-save',
@@ -303,13 +333,17 @@ App.i18n = {
       'fza.pickSvgInject': 'Select an SVG to import', 'fza.importFile': 'Import SVG file…',
       'fza.pickGroupNth': 'Pick the group to inject SVG {n} of {total} into', 'fza.batchTitle': 'About to overwrite {n} vinyl groups', 'fza.batchMsg': 'Injecting overwrites the existing content of these groups.', 'fza.needExact': 'Please select exactly {n} groups (currently {got})', 'fza.pickGroupExactPrompt': 'This time you must tick exactly {n} groups: click groups to tick them — "OK" only lights up once {n} are ticked. Clicking beyond the limit shows a hint.', 'fza.maxPicked': 'You can select at most {n} groups ({n} already selected). Untick one first.', 'fza.multi': 'Multi-select', 'fza.multiCount': ' ({n} selected)', 'fza.undo': 'Undo injection', 'fza.undoPickTitle': 'Pick an injection to undo', 'fza.undoRec': '{time} · {count} group(s)', 'fza.undoGroupsTitle': 'About to restore these {n} group(s)', 'fza.undoMsg': 'The injection at {time} overwrote these groups. Restoring puts back their pre-injection content and overwrites what is there now. This cannot be undone.', 'fza.undoOk': 'Restore', 'fza.undoMissingTitle': 'Original location is gone', 'fza.undoMissingMsg': 'These {n} group(s) were deleted in the game and cannot be restored: {list}. Export their pre-injection content as SVG file(s)?', 'fza.undoExportOk': 'Export', 'fza.backupFailTitle': 'Backup failed', 'fza.backupFailMsg': 'The pre-injection backup failed: {why}. Cancel to keep the save untouched, or inject directly — this injection will not be undoable.', 'fza.backupFailCancel': 'Cancel injection', 'fza.backupFailGo': 'Inject anyway', 'fza.ok': 'OK', 'fza.cancel': 'Cancel', 'fza.cont': 'Continue', 'fza.empty': 'No options', 'fza.emptyNoSvg': 'No files in the SVG folder yet. Use "{v}…" above to pick a local file.', 'fza.emptyNoAccount': 'No game account found (no u_*_16D460 account under GameSave/pgs)', 'fza.pickGroupPrompt': 'Pick the vinyl group to work on (thumbnails may be inaccurate; trust the game)', 'fza.pickGroupMultiPrompt': 'Multi-select: click "Multi-select", then click groups to toggle; confirming exports them all at once', 'fza.scanNote': 'Groups read: {n} scanned / {m} usable', 'fza.scanSkipped': ' ({k} unreadable — different game version or corrupted)',  'fza.softLabel': 'Artwork in app', 'fza.gameLabel': 'Vinyl in game', 'fza.opInject': 'Injection', 'fza.opExport': 'Export', 'fza.opBackup': 'Backup', 'fza.thumbGenFail': 'Thumbnail generation failed', 'fza.svgReadFail': 'Failed to read SVG',
       'log.title': 'Log', 'log.copy': 'Copy recent log', 'log.open': 'Save log', 'log.close': 'Close',
+      'log.export5': 'Export last 5 minutes', 'log.export10': 'Export last 10 minutes', 'log.exportAll': 'Export log',
+      'log.markIssue': 'Report display issue', 'log.exportRender': 'Export render report',
+      'toast.log.renderExported': 'Report exported ({n} events): {v}',
       'log.view': 'View log', 'log.savedPath': 'Saved: {v}',
-      'log.copyFlip': 'Copy flip diagnostics', 'log.autoPath': 'Auto-recording log: {v}',
+      'log.copyFlip': 'Copy flip diagnostics', 'log.autoPath': 'Auto-recording log (deleted when the app closes; click "Export log" to keep it): {v}',
       'log.inMemory': '(Log lives in memory, {n} entries; click "Save log" to write it to disk)',
       'log.pathUnavailable': '(Log path unavailable)',
       'loading.lib': 'Loading shape library…'
     },
     'ja': {
+
       'legacy.title': '図形が正しく表示されない場合は「変更」で旧読み込み方式に切り替え',
       'legacy.sub': 'ホーム画面でワークコピーを右クリックしても読み込み方式を変更できます',
       'legacy.change': '変更', 'legacy.noPrompt': '今後表示しない', 'legacy.close': '閉じる',
@@ -324,6 +358,7 @@ App.i18n = {
       'home.head': '最近のファイル', 'home.search': 'ファイルを検索…', 'home.empty': 'ファイルなし',
       'home.openBtn': '開く', 'home.rename': '名前を変更', 'home.import': 'インポート', 'home.refresh': '更新', 'home.openFolder': 'フォルダーを開く', 'home.exportAs': '名前を付けて保存…', 'home.delete': '削除',
       'lp.title': 'この位置のレイヤー', 'lp.close': '閉じる', 'lp.unnamed': '無名レイヤー', 'lp.mask': 'マスク',
+
       'win.minimize': '最小化', 'win.maximize': '最大化', 'win.restore': '元のサイズに戻す', 'win.close': 'ウィンドウを閉じる',
       'tab.untitled': '無題', 'panel.plusTip': 'SVG を注入（「SVG をセーブに取り込む」と同じ選択画面）',
       'app.title': 'FH6 Vinyl Group Editor',
@@ -354,6 +389,7 @@ App.i18n = {
       'toast.speed.saved': '速度設定を保存しました', 'toast.speed.saveFail': '速度設定の保存に失敗：{v}',
       'toast.speed.badValue': '速度は有限の数値で、許容範囲内である必要があります',
       'toast.settings.saveFail': '設定の保存に失敗：{v}',
+
       'settings.autosave': '作業セッションを自動保存',
       'autosave.title': '自動保存設定',
       'autosave.enabled': '自動保存を有効にする',
@@ -406,13 +442,17 @@ App.i18n = {
       'fza.pickSvgInject': '取り込む SVG を選択', 'fza.importFile': 'SVGファイルを読み込む…',
       'fza.pickGroupNth': '{n}/{total} 個目の SVG を注入するグループを選択', 'fza.batchTitle': '以下 {n} 個のビニールグループを上書きします', 'fza.batchMsg': '注入するとこれらのグループの内容が上書きされます。', 'fza.needExact': '{n} 個のグループを選択してください（現在 {got} 個）', 'fza.pickGroupExactPrompt': '今回はちょうど {n} 個のグループをチェックしてください：グループをクリックしてチェックし、{n} 個そろって初めて「OK」が有効になります。上限を超えてクリックするとヒントが出ます。', 'fza.maxPicked': '選択できるのは最大 {n} 個です（すでに {n} 個選択済み）。先に1つ外してください', 'fza.multi': '複数選択', 'fza.multiCount': '（{n} 個選択中）', 'fza.undo': '注入の取り消し', 'fza.undoPickTitle': '取り消す注入を選択', 'fza.undoRec': '{time} · {count} 個のグループ', 'fza.undoGroupsTitle': '以下の {n} 個のグループを復元します', 'fza.undoMsg': '{time} の注入でこれらのグループが上書きされました。復元すると注入前の内容に戻り、現在の内容は上書きされます。元に戻せません。', 'fza.undoOk': '復元', 'fza.undoMissingTitle': '元の場所が存在しません', 'fza.undoMissingMsg': '以下の {n} 個のグループはゲーム内で削除されたため復元できません：{list}。注入前の元の内容を SVG ファイルとして書き出しますか？', 'fza.undoExportOk': '書き出す', 'fza.backupFailTitle': 'バックアップに失敗', 'fza.backupFailMsg': '注入前のバックアップに失敗しました：{why}。キャンセルするとセーブはそのまま、直接注入するとバックアップを飛ばすため今回の注入は取り消せません。', 'fza.backupFailCancel': '注入を中止', 'fza.backupFailGo': 'そのまま注入', 'fza.ok': 'OK', 'fza.cancel': 'キャンセル', 'fza.cont': '続行', 'fza.empty': '項目がありません', 'fza.emptyNoSvg': 'SVG画像フォルダにファイルがありません。上の「{v}…」から選択してください。', 'fza.emptyNoAccount': 'ゲームアカウントが見つかりません（GameSave/pgs に u_*_16D460 アカウントがありません）', 'fza.pickGroupPrompt': '操作するビニールグループを選択（サムネイルは正確でない場合があります。ゲーム内を基準に）', 'fza.pickGroupMultiPrompt': '複数選択：「複数選択」を押してから各グループをクリックで切り替え。確定でまとめて書き出します', 'fza.scanNote': '読み込み済みグループ：スキャン {n} 件 / 使用可能 {m} 件', 'fza.scanSkipped': '（{k} 件は解析できません。別バージョンか破損の可能性）',  'fza.softLabel': 'アプリ内のペイント', 'fza.gameLabel': 'ゲーム内のペイント', 'fza.opInject': '注入', 'fza.opExport': '書き出し', 'fza.opBackup': 'バックアップ', 'fza.thumbGenFail': 'サムネイルの生成に失敗', 'fza.svgReadFail': 'SVG の読み込みに失敗',
       'log.title': 'ログ', 'log.copy': '最近のログをコピー', 'log.open': 'ログを保存', 'log.close': '閉じる',
+      'log.export5': '直近 5 分を書き出す', 'log.export10': '直近 10 分を書き出す', 'log.exportAll': 'ログを書き出す',
+      'log.markIssue': '表示不具合を記録', 'log.exportRender': '描画診断を書き出す',
+      'toast.log.renderExported': '診断パッケージを書き出しました（{n} 件）：{v}',
       'log.view': 'ログを表示', 'log.savedPath': '保存しました：{v}',
-      'log.copyFlip': '反転診断をコピー', 'log.autoPath': 'ログを自動記録中：{v}',
+      'log.copyFlip': '反転診断をコピー', 'log.autoPath': 'ログを自動記録中（終了時に自動削除。残す場合は「ログを書き出す」を押してください）：{v}',
       'log.inMemory': '（ログはメモリ上に {n} 件。書き出すには「ログを保存」を押してください）',
       'log.pathUnavailable': '（ログのパスを取得できません）',
       'loading.lib': '図形ライブラリを読み込み中…'
     },
     'ko': {
+
       'legacy.title': '패턴이 잘못 보이나요? 변경을 눌러 이전 읽기 방식으로 전환하세요',
       'legacy.sub': '홈에서 작업 복사본을 마우스 오른쪽 버튼으로 클릭해 읽기 규칙을 변경할 수 있습니다',
       'legacy.change': '변경', 'legacy.noPrompt': '다시 표시 안 함', 'legacy.close': '닫기',
@@ -427,6 +467,7 @@ App.i18n = {
       'home.head': '최근 파일', 'home.search': '파일 검색…', 'home.empty': '파일 없음',
       'home.openBtn': '열기', 'home.rename': '이름 바꾸기', 'home.import': '가져오기', 'home.refresh': '새로 고침', 'home.openFolder': '폴더 열기', 'home.exportAs': '다른 이름으로 저장…', 'home.delete': '삭제',
       'lp.title': '이 위치의 레이어', 'lp.close': '닫기', 'lp.unnamed': '이름 없는 레이어', 'lp.mask': '마스크',
+
       'win.minimize': '최소화', 'win.maximize': '최대화', 'win.restore': '복원', 'win.close': '창 닫기',
       'tab.untitled': '제목 없음', 'panel.plusTip': 'SVG 주입("SVG를 세이브에 가져오기"와 같은 선택 창)',
       'app.title': 'FH6 Vinyl Group Editor',
@@ -457,6 +498,7 @@ App.i18n = {
       'toast.speed.saved': '속도 설정을 저장했습니다', 'toast.speed.saveFail': '속도 설정 저장 실패: {v}',
       'toast.speed.badValue': '속도는 유한한 숫자여야 하며 허용 범위 안이어야 합니다',
       'toast.settings.saveFail': '설정 저장 실패: {v}',
+
       'settings.autosave': '작업 세션 자동 저장',
       'autosave.title': '자동 저장 설정',
       'autosave.enabled': '자동 저장 사용',
@@ -509,25 +551,31 @@ App.i18n = {
       'fza.pickSvgInject': '가져올 SVG 선택', 'fza.importFile': 'SVG 파일 가져오기…',
       'fza.pickGroupNth': '{n}/{total}번째 SVG 를 주입할 그룹을 선택', 'fza.batchTitle': '다음 {n} 개 비닐 그룹을 덮어씁니다', 'fza.batchMsg': '주입하면 이 그룹들의 기존 내용이 덮어써집니다.', 'fza.needExact': '{n} 개 그룹을 선택하세요 (현재 {got} 개)', 'fza.pickGroupExactPrompt': '이번에는 정확히 {n}개 그룹을 체크해야 합니다: 그룹을 클릭해 체크하고, {n}개가 채워져야 「확인」이 활성화됩니다. 한도를 넘겨 클릭하면 안내가 표시됩니다.', 'fza.maxPicked': '최대 {n}개 그룹만 선택할 수 있습니다({n}개 선택됨). 먼저 하나를 해제하세요', 'fza.multi': '다중 선택', 'fza.multiCount': ' ({n}개 선택됨)', 'fza.undo': '주입 실행 취소', 'fza.undoPickTitle': '취소할 주입 선택', 'fza.undoRec': '{time} · {count}개 그룹', 'fza.undoGroupsTitle': '다음 {n}개 그룹을 복원합니다', 'fza.undoMsg': '{time} 주입에서 이 그룹들을 덮어썼습니다. 복원하면 주입 전 내용으로 되돌리고 현재 내용은 덮어씁니다. 되돌릴 수 없습니다.', 'fza.undoOk': '복원', 'fza.undoMissingTitle': '원래 위치가 없습니다', 'fza.undoMissingMsg': '다음 {n}개 그룹은 게임에서 삭제되어 복원할 수 없습니다: {list}. 주입 전 원본 내용을 SVG 파일로 내보낼까요?', 'fza.undoExportOk': '내보내기', 'fza.backupFailTitle': '백업 실패', 'fza.backupFailMsg': '주입 전 백업에 실패했습니다: {why}. 취소하면 저장 파일이 그대로 유지되고, 그냥 주입하면 백업을 건너뛰므로 이번 주입은 취소할 수 없습니다.', 'fza.backupFailCancel': '주입 취소', 'fza.backupFailGo': '그냥 주입', 'fza.ok': '확인', 'fza.cancel': '취소', 'fza.cont': '계속', 'fza.empty': '항목이 없습니다', 'fza.emptyNoSvg': 'SVG 이미지 폴더에 파일이 없습니다. 위의 "{v}…"로 로컬 파일을 선택하세요.', 'fza.emptyNoAccount': '게임 계정을 찾을 수 없습니다 (GameSave/pgs 아래에 u_*_16D460 계정이 없습니다)', 'fza.pickGroupPrompt': '작업할 비닐 그룹을 선택하세요 (썸네일이 부정확할 수 있으니 게임 내 기준)', 'fza.pickGroupMultiPrompt': '다중 선택: "다중 선택"을 누른 뒤 그룹을 클릭해 선택/해제하세요. 확인하면 한 번에 모두 내보냅니다', 'fza.scanNote': '읽은 그룹: 스캔 {n}개 / 사용 가능 {m}개', 'fza.scanSkipped': ' ({k}개는 해석 불가 — 다른 버전이거나 손상됨)',  'fza.softLabel': '앱 내 페인팅', 'fza.gameLabel': '게임 내 페인팅', 'fza.opInject': '주입', 'fza.opExport': '내보내기', 'fza.opBackup': '백업', 'fza.thumbGenFail': '썸네일 생성 실패', 'fza.svgReadFail': 'SVG 읽기 실패',
       'log.title': '로그', 'log.copy': '최근 로그 복사', 'log.open': '로그 저장', 'log.close': '닫기',
+      'log.export5': '최근 5분 내보내기', 'log.export10': '최근 10분 내보내기', 'log.exportAll': '로그 내보내기',
+      'log.markIssue': '화면 문제 표시', 'log.exportRender': '렌더링 진단 내보내기',
+      'toast.log.renderExported': '진단 패키지를 내보냈습니다({n}개 이벤트): {v}',
       'log.view': '로그 보기', 'log.savedPath': '저장했습니다: {v}',
-      'log.copyFlip': '반전 진단 복사', 'log.autoPath': '로그 자동 기록 중: {v}',
+      'log.copyFlip': '반전 진단 복사', 'log.autoPath': '로그 자동 기록 중(앱을 닫으면 자동 삭제. 보관하려면 "로그 내보내기"를 누르세요): {v}',
       'log.inMemory': '(로그는 메모리에 {n}건 있습니다. 파일로 쓰려면 「로그 저장」을 누르세요)',
       'log.pathUnavailable': '(로그 경로를 사용할 수 없음)',
       'loading.lib': '도형 라이브러리 불러오는 중…'
     }
   },
+
   refreshers: [],
   onApply(fn) { if (typeof fn === 'function') this.refreshers.push(fn); },
   t(key) {
     const d = this.dicts[this.lang] || this.dicts['zh-CN'];
     return (d && d[key]) || (this.dicts['zh-CN'] || {})[key] || key;
   },
+
   tf(key, params) {
     const s = this.t(key);
     if (!params) return s;
     return s.replace(/\{(\w+)\}/g, (m, k) =>
       (params[k] === undefined || params[k] === null) ? '' : String(params[k]));
   },
+
   apply(root) {
     const scope = root || document;
     scope.querySelectorAll('[data-i18n]').forEach(el => {
@@ -535,6 +583,7 @@ App.i18n = {
       const attr = el.getAttribute('data-i18n-attr');
       if (attr) el.setAttribute(attr, v);
       else {
+
         const keep = el.getAttribute('data-i18n-keep');
         if (keep) {
           let done = false;
@@ -549,6 +598,7 @@ App.i18n = {
       }
     });
     if (App.Tabs && App.Tabs.renderBar) App.Tabs.renderBar();
+
     this.refreshers.forEach(fn => {
       try { fn(); } catch (e) { console.warn('[i18n] refresher failed', e); }
     });
@@ -561,6 +611,7 @@ App.i18n = {
     if (App.settings) App.settings.save();
   }
 };
+
 App.autoNamePrefix = function (lang) {
   const table = { 'zh-CN': '图案-', 'zh-TW': '圖案-', 'en': 'Pattern-', 'ja': 'パターン-', 'ko': '패턴-' };
   return table[lang || (App.i18n && App.i18n.lang) || 'zh-CN'] || '图案-';

@@ -75,7 +75,8 @@ App.boot = function () {
     const dt = clamp((now - last) / 1000, 0, 0.1);
     last = now;
     if (App.layersRoot && App.layersRoot.style.display === 'none' && !App.state.batching &&
-        !App.state.layersHidden && App.state.eyeMode !== 'bg') {
+        !App.state.layersHidden && App.state.eyeMode !== 'bg' &&
+        !(App.staticOverlayBusy && App.staticOverlayBusy())) {
       App.layersRoot.style.display = '';
     }
     if (App.state.edit) App.tick(dt);
@@ -109,6 +110,7 @@ App.wirePointer = function () {
   App.svg.addEventListener('pointerdown', e => {
     if (App.state.eyeMode) { App.onEyeDown(e); return; }
     if (App.state.spaceDown || e.button === 1) {
+      if (App.staticOverlayStart) App.staticOverlayStart('pan');
       App.drag = {
         kind: 'pan', startX: e.clientX, startY: e.clientY,
         vx: App.state.view.x, vy: App.state.view.y
@@ -140,6 +142,7 @@ App.wirePointer = function () {
     if (App.state.eyeMode) { App.onEyeMove(e); return; }
     if (App.panPending && !App.drag) {
       if (Math.hypot(e.clientX - App.panPending.x, e.clientY - App.panPending.y) <= 4) return;
+      if (App.staticOverlayStart) App.staticOverlayStart('pan');
       App.drag = {
         kind: 'pan', startX: App.panPending.x, startY: App.panPending.y,
         vx: App.panPending.vx, vy: App.panPending.vy
@@ -524,6 +527,7 @@ App.wireWheel = function () {
     e.preventDefault();
     if (!App.state.wheelZoomEnabled) return; 
     if (App.noteRenderInteraction) App.noteRenderInteraction();
+    if (App.staticOverlayStart) App.staticOverlayStart('wheel');
     const r = App.svg.getBoundingClientRect();
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     const old = App._wheelPending;
@@ -575,6 +579,7 @@ App.wireDragDrop = function () {
 
 App.wireResize = function () {
   const ro = new ResizeObserver(() => {
+    if (App.staticOverlayEnd) App.staticOverlayEnd('resize');
     if (App.noteRenderResize) App.noteRenderResize();
     App.updateView();
     App.drawOutlines();

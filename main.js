@@ -11,6 +11,7 @@ const workcopyStore = new WorkcopyStore();
 const DLG = require('./dlg-i18n');    
 const updateApply = require('./update-apply');    
 const updateMirror = require('./update-mirror');  
+const renderReport = require('./render-report');  
 
 function uiLang() {
   try {
@@ -46,8 +47,15 @@ function appDataDir() {
 
 
 function portableExePath() {
-  const p = process.env.PORTABLE_EXECUTABLE_FILE || (isPackagedBuild() ? app.getPath('exe') : '');
-  return p || '';
+  return process.env.PORTABLE_EXECUTABLE_FILE || '';
+}
+
+function envDirPath() {
+  if (!isPackagedBuild()) return '';
+  try { return path.dirname(app.getPath('exe')); } catch (e) { return ''; }
+}
+function canApplyInPlace(dir) {
+  try { return !!dir && fs.statSync(path.join(dir, 'resources')).isDirectory(); } catch (e) { return false; }
 }
 
 function updateStatePath() {
@@ -67,7 +75,7 @@ function recoverUpdateState() {
 
   try {
     const tgt = String(st.target || '');
-    if (tgt) {
+    if (tgt && String(st.mode || '') !== 'apply') {
       const r = updateApply.recoverTarget(tgt, st.pkg, { check: checkExePackage });
       if (r.action === 'restored-backup') {
         appendLog('warn', '自动更新：上次替换中断，已用备份恢复 exe', { target: tgt });
@@ -155,6 +163,24 @@ function scheduleExeReplace(newExe, targetExe, meta) {
     });
   }
   return script;
+}
+
+function scheduleEnvApply(newExe, envDir, appName, version, meta) {
+  const m = meta || {};
+  const args = {
+    newExe: newExe,
+    envDir: envDir,
+    appName: appName,
+    version: version,
+    resultFile: updateResultPath(),
+    delayPings: m.delayPings,
+    retry: m.retry
+  };
+  try {
+    return updateApply.scheduleEnvApply(Object.assign({ batDir: envDir }, args));
+  } catch (e) {
+    return updateApply.scheduleEnvApply(Object.assign({ batDir: os.tmpdir() }, args));
+  }
 }
 
 const STALE_TMP_MS = 10 * 60 * 1000;
@@ -466,7 +492,7 @@ function dropWorkcopyThumbs(names) {
   return touched.length;
 }
 
-const LOG_MAX = 12000;
+const LOG_MAX = 30000;
 const logBuf = [];
 let logSavedPath = null;
 function settingsPath() { return path.join(appDataDir(), 'settings.json'); }
@@ -572,8 +598,24 @@ function autoLogDay() {
   const d = new Date(), p = n => String(n).padStart(2, '0');
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
 }
+const SESSION_STAMP = (function () {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + '-' +
+    p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+})();
 function autoLogFileFor(day, idx) {
-  return path.join(logDirPath(), 'session-' + day + (idx ? '-' + idx : '') + '.log');
+  return path.join(logDirPath(), 'session-' + SESSION_STAMP + (idx ? '-' + idx : '') + '.log');
+}
+function cleanupSessionLogs() {
+  try {
+    const dir = logDirPath();
+    const pre = 'session-' + SESSION_STAMP;
+    fs.readdirSync(dir).forEach(n => {
+      if (n.indexOf(pre) === 0 && /\.log$/.test(n)) {
+        try { fs.unlinkSync(path.join(dir, n)); } catch (e) {   }
+      }
+    });
+  } catch (e) {   }
 }
 function rotateAutoLog(fp) {
   try {
@@ -656,6 +698,36 @@ function saveLogFile() {
 process.on('uncaughtException', err => {
   try { appendLog('error', '主进程未捕获异常', { message: String(err && err.message), stack: String(err && err.stack).slice(0, 500) }); } catch (e) {   }
 });
+function exportLogRange(payload) {
+  try {
+    const minutes = Math.max(0, Math.min(180, parseInt(payload && payload.minutes, 10) || 0));
+    const filter = (payload && payload.filter) ? String(payload.filter) : null;
+    flushAutoLog();
+    let lines = logBuf;
+    if (filter) lines = lines.filter(x => x.indexOf('"cat":"' + filter + '"') >= 0);
+    if (minutes > 0) {
+      const cut = Date.now() - minutes * 60000;
+      const re = /^\[(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\.(\d{3})\]/;
+      lines = lines.filter(function (x) {
+        const m = re.exec(x);
+        if (!m) return false;
+        return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6], +m[7]).getTime() >= cut;
+      });
+    }
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    const stamp = d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' +
+      p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+    const name = 'sve-log-' + stamp + (filter ? '-' + filter : '') +
+      (minutes > 0 ? '-last' + minutes + 'min' : '-all') + '.log';
+    const fp = path.join(logDirPath(), name);
+    fs.writeFileSync(fp, (lines.length ? lines.join('\n') : '（这段时间没有日志）') + '\n', 'utf8');
+    logSavedPath = fp;
+    try { require('electron').shell.showItemInFolder(fp); } catch (e) {   }
+    return { ok: true, path: fp, lines: lines.length, minutes: minutes, filter: filter };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}
 
 function appName() {
   try {
@@ -897,7 +969,7 @@ app.whenReady().then(() => {
       fs.readdirSync(dir).forEach(n => {
         const isBak = /\.old\.exe$/i.test(n);
         const isUpd = /^update-(manual-)?\d+\.exe$/i.test(n);
-        const isScript = /^sve-(replace|update-restart)-[\d-]+\.(bat|cmd)$/i.test(n);
+        const isScript = /^sve-(replace|apply|update-restart)-[\d-]+\.(bat|cmd)$/i.test(n);
         if (!isBak && !isUpd && !isScript) return;
         if (isBak && !targetAlive) return;
         const fp = path.join(dir, n);
@@ -912,7 +984,7 @@ app.whenReady().then(() => {
   try {
     const tmpDir = os.tmpdir();
     fs.readdirSync(tmpDir).forEach(n => {
-      if (/^sve-(replace|update-restart)-[\d-]+\.(bat|cmd)$/i.test(n)) {
+      if (/^sve-(replace|apply|update-restart)-[\d-]+\.(bat|cmd)$/i.test(n)) {
         try { fs.unlinkSync(path.join(tmpDir, n)); } catch (e) {   }
       }
     });
@@ -1107,7 +1179,12 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('app-flags', async () => ({
     testMode: !!process.env.SVGBIANJI_TEST,
-    exeDir: appDataDir()
+    exeDir: appDataDir(),
+    version: app.getVersion(),
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
+    platform: process.platform,
+    osRelease: os.release()
   }));
   ipcMain.handle('settings-get', async () => {
     try {
@@ -1134,14 +1211,19 @@ app.whenReady().then(() => {
       try { if (sender && !sender.isDestroyed()) sender.send('update-progress', { pct: pct, got: got || 0, total: total || 0 }); }
       catch (err) {   }
     };
-    const exePath = portableExePath();
-    if (!exePath) return { ok: false, error: 'no-exe-path' };
+    const launcherExe = portableExePath();
+    const envDir = envDirPath();
+    const applyMode = !launcherExe && canApplyInPlace(envDir);
+    if (!launcherExe && !applyMode) return { ok: false, error: 'no-exe-path' };
+    const mode = applyMode ? 'apply' : 'replace';
+    const targetExe = launcherExe || app.getPath('exe');
     const version = String((payload && payload.version) || 'unknown');
-    const tmp = path.join(path.dirname(exePath), 'update-' + Date.now() + '.exe');
+    const tmp = path.join(applyMode ? envDir : path.dirname(launcherExe), 'update-' + Date.now() + '.exe');
     let pkg = '';
     try {
       const prev = updateApply.readState(updateStatePath());
-      const prevChk = (prev && prev.pkg && String(prev.to || '') === version) ? checkExePackage(prev.pkg) : { ok: false };
+      const prevChk = (prev && prev.pkg && String(prev.to || '') === version
+        && String(prev.mode || 'replace') === mode) ? checkExePackage(prev.pkg) : { ok: false };
       if (prevChk.ok) {
         pkg = String(prev.pkg);
         appendLog('info', '自动更新：复用上次已下载的安装包', { file: path.basename(pkg), size: prevChk.size });
@@ -1172,10 +1254,14 @@ app.whenReady().then(() => {
       const size = fs.statSync(pkg).size;
       try { fs.unlinkSync(updateResultPath()); } catch (e2) {   }
       updateApply.writeState(updateStatePath(), {
-        from: app.getVersion(), to: version, target: exePath, pkg: pkg, at: Date.now()
+        from: app.getVersion(), to: version, target: targetExe,
+        mode: mode, envDir: applyMode ? envDir : '',
+        pkg: pkg, at: Date.now()
       });
-      scheduleExeReplace(pkg, exePath);
-      appendLog('info', '自动更新：安装包就绪，退出后替换', { size: size, pkg: path.basename(pkg) });
+      if (applyMode) scheduleEnvApply(pkg, envDir, path.basename(targetExe), version);
+      else scheduleExeReplace(pkg, targetExe);
+      appendLog('info', applyMode ? '自动更新：安装包就绪，退出后原地更新程序环境' : '自动更新：安装包就绪，退出后替换',
+        { size: size, pkg: path.basename(pkg) });
       setTimeout(() => { try { app.exit(0); } catch (e2) {   } }, 800);
       return { ok: true, size: size, reused: pkg !== tmp };
     } catch (err) {
@@ -1192,8 +1278,12 @@ app.whenReady().then(() => {
 
   ipcMain.handle('update-pick-exe', async (e, payload) => {
     if (!isPackagedBuild()) return { ok: false, error: 'dev' };
-    const exePath = portableExePath();
-    if (!exePath) return { ok: false, error: 'no-exe-path' };
+    const launcherExe = portableExePath();
+    const envDir = envDirPath();
+    const applyMode = !launcherExe && canApplyInPlace(envDir);
+    if (!launcherExe && !applyMode) return { ok: false, error: 'no-exe-path' };
+    const mode = applyMode ? 'apply' : 'replace';
+    const targetExe = launcherExe || app.getPath('exe');
     let src = '';
     const forced = (process.env.SVGBIANJI_TEST && payload && payload.file) ? String(payload.file) : '';
     if (forced) {
@@ -1213,7 +1303,7 @@ app.whenReady().then(() => {
       if (!r || r.canceled || !r.filePaths || !r.filePaths.length) return { ok: false, canceled: true };
       src = r.filePaths[0];
     }
-    if (path.resolve(src).toLowerCase() === path.resolve(exePath).toLowerCase()) {
+    if (path.resolve(src).toLowerCase() === path.resolve(targetExe).toLowerCase()) {
       return { ok: false, error: 'same-file' };
     }
     const chk = checkExePackage(src);
@@ -1221,7 +1311,7 @@ app.whenReady().then(() => {
       appendLog('warn', '手动安装：所选文件校验未通过', { file: path.basename(src), error: chk.error });
       return { ok: false, error: chk.error };
     }
-    const tmp = path.join(path.dirname(exePath), 'update-manual-' + Date.now() + '.exe');
+    const tmp = path.join(applyMode ? envDir : path.dirname(launcherExe), 'update-manual-' + Date.now() + '.exe');
     try {
       moveIntoPlace(src, tmp);
     } catch (err) {
@@ -1229,16 +1319,20 @@ app.whenReady().then(() => {
       appendLog('warn', '手动安装：搬移安装包失败', { message: String(err && err.message || err).slice(0, 160) });
       return { ok: false, error: String(err && err.message || err).slice(0, 160) };
     }
-    appendLog('info', '手动安装：已搬入本地安装包（源文件已移除），安排退出后替换',
-      { file: path.basename(src), size: chk.size });
+    appendLog('info', applyMode ? '手动安装：已搬入本地安装包（源文件已移除），安排退出后原地更新环境'
+      : '手动安装：已搬入本地安装包（源文件已移除），安排退出后替换',
+    { file: path.basename(src), size: chk.size });
     try {
       try { fs.unlinkSync(updateResultPath()); } catch (e2) {   }
       updateApply.writeState(updateStatePath(), {
         from: app.getVersion(),
         to: String((payload && payload.version) || 'unknown'),
-        target: exePath, pkg: tmp, at: Date.now()
+        target: targetExe,
+        mode: mode, envDir: applyMode ? envDir : '',
+        pkg: tmp, at: Date.now()
       });
-      scheduleExeReplace(tmp, exePath);
+      if (applyMode) scheduleEnvApply(tmp, envDir, path.basename(targetExe), String((payload && payload.version) || 'unknown'));
+      else scheduleExeReplace(tmp, targetExe);
     } catch (err) {
       try { fs.unlinkSync(tmp); } catch (e2) {   }
       updateApply.clearState(updateStatePath());
@@ -1626,7 +1720,43 @@ app.whenReady().then(() => {
     flushAutoLog();
     return { ok: true, path: autoLogPath, buffered: logBuf.length };
   });
-  ipcMain.handle('sve-log-save', async () => saveLogFile());
+  ipcMain.handle('sve-log-save', async (e, payload) => {
+    if (payload && (payload.minutes || payload.filter)) return exportLogRange(payload);
+    return saveLogFile();
+  });
+  ipcMain.handle('sve-log-export', async (e, payload) => exportLogRange(payload));
+  ipcMain.handle('sve-mem-sample', async () => {
+    try {
+      const metrics = app.getAppMetrics().map(m => ({
+        pid: m.pid,
+        type: m.type,
+        workingSetKB: m.memory ? m.memory.workingSetSize : 0,
+        peakWorkingSetKB: m.memory ? m.memory.peakWorkingSetSize : 0,
+        privateKB: m.memory ? m.memory.privateBytes : 0,
+      }));
+      const os = require('os');
+      return {
+        ok: true,
+        at: Date.now(),
+        procs: metrics,
+        sumWorkingSetKB: metrics.reduce((n, m) => n + (m.workingSetKB || 0), 0),
+        sumPrivateKB: metrics.reduce((n, m) => n + (m.privateKB || 0), 0),
+        system: { totalMem: os.totalmem(), freeMem: os.freemem(), loadavg: os.loadavg() },
+      };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message || err).slice(0, 160) };
+    }
+  });
+  ipcMain.handle('sve-render-report', async (e, payload) => {
+    try {
+      const r = renderReport.writeRenderReport(logDirPath(), payload);
+      if (r && r.id) appendLog('info', 'RENDER-REPORT', { id: r.id, events: r.events, bytes: r.bytes, dropped: r.dropped, ok: !!r.ok });
+      if (r && r.ok) { try { shell.showItemInFolder(r.path); } catch (err) {   } }
+      return r;
+    } catch (err) {
+      return { ok: false, error: '诊断包导出失败', detail: String(err && err.message || err).slice(0, 200) };
+    }
+  });
   ipcMain.handle('sve-log-open', async () => {
     try {
       const fp = logSavedPath;
@@ -1676,6 +1806,7 @@ app.on('before-quit', () => {
     flushAutoLog();
   } catch (e) {   }
 });
+app.on('will-quit', () => { cleanupSessionLogs(); });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

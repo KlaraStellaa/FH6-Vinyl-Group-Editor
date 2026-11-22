@@ -49,6 +49,31 @@ const tmpDir = path.join(ROOT, 'release', '.portable-tmp');
 fs.mkdirSync(tmpDir, { recursive: true });
 const reused7z = argOf('--7z', '');
 const sevenFile = reused7z ? path.resolve(reused7z) : path.join(tmpDir, 'app-64.7z');
+
+const MANIFEST = 'sve-files.txt';
+const EXCLUDE_ANY = new Set(['_userdata', 'sve-logs', 'SVGImages', 'WorkCopies',
+  'WorkCopiesHistory', 'settings.json', 'sve-cache-ok.txt', MANIFEST]);
+function listPackedFiles() {
+  const out = [];
+  const walk = (dir, rel) => {
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (EXCLUDE_ANY.has(ent.name) || /^update-.*\.exe$/i.test(ent.name)) continue;
+      const r = rel ? rel + '\\' + ent.name : ent.name;
+      if (ent.isDirectory()) walk(path.join(dir, ent.name), r);
+      else if (ent.isFile()) out.push(r);
+    }
+  };
+  walk(UNPACKED, '');
+  out.sort();
+  return out;
+}
+function writeManifest() {
+  const files = listPackedFiles();
+  const file = path.join(tmpDir, MANIFEST);
+  fs.writeFileSync(file, files.join('\n') + '\n', 'ascii');
+  return { file: file, count: files.length };
+}
+
 if (reused7z) {
   if (!fs.existsSync(sevenFile)) fail('--7z 指定的文件不存在: ' + sevenFile);
   console.log('  复用 app-64.7z = ' + sevenFile);
@@ -58,11 +83,20 @@ if (reused7z) {
   const a = spawnSync(sevenZip, [
     'a', '-t7z', '-mx=9', '-bd', sevenFile, '*', '-r',
     '-xr!_userdata', '-xr!sve-logs', '-xr!SVGImages', '-xr!WorkCopies',
-    '-xr!WorkCopiesHistory', '-xr!settings.json', '-xr!update-*.exe'
+    '-xr!WorkCopiesHistory', '-xr!settings.json', '-xr!update-*.exe',
+    '-xr!' + MANIFEST, '-xr!sve-cache-ok.txt'
   ], {
     cwd: UNPACKED, stdio: 'inherit', windowsHide: true
   });
   if (a.status !== 0) fail('7za 压缩失败，exit=' + a.status);
+}
+const mani = writeManifest();
+{
+  const a = spawnSync(sevenZip, ['a', '-t7z', '-bd', sevenFile, MANIFEST], {
+    cwd: tmpDir, stdio: 'inherit', windowsHide: true
+  });
+  if (a.status !== 0) fail('清单写入 app-64.7z 失败，exit=' + a.status);
+  console.log('  包内清单 = ' + mani.count + ' 个文件');
 }
 const packMB = (fs.statSync(sevenFile).size / 1048576).toFixed(1);
 console.log('  app-64.7z = ' + packMB + ' MB');

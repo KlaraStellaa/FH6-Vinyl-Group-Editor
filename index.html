@@ -86,6 +86,7 @@
   </div>
 
   <div id="canvasWrap">
+    <canvas id="staticOverlay" aria-hidden="true"></canvas>
     <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
       <defs id="appDefs"></defs>
       <rect id="gridRect" x="0" y="0" width="10" height="10" fill="url(#sveGridP)" pointer-events="none"></rect>
@@ -270,9 +271,11 @@
   <div class="lp-title" data-i18n="log.title">日志</div>
   <div class="lp-path" id="logPathText"></div>
   <div class="lp-btns">
-    <button id="btnLogCopy" data-i18n="log.copy">复制最近日志</button>
-    <button id="btnLogCopyFlip" data-i18n="log.copyFlip">复制翻转诊断</button>
-    <button id="btnLogOpen" data-i18n="log.open">保存日志</button>
+    <button id="btnLogExport5" data-i18n="log.export5">导出最近 5 分钟</button>
+    <button id="btnLogExport10" data-i18n="log.export10">导出最近 10 分钟</button>
+    <button id="btnLogExportAll" data-i18n="log.exportAll">导出日志</button>
+    <button id="btnRenderMark" data-i18n="log.markIssue">标记显示问题</button>
+    <button id="btnRenderExport" data-i18n="log.exportRender">导出渲染诊断</button>
     <button id="btnLogClose" data-i18n="log.close">关闭</button>
   </div>
 </div>
@@ -286,6 +289,8 @@
 </div>
 
 <script src="js/util.js"></script>
+<script src="js/diag-render.js"></script>
+<script src="js/raster-stats.js"></script>
 <script src="js/thumb-disk-cache.js"></script>
 <script src="js/i18n.js"></script>
 <script src="dlg-i18n.js"></script>
@@ -330,5 +335,6 @@
 <script src="js/titlebar.js"></script>
 <script src="js/shortcuts.js"></script>
 <script src="js/render-gate.js"></script>
+<script src="js/diag-ops.js"></script>
 </body>
 </html>

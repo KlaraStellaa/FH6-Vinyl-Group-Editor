@@ -37,14 +37,75 @@ App.initIO = function () {
     if (App.settings) App.settings.toggle();
     App.toggleLogPanel();
   });
-  $('#btnLogCopy').addEventListener('click', () => App.copyLog());
-  $('#btnLogCopyFlip').addEventListener('click', () => App.copyLog('flip'));
-  $('#btnLogOpen').addEventListener('click', async () => {
-    const r = await window.sveApi.logSave();
+  const bindLogExport = function (id, opts) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('click', async () => {
+      const r = await window.sveApi.logExport(opts);
+      if (!r || !r.ok) {
+        showToast(App.i18n.tf('toast.io.logSaveFail', { v: ((r && r.error) || App.i18n.t('toast.unknownError')) }));
+        return;
+      }
+      showToast(App.i18n.tf('toast.io.logExported', { n: r.lines, v: r.path }));
+    });
+  };
+  bindLogExport('btnLogExport5', { minutes: 5 });
+  bindLogExport('btnLogExport10', { minutes: 10 });
+  bindLogExport('btnLogExportAll', { minutes: 0 });
+  const sysInfo = function () {
+    let canvas = null, dpr = 0, hz = 0;
+    try {
+      const r = App.svg.getBoundingClientRect();
+      canvas = [Math.round(r.width), Math.round(r.height)];
+      dpr = Math.round((window.devicePixelRatio || 1) * 1000) / 1000;
+    } catch (e) {   }
+    try {
+      hz = (App.diagRender && App.diagRender.frames && App.diagRender.frames.fps) || 0;
+    } catch (e) {   }
+    return {
+      product: 'FH6 Vinyl Group Editor',
+      version: (App.version || (window.sveApi && window.sveApi.appVersion) || ''),
+      platform: (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '',
+      osRelease: '', electron: '', chrome: '',
+      gpuAccel: 'unknown', dpr: dpr, refreshHz: hz, refreshMeasurable: false, canvas: canvas,
+    };
+  };
+  const btnMark = document.getElementById('btnRenderMark');
+  if (btnMark) btnMark.addEventListener('click', function () {
+    try {
+      const DR = App.diagRender;
+      if (!DR) { showToast(App.i18n.t('toast.unknownError')); return; }
+      const sel = (App.state && App.state.selection) ? Array.from(App.state.selection)[0] : null;
+      const r = DR.mark('missing-layer', { expectedLayer: typeof sel === 'number' ? sel : null, evidence: 'candidate' });
+      showToast(App.i18n.tf('toast.log.renderExported', { n: r.frozenSeq, v: r.id }));
+    } catch (e) {   }
+  });
+  const btnRep = document.getElementById('btnRenderExport');
+  if (btnRep) btnRep.addEventListener('click', async function () {
+    try {
+      const DR = App.diagRender;
+      if (!DR) { showToast(App.i18n.t('toast.unknownError')); return; }
+      const snap = DR.snapshot();
+      const payload = {
+        schema: snap.schema, build: snap.build, session: snap.session, proc: snap.proc,
+        counts: snap.counts, reports: snap.reports, events: snap.events,
+        summary: DR.summaryText(snap), sys: sysInfo(), gapRanges: [],
+      };
+      const r = await window.sveApi.renderReport(payload);
+      if (!r || !r.ok) {
+        showToast(App.i18n.tf('toast.io.logSaveFail', { v: ((r && r.error) || App.i18n.t('toast.unknownError')) }));
+        return;
+      }
+      showToast(App.i18n.tf('toast.log.renderExported', { n: r.events, v: r.id }));
+    } catch (e) {
+      showToast(App.i18n.tf('toast.io.logSaveFail', { v: String(e && e.message || e).slice(0, 80) }));
+    }
+  });
+  const btnLogOpenEl = document.getElementById('btnLogOpen');
+  if (btnLogOpenEl) btnLogOpenEl.addEventListener('click', async () => {
+    const r = await window.sveApi.logExport({ minutes: 0 });
     if (!r || !r.ok) { showToast(App.i18n.tf('toast.io.logSaveFail', { v: ((r && r.error) || App.i18n.t('toast.unknownError')) })); return; }
-    showToast(App.i18n.tf('toast.io.logSaved', { n: r.lines, v: r.path }));
-    const o = await window.sveApi.logOpen();
-    if (!o || !o.ok) showToast(App.i18n.t('toast.io.logOpenFail'));
+    showToast(App.i18n.tf('toast.io.logExported', { n: r.lines, v: r.path }));
   });
   $('#btnLogClose').addEventListener('click', () => $('#logPanel').classList.add('hidden'));
   $('#btnOpenImage').addEventListener('click', App.openBgImageDialog);

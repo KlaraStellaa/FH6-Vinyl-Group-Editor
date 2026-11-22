@@ -546,6 +546,11 @@ App.rebuildLayerContent = function (layer) {
   if (!layer.el) return;
   layer.el.innerHTML = '';
 
+  layer._bakeFrame = undefined;
+  layer._bakeUse = undefined;
+  layer.bakeFrameCache = null;
+  try { layer.el.__bakeFrame = undefined; } catch (e) {   }
+
   layer._symbolColorEpoch = (layer._symbolColorEpoch || 0) + 1;
   layer.maskEl = null; layer.rectEl = null; layer.innerEl = null; layer.imgEl = null;
   layer.bitmapEl = null; 
@@ -794,13 +799,23 @@ App.mergeLayers = function (ids) {
 
   const ordered = items.slice().sort((a, b) => App.state.layers.indexOf(a) - App.state.layers.indexOf(b));
   merged.children = ordered;
+
+  const __mergedIds = new Set(items.map(function (x) { return x.id; }));
   items.forEach(l => {
 
     if (App.dropEditStaticItem) App.dropEditStaticItem(l);
+    try { if (App.restoreAutoStaticDisplay) App.restoreAutoStaticDisplay(l); } catch (e) {   }
     const i = App.state.layers.indexOf(l);
     if (i >= 0) App.state.layers.splice(i, 1);
     App.state.layerMap.delete(l.id);
   });
+  if (App.autoStatic && (App.autoStatic.hiding || []).length) {
+
+    App.autoStatic.hiding = App.autoStatic.hiding.filter(function (x) { return !__mergedIds.has(x.id); });
+    if (App.autoStatic.vectorKeep) {
+      App.autoStatic.vectorKeep = App.autoStatic.vectorKeep.filter(function (x) { return !__mergedIds.has(x.id); });
+    }
+  }
   App.buildLayerElement(merged); 
 
   if (App.unbakeProxy) {
@@ -816,9 +831,25 @@ App.mergeLayers = function (ids) {
   }
   App.registerChildren(merged);
 
-  merged._localBB = undefined;
-
-  setTimeout(function () { try { merged._localBB = undefined; } catch (e) {   } }, 0);
+  try {
+    const bb = merged.el ? merged.el.getBBox() : null;
+    if (bb && bb.width > 0 && bb.height > 0) {
+      merged._localBB = {
+        pts: [[bb.x, bb.y], [bb.x + bb.width, bb.y],
+          [bb.x + bb.width, bb.y + bb.height], [bb.x, bb.y + bb.height]]
+      };
+    } else {
+      let mnx = Infinity, mny = Infinity, mxx = -Infinity, mxy = -Infinity;
+      (merged.children || []).forEach(function (ch) {
+        const b = App.getItemDocBBox(ch);
+        if (!b || !isFinite(b.x) || !isFinite(b.y)) return;
+        mnx = Math.min(mnx, b.x); mny = Math.min(mny, b.y);
+        mxx = Math.max(mxx, b.x + b.w); mxy = Math.max(mxy, b.y + b.h);
+      });
+      merged._localBB = (isFinite(mnx) && mxx > mnx)
+        ? { pts: [[mnx, mny], [mxx, mny], [mxx, mxy], [mnx, mxy]] } : undefined;
+    }
+  } catch (e) { merged._localBB = undefined; }
 
   App.lastWheelIdx = App.state.layers.length - 1 - newIdx;
 

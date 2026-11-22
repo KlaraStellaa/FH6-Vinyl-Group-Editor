@@ -75,6 +75,79 @@ function scheduleExeReplace(opts) {
   return { bat: bat, resultFile: resultFile, delayPings: delayPings, retry: retry };
 }
 
+function scheduleEnvApply(opts) {
+  const o = opts || {};
+  const newExe = String(o.newExe || '');
+  const envDir = String(o.envDir || '');
+  const appName = String(o.appName || '');
+  const version = String(o.version || '');
+  if (!newExe || !envDir || !appName || !version) throw new Error('bad-args');
+  const resultFile = String(o.resultFile || path.join(os.tmpdir(), 'sve-update-result.txt'));
+  const delayPings = Number(o.delayPings || DEFAULT_DELAY_PINGS);
+  const retry = Number(o.retry || DEFAULT_RETRY);
+  const dir = String(o.batDir || envDir || os.tmpdir());
+  try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {   }
+  const bat = path.join(dir, 'sve-apply-' + Date.now() + '-' + process.pid + '.cmd');
+
+  const script = [
+    '@echo off',
+    'setlocal',
+    'set "NEW=%~1"',
+    'set "ENV=%~2"',
+    'set "APP=%~3"',
+    'set "VER=%~4"',
+    'set "RES=%~5"',
+    'set "DELAY=%~6"',
+    'set "RETRY=%~7"',
+    'if "%DELAY%"=="" set "DELAY=4"',
+    'if "%RETRY%"=="" set "RETRY=300"',
+    'ping -n %DELAY% 127.0.0.1 >nul 2>&1',
+    'set /a N=0',
+    ':TRY',
+    'if not exist "%NEW%" goto FAIL',
+    'if exist "%ENV%\\%APP%.old.exe" del /f /q "%ENV%\\%APP%.old.exe" >nul 2>&1',
+    'ren "%ENV%\\%APP%" "%~nx3.old.exe" >nul 2>&1',
+    'if errorlevel 1 goto WAIT',
+    'set "SVE_APPLY_DIR=%ENV%"',
+    '"%NEW%" /SVEAPPLY',
+    'if not exist "%ENV%\\%APP%" goto RESTORE',
+    'set "GOT="',
+    'if exist "%ENV%\\sve-cache-ok.txt" set /p GOT=<"%ENV%\\sve-cache-ok.txt"',
+    'if /i not "%GOT%"=="%VER%" goto RESTORE',
+    'if exist "%ENV%\\%APP%.old.exe" del /f /q "%ENV%\\%APP%.old.exe" >nul 2>&1',
+    'del /f /q "%NEW%" >nul 2>&1',
+    '>"%RES%" echo ok',
+    'if not "%SVE_NO_LAUNCH%"=="1" start "" "%ENV%\\%APP%"',
+    'goto CLEAN',
+    ':RESTORE',
+    'if exist "%ENV%\\%APP%.old.exe" if not exist "%ENV%\\%APP%" ren "%ENV%\\%APP%.old.exe" "%~nx3" >nul 2>&1',
+    ':WAIT',
+    'set /a N+=1',
+    'if %N% GEQ %RETRY% goto FAIL',
+    'ping -n 2 127.0.0.1 >nul 2>&1',
+    'goto TRY',
+    ':FAIL',
+    '>"%RES%" echo fail',
+    'if exist "%ENV%\\%APP%.old.exe" if not exist "%ENV%\\%APP%" ren "%ENV%\\%APP%.old.exe" "%~nx3" >nul 2>&1',
+    'if not "%SVE_NO_LAUNCH%"=="1" if exist "%ENV%\\%APP%" start "" "%ENV%\\%APP%"',
+    'goto CLEAN',
+    ':CLEAN',
+    'del "%~f0" >nul 2>&1',
+    'exit /b'
+  ].join('\r\n');
+  fs.writeFileSync(bat, script, 'ascii');
+
+  const child = spawn('cmd.exe', ['/c', bat, newExe, envDir, appName, version, resultFile,
+    String(delayPings), String(retry)], {
+    detached: false,
+    stdio: 'ignore',
+    windowsHide: true
+  });
+  child.on('error', function () {   });
+  child.unref();
+  return { bat: bat, resultFile: resultFile, delayPings: delayPings, retry: retry };
+}
+
 function readResult(file) {
   try {
     const s = fs.readFileSync(file, 'utf8').trim().toLowerCase();
@@ -198,6 +271,7 @@ function recoverTarget(target, pkg, opts) {
 
 module.exports = {
   scheduleExeReplace: scheduleExeReplace,
+  scheduleEnvApply: scheduleEnvApply,
   readResult: readResult,
   readState: readState,
   writeState: writeState,
