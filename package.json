@@ -1,6 +1,6 @@
 {
   "name": "fh6-vinyl-group-editor",
-  "version": "1.4.7",
+  "version": "1.4.8",
   "description": "SVG vinyl pattern editor (Electron)",
   "main": "main.js",
   "scripts": {
@@ -25,6 +25,7 @@
       "font-name.js",
       "dlg-i18n.js",
       "preload.js",
+      "render-report.js",
       "index.html",
       "js/**/*",
       "css/**/*",
