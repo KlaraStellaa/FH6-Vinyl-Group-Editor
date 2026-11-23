@@ -1,18 +1,4 @@
 'use strict';
-/* ============================================================================
-   render-report.js — 渲染诊断包（主进程侧）
-   职责：把渲染层交上来的结构化事件包做成离线可读的 zip，并做**二次校验**。
-   依据《渲染探针与现场日志实施手册》§4：包内固定四个文件
-     manifest.json   schema / 构建 / 系统 / GPU 粗粒度状态 / DPR / 刷新率 / 采样缺口
-     events.jsonl    结构化事件（一行一条，按 seq 正序）
-     report.json     症状、ROI、证据级别
-     summary.txt     支持人员可读的中文摘要
-   设计约束：
-     · 只接受白名单字段与枚举值；字段名/字符串长度/数组长度/事件条数/总字节都设上限；
-     · 不含文件名、绝对路径、用户名、URL、SVG 内容、位图/base64、图层名；
-     · 原子写入（先写 .tmp 再 rename），失败保留现场并返回可读错误；
-     · 不压缩异常路径：zip 用 store/deflate，读取端只需支持这两种方法。
-   ========================================================================== */
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
@@ -23,7 +9,6 @@ const MAX_EVENTS = 2000;
 const MAX_EVENT_BYTES = 2048;
 const MAX_TOTAL_BYTES = 4 * 1024 * 1024;
 
-/* ---------------------------------------------------------------- zip 写入 */
 function crc32(buf) {
   let c, crc = 0xFFFFFFFF;
   for (let n = 0; n < buf.length; n++) {
@@ -40,7 +25,6 @@ function dosTime(d) {
   return { time, date };
 }
 
-/* entries: [{name, data:Buffer}] → zip Buffer（文本用 deflate，已压缩的用 store） */
 function makeZip(entries, when) {
   const d = when || new Date();
   const { time, date } = dosTime(d);
@@ -105,7 +89,6 @@ function makeZip(entries, when) {
   return Buffer.concat([Buffer.concat(locals), cdBuf, eocd]);
 }
 
-/* ------------------------------------------------------------- 字段校验 */
 const NUM_OK = /^-?\d{1,12}(\.\d{1,3})?$/;
 const STR_MAX = 80;
 const FORBIDDEN_KEY = /^(name|fileName|path|url|user|password|key|clipboard|text|content|svg|bitmap|dataUrl|base64)$/i;
@@ -206,8 +189,6 @@ function sanitizePayload(payload) {
   return { manifest, events, reports, summary };
 }
 
-/* --------------------------------------------------------------- 导出入口 */
-/* dir: 诊断包落地目录（数据根/logs）；返回 { ok, path, bytes, entries, id } */
 function writeRenderReport(dir, payload) {
   let clean;
   try {
@@ -235,14 +216,14 @@ function writeRenderReport(dir, payload) {
 
   const zip = makeZip(entries);
   const id = 'RR-' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomBytes(2).toString('hex').toUpperCase();
-  try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { /* ignore */ }
+  try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {   }
   const file = path.join(dir, 'render-report-' + id + '.zip');
   const tmp = file + '.tmp';
   try {
     fs.writeFileSync(tmp, zip);
     fs.renameSync(tmp, file);
   } catch (e) {
-    try { fs.unlinkSync(tmp); } catch (e2) { /* ignore */ }
+    try { fs.unlinkSync(tmp); } catch (e2) {   }
     return { ok: false, error: '写入失败（磁盘空间 / 权限）', detail: String(e && e.message || e), dir: dir };
   }
   return {
