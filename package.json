@@ -1,6 +1,6 @@
 {
   "name": "fh6-vinyl-group-editor",
-  "version": "1.4.9",
+  "version": "1.5.0",
   "description": "SVG vinyl pattern editor (Electron)",
   "main": "main.js",
   "scripts": {

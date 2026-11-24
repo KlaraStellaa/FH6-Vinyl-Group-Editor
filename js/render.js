@@ -426,7 +426,35 @@ App.modelBBox = function (item) {
 };
 
 App.editStatic = { active: false, baking: false, items: [], bit: null, view: null, failedTop: null };
+App._editStaticToken = 0;
 App.editStaticBgEl = null;
+App.editStaticAbove = true;
+App.editStaticAboveEl = null;
+App.editStaticAboveStageEl = null;
+App._esRaised = null;             
+App.raiseEditTargets = function (targets) {
+  const root = App.layersRoot;
+  if (!root || !targets || !targets.length) return;
+  if (!App._esRaised) App._esRaised = [];
+  targets.forEach(function (t) {
+    if (!t || !t.el || t.el.parentNode !== root) return;
+    if (App._esRaised.some(function (r) { return r.el === t.el; })) return;   
+    App._esRaised.push({ el: t.el, next: t.el.nextSibling || null });
+    root.appendChild(t.el);
+  });
+};
+App.restoreEditTargetsDom = function () {
+  const list = App._esRaised;
+  App._esRaised = null;
+  const root = App.layersRoot;
+  if (!list || !list.length || !root) return;
+  for (let i = list.length - 1; i >= 0; i--) {
+    const el = list[i].el, nx = list[i].next;
+    if (!el) continue;
+    if (nx && nx.parentNode === root && nx !== el) root.insertBefore(el, nx);
+    else root.appendChild(el);
+  }
+};
 
 App.editStaticViewportRect = function () {
   const v = App.state.view;
@@ -750,7 +778,7 @@ App.bakeEditStatic = function (items, viewport, shouldContinue) {
     const leafMat = App.bakeLeafMatFn();
     const matrixStep = () => {
       if (!alive()) { finishResult(null); return; }
-      if (App.renderInteractionBusy && App.renderInteractionBusy()) { setTimeout(matrixStep, 60); return; }
+      if (App.bakeDeferBusy && App.bakeDeferBusy()) { setTimeout(matrixStep, 60); return; }
       const t0 = performance.now();
       let n = 0;
       while (mi < leaves.length && (n < MIN_CHUNK || performance.now() - t0 < BUDGET)) {
@@ -762,7 +790,7 @@ App.bakeEditStatic = function (items, viewport, shouldContinue) {
     };
     const bboxStep = () => {
       if (!alive()) { finishResult(null); return; }
-      if (App.renderInteractionBusy && App.renderInteractionBusy()) { setTimeout(bboxStep, 60); return; }
+      if (App.bakeDeferBusy && App.bakeDeferBusy()) { setTimeout(bboxStep, 60); return; }
       const end = Math.min(leaves.length, i + CHUNK);
       for (; i < end; i++) {
         const hw = (leaves[i].w || 0) / 2, hh = (leaves[i].h || 0) / 2;
@@ -855,14 +883,19 @@ App.beginEditStatic = function () {
   App.rebakeEditStaticViewport();
 };
 App.endEditStatic = function () {
+  try { App.restoreEditTargetsDom(); } catch (e) {   }
   if (!App.editStatic.active && !App.editStatic.baking) return;
   App.editStatic.active = false;
   App.editStatic.baking = false;
+  App.editStatic.bakingAbove = false;
   App.editStatic.items = [];
   App.editStatic.bit = null;
+  App.editStatic.bitAbove = null;
   App.editStatic.view = null;
   App.editStatic.failedTop = null;
+  App.editStatic.failedTopAbove = null;
   App.editStatic._bakedInterMin = undefined;
+  App.editStatic._bakedInterMax = undefined;
   if (App._editStaticViewTimer) { clearTimeout(App._editStaticViewTimer); App._editStaticViewTimer = null; }
   if (App.editStaticBgEl) {
     App.editStaticBgEl.style.display = 'none';
@@ -872,6 +905,14 @@ App.endEditStatic = function () {
     if (App.editStaticStageEl.isConnected) App.editStaticStageEl.remove();
     App.editStaticStageEl = null;
   }
+  if (App.editStaticAboveEl) {
+    if (App.editStaticAboveEl.isConnected) App.editStaticAboveEl.remove();
+    App.editStaticAboveEl = null;
+  }
+  if (App.editStaticAboveStageEl) {
+    if (App.editStaticAboveStageEl.isConnected) App.editStaticAboveStageEl.remove();
+    App.editStaticAboveStageEl = null;
+  }
   try { (App.state.layers || []).forEach(l => App.restoreEsVisibility(l)); } catch (e) {   }
 };
 App.editStaticHealthy = function () {
@@ -879,6 +920,8 @@ App.editStaticHealthy = function () {
   if (!es) return false;
   if (es.bit && App.editStaticBgEl && App.editStaticBgEl.isConnected &&
       App.editStaticBgEl.getAttribute('href')) return true;
+  if (es.bitAbove && App.editStaticAboveEl && App.editStaticAboveEl.isConnected &&
+      App.editStaticAboveEl.getAttribute('href')) return true;
   if (es.baking) return true;
   if (es.items && es.items.length && es._bakedInterMin > 0) return true;
   return false;
@@ -961,6 +1004,7 @@ App.renderInteractionBusy = function () {
 };
 App.bakeDeferBusy = function () {
   if (App._bakeUrgent) return false;
+  if (App.editStatic && App.editStatic.baking && !App.editStatic.bit) return false;
   if (!App.renderInteractionBusy || !App.renderInteractionBusy()) return false;
   if (App.autoStatic.baking && !App.autoStaticViewUpToDate()) return false;
   return true;
@@ -2004,59 +2048,48 @@ App.editStaticRectStillUseful = function (rect, f) {
   const fd = Number(f) || Number(rect._f) || 0;
   return !(fd > 0 && fd < need * 0.5);
 };
-App.rebakeEditStaticViewport = function () {
+App.rebakeEditStaticViewport = function (delay) {
   if (!App.editStatic || !App.editStatic.active) return;
+  if (App.editStatic.baking || App.editStatic.bakingAbove) {
+    const bv = App.editStatic._bakingView;
+    let vpNow = null;
+    try { vpNow = App.editStaticViewportRect(); } catch (e) {   }
+    if (bv && vpNow &&
+        vpNow.x >= bv.x - 1 && vpNow.y >= bv.y - 1 &&
+        (vpNow.x + vpNow.w) <= (bv.x + bv.w + 1) && (vpNow.y + vpNow.h) <= (bv.y + bv.h + 1)) {
+      return;
+    }
+  }
   if (App._editStaticViewTimer) clearTimeout(App._editStaticViewTimer);
-  const token = ++App._editStaticToken; 
   App._editStaticViewTimer = setTimeout(() => {
     App._editStaticViewTimer = null;
+    const token = ++App._editStaticToken;
     try {
       if (!App.editStatic.active) return;
-      if (App.renderInteractionBusy && App.renderInteractionBusy()) { App.rebakeEditStaticViewport(); return; }
       const vp = App.editStaticViewportRect();
-      let items = App.editStatic.items.filter(l => App.layerInRect(l, vp));
+      App.editStatic._bakingView = vp;
       const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
       const editItems = (App.state.edit && App.editTargets) ? App.editTargets() : [];
-      let interMin = -1;
-      for (let i = 0; i < App.state.layers.length; i++) {
-        const l = App.state.layers[i];
-        if (l === box || App.state.selected.has(l.id) || editItems.includes(l)) { interMin = i; break; }
-      }
-      if (interMin >= 0) items = items.filter(l => App.state.layers.indexOf(l) < interMin);
-      else items = [];
-      if (!items.length) {
-        App.editStatic.view = vp;
-        App.editStatic.bit = null;
-        App.editStatic.failedTop = null;
-        App.editStatic._bakedInterMin = undefined;
-        App.editStatic.baking = false;
-        if (App.editStaticBgEl) {
-          App.editStaticBgEl.style.display = 'none';
-          App.editStaticBgEl.removeAttribute('href');
+      let interMin = -1, interMax = -1;
+      for (let t = 0; t < App.state.layers.length; t++) {
+        const l = App.state.layers[t];
+        if (App.state.selected.has(l.id) || editItems.includes(l)) {
+          if (interMin < 0) interMin = t;
+          interMax = t;
         }
-        try { App.state.layers.forEach(l => App.restoreEsVisibility(l)); } catch (e) {   }
-        return;
       }
+      const belowItems = [], aboveItems = [];
+      App.editStatic.items.forEach(function (l) {
+        if (!App.layerInRect(l, vp)) return;
+        const i = App.state.layers.indexOf(l);
+        if (i < 0) return;
+        if (interMin < 0) { belowItems.push(l); return; }    
+        if (i < interMin) belowItems.push(l);
+        else if (i > interMax && App.editStaticAbove) aboveItems.push(l);
+      });
       const docId = App.Tabs && App.Tabs.current ? App.Tabs.current.id : null;
       const contentRevision = App.contentRevision || 0;
       const viewRevision = App.viewRevision || 0;
-      App.editStatic.baking = true;
-      App.editStatic.bakingSince = performance.now();
-      App.editStatic.bakingToken = token;
-      (function (bakeStartedAt) {
-        setTimeout(function () {
-          try {
-            if (!App.editStatic.active || token !== App._editStaticToken) return;
-            if (!App.editStatic.baking || App.editStatic.bakingSince !== bakeStartedAt) return;
-            console.warn('[bake] 编辑背景 20s 未完成，复位（保留矢量）');
-            failCurrent('watchdog');
-          } catch (e) {   }
-        }, 20000);
-      })(App.editStatic.bakingSince);
-      App.traceRenderTask('editStatic', 'start', {
-        docId: docId, contentRevision: contentRevision, viewRevision: viewRevision,
-        generation: token, targets: items.map(function (l) { return l.id; })
-      });
       let lastGeomAt = 0;
       const vpF = Math.min((vp.scale || 1) * (window.devicePixelRatio || 1),
         4096 / Math.max(1, Math.max(vp.w, vp.h)));
@@ -2074,10 +2107,10 @@ App.rebakeEditStaticViewport = function () {
       const failCurrent = function (reason) {
         if (!App.editStatic.active || token !== App._editStaticToken) return;
         App.editStatic.baking = false;
-        App.editStatic.view = null;
         App.editStatic.bit = null;
         App.editStatic.failedTop = null;
         App.editStatic._bakedInterMin = undefined;
+        if (!App.editStatic.bitAbove) App.editStatic.view = null;
         if (App.editStaticBgEl) {
           App.editStaticBgEl.style.display = 'none';
           App.editStaticBgEl.removeAttribute('href');
@@ -2092,6 +2125,115 @@ App.rebakeEditStaticViewport = function () {
           if (App.autoStaticMaybe) { try { App.autoStaticMaybe(); } catch (e) {   } }
         }
       };
+      let aboveStarted = false;
+      const startAboveBake = function () {
+        if (aboveStarted) return;
+        aboveStarted = true;
+      if (aboveItems.length) {
+        App.editStatic.bakingAbove = true;
+        App.bakeEditStatic(aboveItems, vp, shouldContinue).then(function (bitA) {
+          App.editStatic.bakingAbove = false;
+          if (!App.editStatic.active || token !== App._editStaticToken) return;
+          if (!bitA) {
+            console.warn('[bake] 上方位图未生成，上方层保留矢量', aboveItems.length + ' 层');
+            return;
+          }
+          const oldA = App.editStaticAboveEl;
+          const stageA = svgEl('image', { 'pointer-events': 'none', preserveAspectRatio: 'none', class: 'sve-edit-static' });
+          App.editStaticAboveStageEl = stageA;
+          stageA.setAttribute('x', bitA.x); stageA.setAttribute('y', bitA.y);
+          stageA.setAttribute('width', bitA.w); stageA.setAttribute('height', bitA.h);
+          stageA.style.visibility = 'hidden';
+          App.layersRoot.appendChild(stageA);
+          let settledA = false;
+          const clearA = function () {
+            stageA.removeEventListener('load', readyA);
+            stageA.removeEventListener('error', failedA);
+          };
+          const failedA = function () {
+            if (settledA) return; settledA = true; clearA();
+            if (stageA.isConnected) stageA.remove();
+            if (App.editStaticAboveStageEl === stageA) App.editStaticAboveStageEl = null;
+            console.warn('[bake] 上方位图装图失败，上方层保留矢量');
+          };
+          const readyA = function () {
+            if (settledA) return; settledA = true; clearA();
+            requestAnimationFrame(function () { requestAnimationFrame(function () {
+              if (!App.editStatic.active || token !== App._editStaticToken || !stageA.isConnected) {
+                if (stageA.isConnected) stageA.remove();
+                if (App.editStaticAboveStageEl === stageA) App.editStaticAboveStageEl = null;
+                return;
+              }
+              stageA.style.visibility = '';
+              App.editStaticAboveEl = stageA;
+              if (App.editStaticAboveStageEl === stageA) App.editStaticAboveStageEl = null;
+              App.editStatic.bitAbove = bitA;
+              App.editStatic.failedTopAbove = bitA.failedTop || null;
+              App.editStatic._bakedInterMax = interMax;
+              if (!App.editStatic.view) App.editStatic.view = vp;
+              if (oldA && oldA !== stageA && oldA.isConnected) oldA.remove();
+              App.updateEditStaticViewport();
+            }); });
+          };
+          stageA.addEventListener('load', readyA);
+          stageA.addEventListener('error', failedA);
+          stageA.setAttribute('href', bitA.url);
+        }).catch(function (e) {
+          App.editStatic.bakingAbove = false;
+          console.warn('[bake] 上方位图任务失败', String(e && e.message || e).slice(0, 140));
+        });
+      } else {
+        App.editStatic.bitAbove = null;
+        App.editStatic.failedTopAbove = null;
+        App.editStatic._bakedInterMax = undefined;
+        if (App.editStaticAboveEl) {
+          if (App.editStaticAboveEl.isConnected) App.editStaticAboveEl.remove();
+          App.editStaticAboveEl = null;
+        }
+      }
+      };
+      const items = belowItems;
+      if (!items.length) {
+        App.editStatic.bit = null;
+        App.editStatic.failedTop = null;
+        App.editStatic._bakedInterMin = undefined;
+        App.editStatic.baking = false;
+        if (App.editStaticBgEl) {
+          App.editStaticBgEl.style.display = 'none';
+          App.editStaticBgEl.removeAttribute('href');
+        }
+        if (!App.editStatic.bitAbove) {
+          App.editStatic.view = vp;
+          try { App.state.layers.forEach(l => App.restoreEsVisibility(l)); } catch (e) {   }
+        } else {
+          App.updateEditStaticViewport();
+        }
+        startAboveBake();
+        return;
+      }
+      App.editStatic.baking = true;
+      App.editStatic.bakingSince = performance.now();
+      App.editStatic.bakingToken = token;
+      (function (bakeStartedAt) {
+        setTimeout(function () {
+          try {
+            if (!App.editStatic.active || token !== App._editStaticToken) return;
+            if (!App.editStatic.baking || App.editStatic.bakingSince !== bakeStartedAt) {
+              if (App.editStatic.bakingAbove && token === App._editStaticToken) {
+                console.warn('[bake] 上方位图 20s 未完成，复位（上方层保留矢量）');
+                App.editStatic.bakingAbove = false;
+              }
+              return;
+            }
+            console.warn('[bake] 编辑背景 20s 未完成，复位（保留矢量）');
+            failCurrent('watchdog');
+          } catch (e) {   }
+        }, 20000);
+      })(App.editStatic.bakingSince);
+      App.traceRenderTask('editStatic', 'start', {
+        docId: docId, contentRevision: contentRevision, viewRevision: viewRevision,
+        generation: token, targets: items.map(function (l) { return l.id; })
+      });
       App.bakeEditStatic(items, vp, shouldContinue).then(bit => {
         if (App.editStatic.baking && App.editStatic.bakingToken === token) App.editStatic.baking = false;
         if (!App.editStatic.active || token !== App._editStaticToken) return; 
@@ -2162,48 +2304,60 @@ App.rebakeEditStaticViewport = function () {
       }).catch(function (e) {
         console.warn('[bake] 编辑静态任务失败', String(e && e.message || e).slice(0, 160));
         failCurrent('bake-throw');
+      }).then(function () {
+        startAboveBake();
       });
     } catch (e) {   }
-  }, 300);
+  }, Number(delay) === 0 ? 0 : 300);
 };
 App.updateEditStaticViewport = function () {
   if (!App.editStatic || !App.editStatic.active) return;
   const s = App.state;
   if (!s || !s.layers) return;
   const es = App.editStatic;
-  if (!s.edit && !es.bit && !es.baking) {
+  if (!s.edit && !es.bit && !es.bitAbove && !es.baking) {
     try { App.log('perf', '静态化僵尸态拆除', { items: (es.items || []).length, interMin: es._bakedInterMin }); } catch (e) {   }
     App.endEditStatic();
     if (App.autoStaticMaybe) App.autoStaticMaybe();
     return;
   }
-  let interMinNow = -1;
-  if (es.view && es.bit) {
-    const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
-    const editItems = (s.edit && App.editTargets) ? App.editTargets() : [];
-    for (let i = 0; i < s.layers.length; i++) {
-      const l = s.layers[i];
-      if (l === box || s.selected.has(l.id) || editItems.includes(l)) { interMinNow = i; break; }
+  let interMinNow = -1, interMaxNow = -1;
+  const box = App.whiteBoxLayer ? App.whiteBoxLayer() : null;
+  const editItems = (s.edit && App.editTargets) ? App.editTargets() : [];
+  for (let i = 0; i < s.layers.length; i++) {
+    const l = s.layers[i];
+    if (!l) continue;
+    if (s.selected.has(l.id) || editItems.includes(l)) {
+      if (interMinNow < 0) interMinNow = i;
+      interMaxNow = i;
     }
-    const interMin = es._bakedInterMin !== undefined ? es._bakedInterMin : interMinNow;
+  }
+  const bMin = es._bakedInterMin;
+  const bMax = es._bakedInterMax;
+  if (es.view && (bMin !== undefined || bMax !== undefined)) {
     for (let i = 0; i < s.layers.length; i++) {
       const l = s.layers[i];
       if (!l || !l.el) continue;
-      const inter = l === box || s.selected.has(l.id) || editItems.includes(l);
-      const inItems = es.items.includes(l);
-      const inView = App.layerInRect(l, es.view);
-      const hide = !inter && inItems && inView && (interMin < 0 || i < interMin) &&
-        !(es.failedTop && es.failedTop.has(l.id));
+      const inter = s.selected.has(l.id) || editItems.includes(l);
+      let hide = false;
+      if (!inter && es.items.includes(l) && App.layerInRect(l, es.view)) {
+        if (bMin !== undefined && i < bMin) {
+          hide = !(es.failedTop && es.failedTop.has(l.id));
+        } else if (bMax !== undefined && i > bMax) {
+          hide = !(es.failedTopAbove && es.failedTopAbove.has(l.id));
+        }
+      }
       App.setEsHidden(l, hide);
     }
   }
-  if (es.view && es._bakedInterMin !== undefined && es._bakedInterMin !== interMinNow) {
+  if (es.view && ((es._bakedInterMin !== undefined && es._bakedInterMin !== interMinNow) ||
+                  (es._bakedInterMax !== undefined && es._bakedInterMax !== interMaxNow))) {
     App.rebakeEditStaticViewport();
   }
   const vpNow = App.editStaticViewportRect();
   if (!es.view || Math.abs(es.view.x - vpNow.x) > 5 || Math.abs(es.view.y - vpNow.y) > 5 ||
       Math.abs(es.view.scale - (App.state.view.scale || 1)) > 0.05) {
-    App.rebakeEditStaticViewport();
+    App.rebakeEditStaticViewport(es.bit ? 300 : 0);
   }
 };
 App.dropEditStaticItem = function (layer) {

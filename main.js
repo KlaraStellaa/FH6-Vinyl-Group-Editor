@@ -44,6 +44,46 @@ function appDataDir() {
   return _dataDirs.__base;
 }
 
+let _dataRoot = null;
+function dataRoot() {
+  if (_dataRoot) return _dataRoot;
+  const base = appDataDir();
+  let root = path.join(base, 'FH6EditorData');
+  let ok = false;
+  try {
+    if (!fs.existsSync(root)) fs.mkdirSync(root, { recursive: true });
+    const probe = path.join(root, '.write-test');
+    fs.writeFileSync(probe, '1');
+    fs.unlinkSync(probe);
+    ok = true;
+  } catch (e) { ok = false; }
+  if (!ok) {
+    try {
+      root = path.join(app.getPath('appData'), 'FH6EditorData');
+      fs.mkdirSync(root, { recursive: true });
+      try { console.warn('[data] exe 目录不可写，数据根回退到', root); } catch (e3) {   }
+    } catch (e2) {
+      root = path.join(base, 'FH6EditorData');    
+    }
+  }
+  _dataRoot = root;
+
+  return root;
+}
+function adoptLegacyDir(oldPath, newPath, label) {
+  if (!oldPath || oldPath === newPath) return false;
+  if (fs.existsSync(newPath) || !fs.existsSync(oldPath)) return false;
+  try {
+    fs.mkdirSync(path.dirname(newPath), { recursive: true });
+    fs.renameSync(oldPath, newPath);
+    try { console.info('[data] 已迁入 FH6EditorData:', label, oldPath, '->', newPath); } catch (e4) {   }
+    return true;
+  } catch (e) {
+    try { console.warn('[data] 迁移失败，继续使用旧位置:', label, String(e && e.message || e).slice(0, 120)); } catch (e5) {   }
+    return false;
+  }
+}
+
 
 
 function portableExePath() {
@@ -218,7 +258,12 @@ if (ISOLATE) {
   const isoDir = process.env.SVGBIANJI_ISOLATE_DIR || path.join(os.tmpdir(), 'groupfh6-cdp-' + process.pid);
   app.setPath('userData', isoDir);
 } else {
-  try { app.setPath('userData', path.join(appDataDir(), '_userdata')); } catch (e) {   }
+  try {
+    const newUd = path.join(dataRoot(), 'chromium');
+    adoptLegacyDir(path.join(appDataDir(), '_userdata'), newUd, 'userData');
+    try { fs.mkdirSync(newUd, { recursive: true }); } catch (e2) {   }
+    app.setPath('userData', newUd);
+  } catch (e) {   }
   const gotLock = app.requestSingleInstanceLock();
   if (!gotLock) {
     app.quit();
@@ -555,17 +600,26 @@ const DATA_DIR_LEGACY = {
 };
 function ensureDataDir(name) {
   if (_dataDirs[name]) return _dataDirs[name];
-  let dir = path.join(appDataDir(), name);
+  const root = dataRoot();
+  let dir = path.join(root, name);
   const legacy = DATA_DIR_LEGACY[name];
   if (legacy) {
     const old = path.join(appDataDir(), legacy);
-    if (!fs.existsSync(dir) && fs.existsSync(old)) {
+    const mid = path.join(appDataDir(), name);
+    if (!fs.existsSync(mid) && fs.existsSync(old)) {
       try {
-        fs.renameSync(old, dir);
+        fs.renameSync(old, mid);
         appendLog('info', '数据目录改用英文名', { from: legacy, to: name });
       } catch (e) {   }
     }
-    if (!fs.existsSync(dir) && fs.existsSync(old)) dir = old;
+    if (!fs.existsSync(mid) && fs.existsSync(old)) {
+      _dataDirs[name] = old;
+      return old;
+    }
+  }
+  adoptLegacyDir(path.join(appDataDir(), name), dir, name);
+  if (!fs.existsSync(dir) && fs.existsSync(path.join(appDataDir(), name))) {
+    dir = path.join(appDataDir(), name);
   }
   if (!fs.existsSync(dir)) { try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {   } }
   _dataDirs[name] = dir;
@@ -908,7 +962,43 @@ function createWindow() {
   });
 }
 
+const THUMB_CACHE_MAX_FILES = 400;
+const THUMB_CACHE_MAX_BYTES = 60 * 1024 * 1024;
+const THUMB_CACHE_KEEP = 150;
+async function sweepThumbCache() {
+  const dir = path.join(app.getPath('userData'), 'svg-thumb-cache');
+  let ents;
+  try { ents = await fs.promises.readdir(dir, { withFileTypes: true }); } catch (e) { return { removed: 0 }; }
+  const files = [];
+  let total = 0;
+  for (const d of ents) {
+    if (!d.isFile() || !/\.png$/i.test(d.name)) continue;
+    try {
+      const st = await fs.promises.stat(path.join(dir, d.name));
+      files.push({ n: d.name, m: st.mtimeMs, s: st.size });
+      total += st.size;
+    } catch (e) {   }
+  }
+  if (files.length <= THUMB_CACHE_MAX_FILES && total <= THUMB_CACHE_MAX_BYTES) return { removed: 0, kept: files.length };
+  files.sort((a, b) => a.m - b.m);
+  let removed = 0, freed = 0, i2 = 0;
+  while (i2 < files.length - THUMB_CACHE_KEEP &&
+         (files.length - i2 > THUMB_CACHE_MAX_FILES || total - freed > THUMB_CACHE_MAX_BYTES)) {
+    try { await fs.promises.unlink(path.join(dir, files[i2].n)); removed++; freed += files[i2].s; } catch (e) {   }
+    i2++;
+  }
+  if (removed) {
+    try { appendLog('info', '清理过期缩略图缓存', { removed, kept: files.length - removed, freedMB: Math.round(freed / 1048576) }); } catch (e) {   }
+  }
+  return { removed, freed };
+}
+
 app.whenReady().then(() => {
+  try {
+    [DATA_DIRS.svg, DATA_DIRS.workcopy, DATA_DIRS.history, DATA_DIRS.logs, DATA_DIRS.injectundo]
+      .forEach(n => ensureDataDir(n));
+  } catch (e) {   }
+  setTimeout(() => { try { sweepThumbCache(); } catch (e) {   } }, 4000);
   try {
     cleanOldAutoLogs();
     autoLogReady = true;
@@ -955,9 +1045,6 @@ app.whenReady().then(() => {
   }
   catch (e) { appendLog('warn', '更新检查模块加载失败（已忽略）', { message: String(e && e.message || e).slice(0, 160) }); }
 
-  try {
-[DATA_DIRS.history, DATA_DIRS.logs, DATA_DIRS.workcopy, DATA_DIRS.svg].forEach(n => ensureDataDir(n));
-  } catch (e) {   }
   try {
     const exePath = process.env.PORTABLE_EXECUTABLE_FILE || (isPackagedBuild() ? app.getPath('exe') : '');
     if (exePath) {

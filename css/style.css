@@ -21,7 +21,7 @@
   --overlay-bg: #26282d;
   --accent-sel-bg: #2e4057;
   --thumb-bg: #1c1e21;
-  --swatch-bg: #c8cbd2;
+  --swatch-bg: #808080;
   --scrollbar-thumb: #5c626b;    
   --btn-shadow: 0 1px 3px rgba(0, 0, 0, .3);
   --btn-radius: 10px;
@@ -53,7 +53,7 @@ html[data-theme="light"] {
   --overlay-bg: #e0e2e6;
   --accent-sel-bg: #d0f0ed;
   --thumb-bg: #eceef1;
-  --swatch-bg: #5f6570;    
+  --swatch-bg: #808080;    
   --scrollbar-thumb: #9aa0a8;
   --btn-shadow: 0 1px 3px rgba(0, 0, 0, .1);
   color-scheme: light;
@@ -1371,7 +1371,7 @@ html[data-theme="midnight"] {
   --overlay-bg: #1a2032;
   --accent-sel-bg: #2c355c;
   --thumb-bg: #0f1422;
-  --swatch-bg: #c8cbd2;
+  --swatch-bg: #808080;
   --scrollbar-thumb: #525768;
   --btn-shadow: 0 1px 3px rgba(0, 0, 0, .3);
   --acrylic-bg: rgba(16, 21, 36, .78);
@@ -1402,7 +1402,7 @@ html[data-theme="forest"] {
   --overlay-bg: #1a251f;
   --accent-sel-bg: #214b31;
   --thumb-bg: #101914;
-  --swatch-bg: #c8cbd2;
+  --swatch-bg: #808080;
   --scrollbar-thumb: #515d56;
   --btn-shadow: 0 1px 3px rgba(0, 0, 0, .3);
   --acrylic-bg: rgba(17, 26, 21, .78);
@@ -1433,7 +1433,7 @@ html[data-theme="ember"] {
   --overlay-bg: #28211c;
   --accent-sel-bg: #513b23;
   --thumb-bg: #1c1613;
-  --swatch-bg: #c8cbd2;
+  --swatch-bg: #808080;
   --scrollbar-thumb: #605852;
   --btn-shadow: 0 1px 3px rgba(0, 0, 0, .3);
   --acrylic-bg: rgba(29, 23, 20, .78);
@@ -1464,7 +1464,7 @@ html[data-theme="sepia"] {
   --overlay-bg: #e5e3de;
   --accent-sel-bg: #f2e4d3;
   --thumb-bg: #eee9e2;
-  --swatch-bg: #5f6570;
+  --swatch-bg: #808080;
   --scrollbar-thumb: #aca8a2;
   --btn-shadow: 0 1px 3px rgba(0, 0, 0, .1);
   --acrylic-bg: rgba(250, 246, 239, .78);
@@ -1495,7 +1495,7 @@ html[data-theme="frost"] {
   --overlay-bg: #e2e3e4;
   --accent-sel-bg: #dae7f8;
   --thumb-bg: #e4e8ed;
-  --swatch-bg: #5f6570;
+  --swatch-bg: #808080;
   --scrollbar-thumb: #a2a5a8;
   --btn-shadow: 0 1px 3px rgba(0, 0, 0, .1);
   --acrylic-bg: rgba(241, 245, 250, .78);
@@ -1526,7 +1526,7 @@ html[data-theme="sakura"] {
   --overlay-bg: #e5e4e4;
   --accent-sel-bg: #f7e1ea;
   --thumb-bg: #f0e7e9;
-  --swatch-bg: #5f6570;
+  --swatch-bg: #808080;
   --scrollbar-thumb: #aca6a8;
   --btn-shadow: 0 1px 3px rgba(0, 0, 0, .1);
   --acrylic-bg: rgba(253, 244, 246, .78);

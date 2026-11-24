@@ -302,7 +302,8 @@ App.exitEdit = function (cancel) {
   App.editSession = null;
   App.state.edit = null;
   if (App.updateHideLayersButton) App.updateHideLayersButton();
-  if (App.updateEditStaticViewport) App.updateEditStaticViewport();
+  try { if (App.endEditStatic) App.endEditStatic(); } catch (e) {   }
+  try { if (App.autoStaticMaybe) App.autoStaticMaybe(); } catch (e) {   }
   App.state.keys.clear();
   App.drag = null;
   if (!(App.state.selectedByTab && App.state.selected.size > 1)) {
