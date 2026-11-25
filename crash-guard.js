@@ -1,32 +1,12 @@
 'use strict';
-/* ============================================================================
-   crash-guard.js — 非正常退出（闪退）检测 + 崩溃日志包（主进程侧）
-   ----------------------------------------------------------------------------
-   做法（业界通用，见 docs/03 §6.36）：**启动标记**。
-     · 每次启动写 sve-guard/session-guard.json（pid / 版本 / 启动时刻 / 当前阶段）；
-     · 正常退出（will-quit）先把它标成 cleanExit 再删；
-     · 下次启动若标记还在、且里面那个 pid 已经不在 → 上次没走正常退出 = 闪退 / 被强杀 / 断电。
-   为什么不是「正常退出时写标记」：那样还得区分「装完第一次启动」，代码更多、误判面更大。
-   为什么不是只看 minidump：原生崩溃才有 dump，主进程被 Task Manager 结束、断电、
-   驱动级卡死都没有；日志 + 标记才是这几种情况唯一的共同证据。
-
-   崩溃日志包 = 崩溃那一轮留下的 session-*.log（正常退出会自己删，留下的就是现场）
-              + manifest.json（版本 / 系统 / 上次会话 / 判定原因）
-              + summary.txt（给人看的中文摘要）
-   约束：
-     · 只读本机日志，**不自动上传**；用户点了「导出崩溃日志」才落盘；
-     · 不含作品内容、SVG、位图、剪贴板；日志里的用户目录 / 程序目录统一换成占位符；
-     · 全程 try/catch：守卫自身出问题绝不能影响主流程（更不能再制造一次崩溃）。
-   ========================================================================== */
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-/* 复用渲染诊断包的 zip 写入（store/deflate 两种方法，Windows 资源管理器可直接打开） */
 const { makeZip } = require('./render-report');
 
 const MARK_NAME = 'session-guard.json';
 const LAST_NAME = 'last-crash.json';
-const STALE_MS = 14 * 24 * 60 * 60 * 1000;   /* 超过两周的旧标记不提示：早就没意义了 */
+const STALE_MS = 14 * 24 * 60 * 60 * 1000;    
 const MAX_LOG_FILES = 4;
 const MAX_LOG_BYTES = 12 * 1024 * 1024;
 const MAX_DETAIL = 400;
@@ -46,9 +26,6 @@ function fmtSize(bytes) {
   return n + ' B';
 }
 
-/* pid 还在不在。EPERM = 进程在、只是没权限发信号，同样算「活着」。
-   ★ 不能用 pid 文件里的 pid 直接判「活着」：Windows 会复用 pid，
-     所以下面还要求标记里没有 cleanExit、且时间不超过 STALE_MS。 */
 function pidAlive(pid) {
   const n = parseInt(pid, 10);
   if (!(n > 0)) return false;
@@ -64,28 +41,24 @@ function readJson(fp) {
   } catch (e) { return null; }
 }
 
-/* 先写 .tmp 再 rename：断电 / 被杀时不会留下半个 JSON 被当成「上次崩溃」 */
 function writeJsonAtomic(fp, obj) {
   const tmp = fp + '.tmp';
   const text = JSON.stringify(obj, null, 1);
   try {
     const fd = fs.openSync(tmp, 'w');
-    try { fs.writeSync(fd, text); fs.fsyncSync(fd); } finally { try { fs.closeSync(fd); } catch (e) { /* ignore */ } }
+    try { fs.writeSync(fd, text); fs.fsyncSync(fd); } finally { try { fs.closeSync(fd); } catch (e) {   } }
     fs.renameSync(tmp, fp);
     return true;
   } catch (e) {
     try { fs.writeFileSync(fp, text, 'utf8'); } catch (e2) {
-      try { fs.unlinkSync(tmp); } catch (e3) { /* ignore */ }
+      try { fs.unlinkSync(tmp); } catch (e3) {   }
       return false;
     }
-    try { fs.unlinkSync(tmp); } catch (e4) { /* ignore */ }
+    try { fs.unlinkSync(tmp); } catch (e4) {   }
     return true;
   }
 }
 
-/* 路径清洗：报告是给人看的，不需要知道用户叫什么、程序装在哪。
-   ★ 日志里的路径是 JSON 序列化过的（`C:\\Users\\x` 两个反斜杠），
-     所以匹配要同时接受 `\` / `\\` / `/` 三种写法，否则一个都换不掉。 */
 function makeScrubber(privatePaths) {
   const esc = function (s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); };
   const toRe = function (p) {
@@ -97,11 +70,11 @@ function makeScrubber(privatePaths) {
     if (p2 && String(p2).length > 3) rules.push({ re: toRe(p2), tag: '%APPDIR%' });
   });
   if (home.length > 3) rules.push({ re: toRe(home), tag: '%USERPROFILE%' });
-  rules.sort(function (a, b) { return b.re.length - a.re.length; });   /* 长的先换，避免子串被吃掉 */
+  rules.sort(function (a, b) { return b.re.length - a.re.length; });    
   return function (text) {
     let s = String(text == null ? '' : text);
     rules.forEach(function (rule) {
-      try { s = s.replace(new RegExp(rule.re, 'gi'), rule.tag); } catch (e) { /* ignore */ }
+      try { s = s.replace(new RegExp(rule.re, 'gi'), rule.tag); } catch (e) {   }
     });
     s = s.replace(/([A-Za-z]:\\{1,2}Users\\{1,2})[^\\\s"']+/g, '$1%USER%');
     return s;
@@ -114,8 +87,6 @@ function newSessionId() {
     pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds()) + '-' + process.pid;
 }
 
-/* --------------------------------------------------------------- 守卫实例 */
-/* opts = { dir, version(), log(level,msg,data), privatePaths[] } */
 function create(opts) {
   const o = opts || {};
   const dir = o.dir ? String(o.dir) : '';
@@ -125,9 +96,8 @@ function create(opts) {
   let session = null;
 
   function fp(name) { return path.join(dir, name); }
-  function ensure() { try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { /* 无写权限：整条链路静默降级 */ } }
+  function ensure() { try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {   } }
 
-  /* 启动时调用一次。返回 { crashed, prev, crash, skipped } */
   function begin() {
     if (!dir) return { crashed: false };
     ensure();
@@ -138,9 +108,6 @@ function create(opts) {
       const age = Date.now() - Number(mark.startedAt);
       const wasClean = mark.cleanExit === true;
       const samePid = Number(mark.pid) === process.pid;
-      /* 另一个实例还在跑（理论上被单实例锁挡住，这里只是别把它的标记踩掉）。
-         ★ samePid 不能算「活着」：刚起来的进程不可能已经有标记 ——
-         那是 Windows 复用了上个进程的 pid，必须按「上次崩了」处理。 */
       if (!wasClean && !samePid && pidAlive(mark.pid)) {
         log('info', '崩溃守卫：另一实例仍在运行，跳过判定', { pid: mark.pid });
         return { crashed: false, skipped: true };
@@ -155,7 +122,6 @@ function create(opts) {
           stage: String(mark.stage || '')
         };
         const last = readJson(fp(LAST_NAME));
-        /* 只认「本次会话期间」写下的异常记录，旧记录不往这次头上安 */
         if (last && Number(last.at) >= prev.startedAt - 2000) {
           crash = {
             kind: String(last.kind || 'unknown').slice(0, 40),
@@ -165,8 +131,7 @@ function create(opts) {
         }
       }
     }
-    /* 旧的异常记录只对上一轮有效：读完就删，避免张冠李戴到下一次 */
-    try { fs.unlinkSync(fp(LAST_NAME)); } catch (e) { /* ignore */ }
+    try { fs.unlinkSync(fp(LAST_NAME)); } catch (e) {   }
 
     session = {
       schema: 1,
@@ -181,8 +146,6 @@ function create(opts) {
     return { crashed: crashed, prev: prev, crash: crash, session: session };
   }
 
-  /* 记「跑到哪一步了」：启动就闪退 → stage 还是 start；用完再闪退 → window-ready。
-     写盘很便宜（几百字节 + fsync），只在几个里程碑调，不做心跳。 */
   function setStage(stage) {
     if (!session || !dir) return;
     const s = String(stage || '').slice(0, 40);
@@ -191,7 +154,6 @@ function create(opts) {
     writeJsonAtomic(fp(MARK_NAME), session);
   }
 
-  /* 运行中抓到的致命异常（渲染进程 gone / 未捕获异常）：留给下次启动解释原因 */
   function noteFatal(kind, why) {
     if (!dir) return;
     ensure();
@@ -205,33 +167,29 @@ function create(opts) {
       detail: scrub(typeof why === 'string' ? why : JSON.stringify(why || {})).slice(0, MAX_DETAIL)
     };
     writeJsonAtomic(fp(LAST_NAME), rec);
-    try { log('error', '记录异常现场：' + rec.kind, { detail: rec.detail }); } catch (e) { /* ignore */ }
+    try { log('error', '记录异常现场：' + rec.kind, { detail: rec.detail }); } catch (e) {   }
   }
 
-  /* 正常退出：先标 cleanExit 再删文件。删不掉（杀软占用）也不会误报，因为标记里已经写明干净退出。 */
   function markClean(reason) {
     if (!session || !dir) return false;
     session.cleanExit = true;
     session.endedAt = Date.now();
     session.endWhy = String(reason || '').slice(0, 24);
     writeJsonAtomic(fp(MARK_NAME), session);
-    try { fs.unlinkSync(fp(MARK_NAME)); } catch (e) { /* ignore */ }
+    try { fs.unlinkSync(fp(MARK_NAME)); } catch (e) {   }
     return true;
   }
 
   return { begin: begin, setStage: setStage, noteFatal: noteFatal, markClean: markClean, dir: dir };
 }
 
-/* ------------------------------------------------------------- 日志收集 */
-/* 崩溃那一轮的日志：正常退出会删掉自己的 session-*.log，所以「留着的」就是现场。
-   按 mtime 倒序，最多 MAX_LOG_FILES 个、合计不超过 MAX_LOG_BYTES。 */
 function pickLogs(logDir, excludePrefix) {
   let names = [];
   try { names = fs.readdirSync(logDir); } catch (e) { return []; }
   const items = [];
   names.forEach(function (n) {
     if (!/^session-.*\.log$/i.test(n)) return;
-    if (excludePrefix && n.indexOf(excludePrefix) === 0) return;   /* 本次会话自己的不打包 */
+    if (excludePrefix && n.indexOf(excludePrefix) === 0) return;    
     const p = path.join(logDir, n);
     let st;
     try { st = fs.statSync(p); } catch (e) { return; }
@@ -249,8 +207,6 @@ function pickLogs(logDir, excludePrefix) {
   return out;
 }
 
-/* ------------------------------------------------------------- 崩溃日志包 */
-/* cfg = { logDir, excludePrefix, privatePaths[], app{}, env{}, gpu, prev, crash, autoLog } */
 function writeCrashPackage(cfg) {
   const c = cfg || {};
   const scrub = makeScrubber(c.privatePaths);
@@ -334,7 +290,7 @@ function writeCrashPackage(cfg) {
 
   let outDir = c.logDir;
   if (!outDir) return { ok: false, error: '没有日志目录' };
-  try { fs.mkdirSync(outDir, { recursive: true }); } catch (e) { /* ignore */ }
+  try { fs.mkdirSync(outDir, { recursive: true }); } catch (e) {   }
   const stamp = when.getFullYear() + pad2(when.getMonth() + 1) + pad2(when.getDate()) + '-' +
     pad2(when.getHours()) + pad2(when.getMinutes()) + pad2(when.getSeconds());
   const file = path.join(outDir, 'sve-crash-' + stamp + '.zip');
@@ -343,7 +299,7 @@ function writeCrashPackage(cfg) {
     fs.writeFileSync(tmp, zip);
     fs.renameSync(tmp, file);
   } catch (e) {
-    try { fs.unlinkSync(tmp); } catch (e2) { /* ignore */ }
+    try { fs.unlinkSync(tmp); } catch (e2) {   }
     return { ok: false, error: '写入失败（磁盘空间 / 权限）', detail: String(e && e.message || e).slice(0, 160) };
   }
   return {
