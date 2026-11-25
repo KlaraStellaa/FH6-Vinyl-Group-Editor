@@ -12,6 +12,7 @@ const DLG = require('./dlg-i18n');
 const updateApply = require('./update-apply');    
 const updateMirror = require('./update-mirror');  
 const renderReport = require('./render-report');  
+const crashGuard = require('./crash-guard');  
 
 function uiLang() {
   try {
@@ -289,6 +290,8 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 let forceClose = false;
+
+let crashHandle = null;
 
 let thumbRendererWin = null;
 let thumbRendererReady = null;
@@ -751,6 +754,14 @@ function saveLogFile() {
 }
 process.on('uncaughtException', err => {
   try { appendLog('error', '主进程未捕获异常', { message: String(err && err.message), stack: String(err && err.stack).slice(0, 500) }); } catch (e) {   }
+  try { if (crashHandle) crashHandle.noteFatal('uncaught-exception', String(err && err.message || err).slice(0, 200)); } catch (e) {   }
+});
+app.on('child-process-gone', (_e, details) => {
+  try {
+    const d = details || {};
+    if (!d.reason || d.reason === 'clean-exit') return;
+    appendLog('error', '子进程异常退出', { type: d.type, reason: d.reason, exitCode: d.exitCode, name: d.name });
+  } catch (e) {   }
 });
 function exportLogRange(payload) {
   try {
@@ -948,6 +959,13 @@ function createWindow() {
     confirmClose(win);
   });
   win.on('closed', () => destroyThumbRenderer());
+  win.webContents.on('render-process-gone', (_e, details) => {
+    try {
+      const why = 'reason=' + String((details && details.reason) || 'unknown') +
+        ' exit=' + String(details && details.exitCode != null ? details.exitCode : '?');
+      if (crashHandle) crashHandle.noteFatal('renderer-gone', why);
+    } catch (err) {   }
+  });
   win.on('maximize', () => sendWinState(win));
   win.on('unmaximize', () => sendWinState(win));
   win.on('focus', () => sendWinState(win));
@@ -960,6 +978,101 @@ function createWindow() {
       console.log('[renderer]', msg);
     } catch (e) {   }
   });
+}
+
+function crashReasonText(info) {
+  const c = info && info.crash;
+  if (c && c.kind === 'renderer-gone') return dt('dlg.crashWhyRenderer', { why: c.detail || 'unknown' });
+  if (c && c.kind === 'uncaught-exception') return dt('dlg.crashWhyUncaught', { why: c.detail || 'error' });
+  return dt('dlg.crashWhyKilled');
+}
+function gpuSummary() {
+  try {
+    const s = app.getGPUFeatureStatus() || {};
+    return {
+      compositing: String(s.gpu_compositing || '').slice(0, 24),
+      rasterization: String(s.rasterization || '').slice(0, 24),
+      canvas: String(s['2d_canvas'] || '').slice(0, 24),
+      webgl: String(s.webgl || '').slice(0, 24)
+    };
+  } catch (e) { return null; }
+}
+async function promptCrashExport(info) {
+  if (!info || !info.crashed) return;
+  const win = BrowserWindow.getAllWindows().find(w => !w.isDestroyed()) || null;
+  const stub = String(process.env.SVGBIANJI_CRASH_STUB || '');
+  const opt = {
+    type: 'warning',
+    title: appName(),
+    message: dt('dlg.crashMsg'),
+    detail: dt('dlg.crashDetail', {
+      time: crashGuard.fmtTime(info.prev && info.prev.startedAt).slice(0, 16),
+      version: (info.prev && info.prev.version) || app.getVersion(),
+      why: crashReasonText(info)
+    }),
+    buttons: [dt('dlg.crashExport'), dt('dlg.crashSkip')],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true
+  };
+  let choice = 0;
+  if (stub === 'skip') choice = 1;
+  else if (stub === 'export') choice = 0;
+  else if (ISOLATE) choice = 1;             
+  else {
+    try {
+      const r = win ? await dialog.showMessageBox(win, opt) : await dialog.showMessageBox(opt);
+      choice = (r && r.response === 0) ? 0 : 1;
+    } catch (e) { return; }
+  }
+  if (choice !== 0) { try { appendLog('info', '崩溃日志：用户选择不导出'); } catch (e) {   } return; }
+
+  let r = null;
+  try {
+    r = crashGuard.writeCrashPackage({
+      logDir: logDirPath(),
+      excludePrefix: 'session-' + SESSION_STAMP,    
+      privatePaths: [appDataDir(), dataRoot(), app.getPath('userData')],
+      app: {
+        product: appName(), version: app.getVersion(),
+        packaged: isPackagedBuild(),
+        portable: !!(process.env.PORTABLE_EXECUTABLE_DIR || process.env.SVE_PORTABLE_MODE),
+        locale: uiLang()
+      },
+      env: {
+        platform: process.platform, arch: process.arch, osRelease: os.release(),
+        electron: process.versions.electron, chrome: process.versions.chrome,
+        node: process.versions.node, totalMemMB: Math.round(os.totalmem() / 1048576)
+      },
+      gpu: gpuSummary(),
+      prev: info.prev, crash: info.crash,
+      autoLog: autoLogEnabled()
+    });
+  } catch (e) { r = { ok: false, error: String(e && e.message || e).slice(0, 200) }; }
+
+  if (!r || !r.ok) {
+    try { appendLog('warn', '崩溃日志导出失败', { error: r && (r.error || ''), detail: r && r.detail }); } catch (e) {   }
+    if (stub) return;
+    try {
+      await dialog.showMessageBox({
+        type: 'error', title: appName(), message: dt('dlg.crashFailTitle'),
+        detail: dt('dlg.crashFail', { detail: String((r && (r.error || r.detail)) || '').slice(0, 200) }),
+        buttons: [dt('dlg.crashClose')], noLink: true
+      });
+    } catch (e) {   }
+    return;
+  }
+  try { appendLog('info', '崩溃日志已导出', { file: path.basename(r.path), bytes: r.bytes, logs: r.logs }); } catch (e) {   }
+  if (stub) { console.log('[crash-stub] exported ' + r.path); return; }
+  try {
+    const done = await dialog.showMessageBox({
+      type: 'info', title: appName(), message: dt('dlg.crashDoneTitle'),
+      detail: dt('dlg.crashDone', { name: path.basename(r.path), size: crashGuard.fmtSize(r.bytes) }),
+      buttons: [dt('dlg.crashOpen'), dt('dlg.crashClose')],
+      defaultId: 1, cancelId: 1, noLink: true
+    });
+    if (done && done.response === 0) { try { shell.showItemInFolder(r.path); } catch (e) {   } }
+  } catch (e) {   }
 }
 
 const THUMB_CACHE_MAX_FILES = 400;
@@ -998,6 +1111,25 @@ app.whenReady().then(() => {
     [DATA_DIRS.svg, DATA_DIRS.workcopy, DATA_DIRS.history, DATA_DIRS.logs, DATA_DIRS.injectundo]
       .forEach(n => ensureDataDir(n));
   } catch (e) {   }
+  let crashInfo = null;
+  try {
+    crashHandle = crashGuard.create({
+      dir: path.join(app.getPath('userData'), 'sve-guard'),
+      version: () => app.getVersion(),
+      log: appendLog,
+      privatePaths: [appDataDir(), dataRoot(), app.getPath('userData')]
+    });
+    crashInfo = crashHandle.begin();
+    if (crashInfo && crashInfo.crashed) {
+      appendLog('warn', '上次会话非正常退出', {
+        at: crashGuard.fmtTime(crashInfo.prev.startedAt),
+        stage: crashInfo.prev.stage || 'unknown',
+        reason: crashInfo.crash ? crashInfo.crash.kind : 'no-record'
+      });
+    }
+  } catch (e) {
+    appendLog('warn', '崩溃守卫初始化失败（已忽略）', { message: String(e && e.message || e).slice(0, 160) });
+  }
   setTimeout(() => { try { sweepThumbCache(); } catch (e) {   } }, 4000);
   try {
     cleanOldAutoLogs();
@@ -1349,7 +1481,7 @@ app.whenReady().then(() => {
       else scheduleExeReplace(pkg, targetExe);
       appendLog('info', applyMode ? '自动更新：安装包就绪，退出后原地更新程序环境' : '自动更新：安装包就绪，退出后替换',
         { size: size, pkg: path.basename(pkg) });
-      setTimeout(() => { try { app.exit(0); } catch (e2) {   } }, 800);
+      setTimeout(() => exitForUpdate('auto-update'), 800);
       return { ok: true, size: size, reused: pkg !== tmp };
     } catch (err) {
       try { if (pkg !== tmp) fs.unlinkSync(tmp); } catch (e2) {   }
@@ -1425,7 +1557,7 @@ app.whenReady().then(() => {
       updateApply.clearState(updateStatePath());
       return { ok: false, error: String(err && err.message || err).slice(0, 160) };
     }
-    setTimeout(() => { try { app.exit(0); } catch (e2) {   } }, 800);
+    setTimeout(() => exitForUpdate('manual-install'), 800);
     return { ok: true, size: chk.size };
   });
 
@@ -1885,7 +2017,17 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+  try { if (crashHandle) crashHandle.setStage('window-ready'); } catch (e) {   }
+  if (crashInfo && crashInfo.crashed) setTimeout(() => { promptCrashExport(crashInfo).catch(() => { }); }, 1500);
 });
+
+function exitForUpdate(reason) {
+  try { appendLog('info', '为应用更新而退出', { reason: reason }); } catch (e) {   }
+  try { flushAutoLog(); } catch (e) {   }
+  try { if (crashHandle) crashHandle.markClean('update'); } catch (e) {   }
+  try { cleanupSessionLogs(); } catch (e) {   }
+  try { app.exit(0); } catch (e) {   }
+}
 
 app.on('before-quit', () => {
   try {
@@ -1893,7 +2035,10 @@ app.on('before-quit', () => {
     flushAutoLog();
   } catch (e) {   }
 });
-app.on('will-quit', () => { cleanupSessionLogs(); });
+app.on('will-quit', () => {
+  try { if (crashHandle) crashHandle.markClean('will-quit'); } catch (e) {   }
+  cleanupSessionLogs();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

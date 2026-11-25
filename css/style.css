@@ -591,9 +591,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outlin
 .home-card-cover.has-thumb { background: repeating-conic-gradient(#ffffff 0 25%, #d5d9de 0 50%) 0 0 / 10px 10px; }
 .home-card-cover.has-thumb .home-card-glyph { display: none; }
 
-.home-account-box { display: flex; flex-direction: column; gap: 3px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
-.home-account-box label { color: var(--dim); font-size: 11px; }
-#forzaAccountSel { width: 100%; padding: 5px 6px; border: 1px solid var(--btn-border); border-radius: 6px; background: var(--input-bg); color: var(--text); font-size: 12px; }
 
 .fza-row { display: flex; align-items: center; gap: 10px; min-height: 82px; }
 .fza-thumb-box { position: relative; width: 72px; height: 72px; flex: none; }

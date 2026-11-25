@@ -83,6 +83,84 @@
     DICT[lang]['dlg.overwriteMsg'] = overwrite[lang][1];
     DICT[lang]['dlg.fileChanged'] = overwrite[lang][2];
   });
+  var crash = {
+    'zh-CN': {
+      msg: '上次运行没有正常退出，可能发生过闪退。',
+      detail: '上次启动：{time}\n当时版本：{version}\n判定原因：{why}\n\n可以把崩溃日志导出后发给开发者，帮助我们定位闪退。日志只含运行记录，不含作品内容。',
+      exp: '导出崩溃日志', skip: '不用了',
+      whyKilled: '程序没有执行正常退出流程（崩溃或被强制结束）',
+      whyRenderer: '窗口渲染进程异常退出（{why}）',
+      whyUncaught: '主进程未捕获异常（{why}）',
+      doneTitle: '崩溃日志已导出',
+      done: '已导出 {name}（{size}）。\n反馈问题时请把这个文件一起发给开发者。',
+      failTitle: '导出失败', fail: '崩溃日志没能导出：{detail}',
+      open: '打开所在文件夹', close: '完成'
+    },
+    'zh-TW': {
+      msg: '上次執行沒有正常結束，可能發生過閃退。',
+      detail: '上次啟動：{time}\n當時版本：{version}\n判定原因：{why}\n\n可以匯出崩潰日誌後寄給開發者，協助我們定位閃退。日誌只含執行記錄，不含作品內容。',
+      exp: '匯出崩潰日誌', skip: '不用了',
+      whyKilled: '程式沒有執行正常結束流程（崩潰或被強制結束）',
+      whyRenderer: '視窗轉譯程序異常結束（{why}）',
+      whyUncaught: '主程序未攔截的例外（{why}）',
+      doneTitle: '崩潰日誌已匯出',
+      done: '已匯出 {name}（{size}）。\n回報問題時請把這個檔案一併寄給開發者。',
+      failTitle: '匯出失敗', fail: '崩潰日誌無法匯出：{detail}',
+      open: '開啟所在資料夾', close: '完成'
+    },
+    'en': {
+      msg: 'The app did not shut down normally last time, so it may have crashed.',
+      detail: 'Last start: {time}\nVersion then: {version}\nDetected: {why}\n\nYou can export a crash log and send it to the developer to help fix the crash. The log contains run records only — no artwork.',
+      exp: 'Export crash log', skip: 'Not now',
+      whyKilled: 'the app did not run its normal exit path (crash, force-kill or power loss)',
+      whyRenderer: 'the window renderer process died ({why})',
+      whyUncaught: 'an uncaught exception in the main process ({why})',
+      doneTitle: 'Crash log exported',
+      done: 'Exported {name} ({size}).\nPlease attach this file when reporting the issue.',
+      failTitle: 'Export failed', fail: 'The crash log could not be exported: {detail}',
+      open: 'Show in folder', close: 'Done'
+    },
+    'ja': {
+      msg: '前回は正常終了していません。クラッシュした可能性があります。',
+      detail: '前回の起動：{time}\n当時のバージョン：{version}\n判定理由：{why}\n\nクラッシュログを書き出して開発者に送ると、原因の特定に役立ちます。ログには動作記録のみが含まれ、作品データは含まれません。',
+      exp: 'クラッシュログを書き出す', skip: '今はしない',
+      whyKilled: '正常終了の処理が実行されていません（クラッシュ／強制終了）',
+      whyRenderer: 'ウィンドウのレンダラープロセスが異常終了しました（{why}）',
+      whyUncaught: 'メインプロセスの未処理例外（{why}）',
+      doneTitle: 'クラッシュログを書き出しました',
+      done: '{name}（{size}）を書き出しました。\n問題を報告する際にこのファイルを添付してください。',
+      failTitle: '書き出しに失敗しました', fail: 'クラッシュログを書き出せませんでした：{detail}',
+      open: 'フォルダーを開く', close: '完了'
+    },
+    'ko': {
+      msg: '지난번 실행이 정상 종료되지 않았습니다. 충돌이 있었을 수 있습니다.',
+      detail: '지난 시작: {time}\n당시 버전: {version}\n판정 사유: {why}\n\n충돌 로그를 내보내 개발자에게 보내면 원인 파악에 도움이 됩니다. 로그에는 실행 기록만 포함되며 작품 내용은 없습니다.',
+      exp: '충돌 로그 내보내기', skip: '나중에',
+      whyKilled: '정상 종료 절차가 실행되지 않았습니다(충돌/강제 종료)',
+      whyRenderer: '창 렌더러 프로세스가 비정상 종료되었습니다({why})',
+      whyUncaught: '메인 프로세스의 처리되지 않은 예외({why})',
+      doneTitle: '충돌 로그를 내보냈습니다',
+      done: '{name}({size})을(를) 내보냈습니다.\n문제를 알릴 때 이 파일을 함께 보내 주세요.',
+      failTitle: '내보내기 실패', fail: '충돌 로그를 내보내지 못했습니다: {detail}',
+      open: '폴더 열기', close: '완료'
+    }
+  };
+  Object.keys(DICT).forEach(function (lang) {
+    var c = crash[lang] || crash['zh-CN'];
+    DICT[lang]['dlg.crashMsg'] = c.msg;
+    DICT[lang]['dlg.crashDetail'] = c.detail;
+    DICT[lang]['dlg.crashExport'] = c.exp;
+    DICT[lang]['dlg.crashSkip'] = c.skip;
+    DICT[lang]['dlg.crashWhyKilled'] = c.whyKilled;
+    DICT[lang]['dlg.crashWhyRenderer'] = c.whyRenderer;
+    DICT[lang]['dlg.crashWhyUncaught'] = c.whyUncaught;
+    DICT[lang]['dlg.crashDoneTitle'] = c.doneTitle;
+    DICT[lang]['dlg.crashDone'] = c.done;
+    DICT[lang]['dlg.crashFailTitle'] = c.failTitle;
+    DICT[lang]['dlg.crashFail'] = c.fail;
+    DICT[lang]['dlg.crashOpen'] = c.open;
+    DICT[lang]['dlg.crashClose'] = c.close;
+  });
   var titles = { 'zh-CN': 'FH6 Vinyl Group Editor', 'zh-TW': 'FH6 Vinyl Group Editor', 'en': 'FH6 Vinyl Group Editor',
     'ja': 'SVG パターンコラージュエディター', 'ko': 'SVG 패턴 콜라주 편집기' };
   Object.keys(titles).forEach(function (l) { if (DICT[l]) DICT[l]['app.title'] = titles[l]; });
